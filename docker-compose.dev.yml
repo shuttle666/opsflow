@@ -1,0 +1,75 @@
+services:
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile.dev
+    container_name: opsflow-client
+    working_dir: /app
+    command: sh -c "pnpm install --frozen-lockfile --store-dir=/pnpm/store && pnpm dev"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      NEXT_PUBLIC_API_URL: http://localhost:${SERVER_PORT:-4000}/api
+      WATCHPACK_POLLING: "true"
+      npm_config_store_dir: /pnpm/store
+    ports:
+      - "${CLIENT_PORT:-3000}:3000"
+    volumes:
+      - ./client:/app
+      - client_node_modules:/app/node_modules
+      - client_pnpm_store:/pnpm/store
+    depends_on:
+      server:
+        condition: service_started
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.dev
+    container_name: opsflow-server
+    working_dir: /app
+    command: sh -c "pnpm install --frozen-lockfile --store-dir=/pnpm/store && pnpm dev"
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      CLIENT_URL: http://localhost:${CLIENT_PORT:-3000}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-opsflow}:${POSTGRES_PASSWORD:-opsflow}@postgres:5432/${POSTGRES_DB:-opsflow}
+      npm_config_store_dir: /pnpm/store
+    ports:
+      - "${SERVER_PORT:-4000}:4000"
+    volumes:
+      - ./server:/app
+      - server_node_modules:/app/node_modules
+      - server_pnpm_store:/pnpm/store
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: opsflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-opsflow}
+      POSTGRES_USER: ${POSTGRES_USER:-opsflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opsflow}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-opsflow} -d ${POSTGRES_DB:-opsflow}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  client_node_modules:
+  client_pnpm_store:
+  server_node_modules:
+  server_pnpm_store:
+  postgres_data:

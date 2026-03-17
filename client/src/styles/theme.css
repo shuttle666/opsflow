@@ -1,0 +1,6 @@
+:root {
+  --color-app: #eef4ff;
+  --color-app-panel: rgba(255, 255, 255, 0.82);
+  --color-app-panel-strong: #ffffff;
+  --color-app-border: rgba(148, 163, 184, 0.24);
+}

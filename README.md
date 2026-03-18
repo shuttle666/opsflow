@@ -1,6 +1,6 @@
 # OpsFlow
 
-OpsFlow is a full-stack operations platform foundation with a Next.js client, an Express API, and lightweight planning docs. This setup intentionally stops before any PostgreSQL or Prisma data modeling so the engineering base is clean before domain work begins.
+OpsFlow is a full-stack operations platform foundation with a Next.js client, an Express API, and lightweight planning docs. The project now includes a Phase 1 data layer implementation with Prisma core models, migrations, seed data, and backend domain tests.
 
 ## Project Structure
 
@@ -12,7 +12,8 @@ OpsFlow is a full-stack operations platform foundation with a Next.js client, an
 
 - Frontend: Next.js App Router, React, TypeScript, Tailwind CSS, Zustand, React Hook Form, Zod, TanStack Query
 - Backend: Express, TypeScript, dotenv, Zod, cors, helmet, morgan
-- Database prep: Prisma CLI and client installed, schema prepared, no models defined
+- Database: PostgreSQL + Prisma 7 with adapter-based runtime connection (`@prisma/adapter-pg` + `pg`)
+- Data layer delivered: `User`, `Tenant`, `Membership`, `Customer`, `Job`, `JobStatusHistory`, migration, and seed
 - Local development: Docker Compose with `client`, `server`, and `postgres` services
 
 ## Getting Started
@@ -38,7 +39,9 @@ pnpm dev
 
 ```bash
 cd client && pnpm build && pnpm lint
-cd server && pnpm typecheck && pnpm build
+cd server && pnpm typecheck && pnpm build && pnpm test
+cd server && pnpm prisma:migrate:deploy && pnpm prisma:seed
+cd server && pnpm db:reset
 ```
 
 ## Docker Development
@@ -116,12 +119,7 @@ docker compose -f docker-compose.dev.yml down -v
 - `./server` is mounted into `/app` in the `server` container.
 - `/app/node_modules` is a Docker-managed named volume in each container, which avoids common cross-platform module issues.
 
-### Important Note
-
-- Prisma and PostgreSQL models are intentionally not implemented yet.
-- The Docker setup only prepares local infrastructure for the next phase of database and schema work.
-
 ## Notes
 
-- Database models and migrations are intentionally not implemented yet.
-- The next step can focus on PostgreSQL and Prisma data modeling without needing to restructure the app foundations.
+- Phase 1 data layer is implemented and validated with migration + seed + backend tests.
+- Auth APIs, tenant context middleware, and RBAC enforcement are planned for the next phase.

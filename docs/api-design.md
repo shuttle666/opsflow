@@ -1,5 +1,10 @@
 # API Design (Phase 3 - Planned)
 
+## Current Status
+
+- Auth/Tenant/Customer APIs are still planned.
+- Job status workflow rules are already implemented in the backend domain layer (`transitionJobStatus`), but no HTTP endpoints are exposed yet.
+
 ## Auth
 
 POST /auth/register  

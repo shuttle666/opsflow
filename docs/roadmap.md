@@ -1,20 +1,26 @@
 # Roadmap
 
 ## Phase 1
+- Status: Completed
 - Project initialization
 - Docker development environment
-- Prisma setup (no models)
+- Base Prisma setup
 
 ## Phase 2
+- Status: Completed (data layer)
 - Prisma core models
   - User
   - Tenant
   - Membership
   - Customer
+  - Job
+  - JobStatusHistory
 - Migration
 - Seed script
+- Job status transition rules (domain layer)
 
 ## Phase 3
+- Status: In progress (planned next)
 - Authentication
 - Tenant context
 - Basic RBAC

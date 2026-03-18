@@ -6,4 +6,139 @@ datasource db {
   provider = "postgresql"
 }
 
-// Models will be added in a later step.
+enum TenantStatus {
+  ACTIVE
+  DEACTIVATED
+}
+
+enum MembershipRole {
+  OWNER
+  MANAGER
+  STAFF
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INVITED
+  DISABLED
+}
+
+enum JobStatus {
+  NEW
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id               String             @id @default(uuid()) @db.Uuid
+  email            String             @unique
+  passwordHash     String             @map("password_hash")
+  displayName      String             @map("display_name")
+  isActive         Boolean            @default(true) @map("is_active")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+  memberships      Membership[]
+  createdCustomers Customer[]         @relation("CustomerCreatedBy")
+  createdJobs      Job[]              @relation("JobCreatedBy")
+  assignedJobs     Job[]              @relation("JobAssignedTo")
+  jobStatusChanges JobStatusHistory[] @relation("JobStatusChangedBy")
+
+  @@map("users")
+}
+
+model Tenant {
+  id               String             @id @default(uuid()) @db.Uuid
+  name             String
+  slug             String             @unique
+  status           TenantStatus       @default(ACTIVE)
+  deletedAt        DateTime?          @map("deleted_at")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+  memberships      Membership[]
+  customers        Customer[]
+  jobs             Job[]
+  jobStatusHistory JobStatusHistory[]
+
+  @@index([status])
+  @@map("tenants")
+}
+
+model Membership {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  tenantId  String           @map("tenant_id") @db.Uuid
+  role      MembershipRole
+  status    MembershipStatus @default(ACTIVE)
+  createdAt DateTime         @default(now()) @map("created_at")
+  user      User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, tenantId])
+  @@index([tenantId, role])
+  @@map("memberships")
+}
+
+model Customer {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  name        String
+  phone       String?
+  email       String?
+  address     String?
+  createdById String   @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  createdBy   User     @relation("CustomerCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  jobs        Job[]
+
+  @@unique([id, tenantId])
+  @@index([tenantId])
+  @@index([tenantId, createdAt])
+  @@map("customers")
+}
+
+model Job {
+  id            String             @id @default(uuid()) @db.Uuid
+  tenantId      String             @map("tenant_id") @db.Uuid
+  customerId    String             @map("customer_id") @db.Uuid
+  title         String
+  description   String?
+  status        JobStatus          @default(NEW)
+  assignedToId  String?            @map("assigned_to_id") @db.Uuid
+  createdById   String             @map("created_by_id") @db.Uuid
+  scheduledAt   DateTime?          @map("scheduled_at")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  customer      Customer           @relation(fields: [customerId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  assignedTo    User?              @relation("JobAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdBy     User               @relation("JobCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  statusHistory JobStatusHistory[]
+
+  @@unique([id, tenantId])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, customerId])
+  @@map("jobs")
+}
+
+model JobStatusHistory {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  jobId       String    @map("job_id") @db.Uuid
+  fromStatus  JobStatus @map("from_status")
+  toStatus    JobStatus @map("to_status")
+  changedById String?   @map("changed_by_id") @db.Uuid
+  reason      String?
+  changedAt   DateTime  @default(now()) @map("changed_at")
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  job         Job       @relation(fields: [jobId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  changedBy   User?     @relation("JobStatusChangedBy", fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([jobId, changedAt])
+  @@map("job_status_history")
+}

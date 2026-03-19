@@ -31,19 +31,42 @@ enum JobStatus {
   CANCELLED
 }
 
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  CANCELLED
+  EXPIRED
+}
+
+enum AuditAction {
+  AUTH_REGISTER
+  AUTH_LOGIN
+  AUTH_LOGIN_FAILED
+  AUTH_REFRESH
+  AUTH_LOGOUT
+  AUTH_SWITCH_TENANT
+  TENANT_INVITATION_CREATED
+  TENANT_INVITATION_ACCEPTED
+  RBAC_FORBIDDEN
+}
+
 model User {
-  id               String             @id @default(uuid()) @db.Uuid
-  email            String             @unique
-  passwordHash     String             @map("password_hash")
-  displayName      String             @map("display_name")
-  isActive         Boolean            @default(true) @map("is_active")
-  createdAt        DateTime           @default(now()) @map("created_at")
-  updatedAt        DateTime           @updatedAt @map("updated_at")
-  memberships      Membership[]
-  createdCustomers Customer[]         @relation("CustomerCreatedBy")
-  createdJobs      Job[]              @relation("JobCreatedBy")
-  assignedJobs     Job[]              @relation("JobAssignedTo")
-  jobStatusChanges JobStatusHistory[] @relation("JobStatusChangedBy")
+  id                  String             @id @default(uuid()) @db.Uuid
+  email               String             @unique
+  passwordHash        String             @map("password_hash")
+  displayName         String             @map("display_name")
+  isActive            Boolean            @default(true) @map("is_active")
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+  memberships         Membership[]
+  createdCustomers    Customer[]         @relation("CustomerCreatedBy")
+  createdJobs         Job[]              @relation("JobCreatedBy")
+  assignedJobs        Job[]              @relation("JobAssignedTo")
+  jobStatusChanges    JobStatusHistory[] @relation("JobStatusChangedBy")
+  authSessions        AuthSession[]
+  sentInvitations     TenantInvitation[] @relation("TenantInvitationInvitedBy")
+  receivedInvitations TenantInvitation[] @relation("TenantInvitationInvitedUser")
+  auditLogs           AuditLog[]
 
   @@map("users")
 }
@@ -60,6 +83,9 @@ model Tenant {
   customers        Customer[]
   jobs             Job[]
   jobStatusHistory JobStatusHistory[]
+  authSessions     AuthSession[]
+  invitations      TenantInvitation[]
+  auditLogs        AuditLog[]
 
   @@index([status])
   @@map("tenants")
@@ -141,4 +167,72 @@ model JobStatusHistory {
   @@index([tenantId])
   @@index([jobId, changedAt])
   @@map("job_status_history")
+}
+
+model AuthSession {
+  id                  String         @id @default(uuid()) @db.Uuid
+  userId              String         @map("user_id") @db.Uuid
+  tenantId            String         @map("tenant_id") @db.Uuid
+  role                MembershipRole
+  refreshTokenHash    String         @unique @map("refresh_token_hash")
+  expiresAt           DateTime       @map("expires_at")
+  revokedAt           DateTime?      @map("revoked_at")
+  replacedBySessionId String?        @map("replaced_by_session_id") @db.Uuid
+  ipAddress           String?        @map("ip_address")
+  userAgent           String?        @map("user_agent")
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+  user                User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  tenant              Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  replacedBySession   AuthSession?   @relation("AuthSessionRotation", fields: [replacedBySessionId], references: [id], onDelete: SetNull)
+  rotatedSessions     AuthSession[]  @relation("AuthSessionRotation")
+
+  @@index([userId, revokedAt])
+  @@index([tenantId, revokedAt])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
+
+model TenantInvitation {
+  id            String           @id @default(uuid()) @db.Uuid
+  tenantId      String           @map("tenant_id") @db.Uuid
+  invitedById   String           @map("invited_by_id") @db.Uuid
+  invitedUserId String?          @map("invited_user_id") @db.Uuid
+  email         String
+  role          MembershipRole
+  tokenHash     String           @unique @map("token_hash")
+  status        InvitationStatus @default(PENDING)
+  expiresAt     DateTime         @map("expires_at")
+  acceptedAt    DateTime?        @map("accepted_at")
+  cancelledAt   DateTime?        @map("cancelled_at")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  invitedBy     User             @relation("TenantInvitationInvitedBy", fields: [invitedById], references: [id], onDelete: Restrict)
+  invitedUser   User?            @relation("TenantInvitationInvitedUser", fields: [invitedUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, status])
+  @@index([invitedUserId, status])
+  @@index([email, status])
+  @@map("tenant_invitations")
+}
+
+model AuditLog {
+  id         String      @id @default(uuid()) @db.Uuid
+  tenantId   String?     @map("tenant_id") @db.Uuid
+  userId     String?     @map("user_id") @db.Uuid
+  action     AuditAction
+  targetType String?     @map("target_type")
+  targetId   String?     @map("target_id")
+  ipAddress  String?     @map("ip_address")
+  userAgent  String?     @map("user_agent")
+  metadata   Json?
+  createdAt  DateTime    @default(now()) @map("created_at")
+  tenant     Tenant?     @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  user       User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_logs")
 }

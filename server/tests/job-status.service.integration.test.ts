@@ -1,20 +1,7 @@
 import { JobStatus, MembershipRole, MembershipStatus, TenantStatus } from "@prisma/client";
 import { prisma } from "../src/lib/prisma";
 import { JobDomainError, transitionJobStatus } from "../src/modules/job";
-
-const runDbTests =
-  process.env.RUN_DB_TESTS === "true" &&
-  process.env.ALLOW_DB_TEST_RESET === "true";
-const describeIfDb = runDbTests ? describe : describe.skip;
-
-async function resetDatabase() {
-  await prisma.jobStatusHistory.deleteMany();
-  await prisma.job.deleteMany();
-  await prisma.customer.deleteMany();
-  await prisma.membership.deleteMany();
-  await prisma.tenant.deleteMany();
-  await prisma.user.deleteMany();
-}
+import { describeIfDb, resetDatabase } from "./helpers/db";
 
 describeIfDb("job transition service + schema constraints", () => {
   beforeAll(async () => {

@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
+import bcrypt from "bcryptjs";
 import {
   JobStatus,
   MembershipRole,
@@ -44,12 +44,11 @@ const ids = {
   ],
 };
 
-function hashPassword(plainText: string) {
-  return createHash("sha256").update(plainText).digest("hex");
-}
-
 async function main() {
   await prisma.$transaction([
+    prisma.auditLog.deleteMany(),
+    prisma.tenantInvitation.deleteMany(),
+    prisma.authSession.deleteMany(),
     prisma.jobStatusHistory.deleteMany(),
     prisma.job.deleteMany(),
     prisma.customer.deleteMany(),
@@ -72,19 +71,19 @@ async function main() {
       {
         id: ids.owner,
         email: "owner@acme.example",
-        passwordHash: hashPassword("owner-password-123"),
+        passwordHash: bcrypt.hashSync("owner-password-123", 10),
         displayName: "Avery Owner",
       },
       {
         id: ids.manager,
         email: "manager@acme.example",
-        passwordHash: hashPassword("manager-password-123"),
+        passwordHash: bcrypt.hashSync("manager-password-123", 10),
         displayName: "Morgan Manager",
       },
       {
         id: ids.staff,
         email: "staff@acme.example",
-        passwordHash: hashPassword("staff-password-123"),
+        passwordHash: bcrypt.hashSync("staff-password-123", 10),
         displayName: "Sam Staff",
       },
     ],

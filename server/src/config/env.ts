@@ -13,6 +13,15 @@ const envSchema = z.object({
     .string()
     .min(1)
     .default("postgresql://opsflow:opsflow@localhost:5432/opsflow"),
+  JWT_ACCESS_SECRET: z
+    .string()
+    .min(16)
+    .default("dev-access-secret-change-me"),
+  JWT_ACCESS_EXPIRES_IN_MINUTES: z.coerce.number().int().positive().default(15),
+  JWT_REFRESH_EXPIRES_IN_DAYS: z.coerce.number().int().positive().default(7),
+  AUTH_SESSION_LIMIT: z.coerce.number().int().positive().default(5),
+  BCRYPT_SALT_ROUNDS: z.coerce.number().int().min(8).max(14).default(10),
+  INVITATION_EXPIRES_IN_DAYS: z.coerce.number().int().positive().default(7),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

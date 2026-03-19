@@ -6,27 +6,34 @@ const frontendModules = [
   "App Router foundation",
   "Tailwind CSS styling",
   "TanStack Query provider",
-  "Zustand auth placeholder",
+  "Zustand auth session store",
+  "Token refresh + tenant context",
 ];
 
 export default function HomePage() {
   return (
     <AppShell
       title="OpsFlow engineering foundation"
-      description="A clean starter for the operations platform. The client is ready for future auth, customer, job, and staff feature modules."
+      description="The client now includes an Auth MVP connected to backend APIs, plus a dashboard shell ready for customer, job, and staff modules."
     >
       <section className="grid gap-6 lg:grid-cols-[1.3fr_0.9fr]">
         <SectionCard
           eyebrow="Overview"
           title="Build the product on stable rails"
-          description="This starter intentionally focuses on architecture, shared providers, and placeholder UI instead of business logic."
+          description="This foundation focuses on stable architecture, real authentication flow, and clear room for business modules."
         >
           <div className="flex flex-wrap gap-3">
+            <Link
+              href="/register"
+              className="rounded-full bg-cyan-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-cyan-700"
+            >
+              Create account
+            </Link>
             <Link
               href="/login"
               className="rounded-full bg-slate-950 px-5 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
             >
-              Open login placeholder
+              Open login
             </Link>
             <Link
               href="/dashboard"

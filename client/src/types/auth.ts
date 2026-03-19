@@ -1,13 +1,66 @@
-export type AuthStatus = "authenticated" | "unauthenticated";
+export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
+
+export type MembershipRole = "OWNER" | "MANAGER" | "STAFF";
 
 export type AuthUser = {
   id: string;
-  name: string;
   email: string;
-  role: "admin" | "dispatcher" | "staff";
+  displayName: string;
+};
+
+export type TenantMembership = {
+  tenantId: string;
+  tenantName: string;
+  tenantSlug: string;
+  role: MembershipRole;
+};
+
+export type AuthTokens = {
+  accessToken: string;
+  refreshToken: string;
 };
 
 export type AuthCredentials = {
   email: string;
   password: string;
+  tenantId?: string;
+};
+
+export type RegisterInput = {
+  email: string;
+  password: string;
+  displayName: string;
+  tenantName?: string;
+};
+
+export type AuthResult = AuthTokens & {
+  expiresInMinutes: number;
+  user: AuthUser;
+  currentTenant: TenantMembership;
+  availableTenants: TenantMembership[];
+};
+
+export type MeResult = {
+  user: AuthUser;
+  currentTenant: TenantMembership;
+  availableTenants: TenantMembership[];
+};
+
+export type InvitationAcceptedResult = {
+  tenantId: string;
+  role: MembershipRole;
+};
+
+export type InvitationCreateInput = {
+  email: string;
+  role: Extract<MembershipRole, "MANAGER" | "STAFF">;
+};
+
+export type InvitationCreatedResult = {
+  id: string;
+  tenantId: string;
+  email: string;
+  role: Extract<MembershipRole, "MANAGER" | "STAFF">;
+  expiresAt: string;
+  token: string;
 };

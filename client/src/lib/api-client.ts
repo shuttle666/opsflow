@@ -5,6 +5,30 @@ type RequestOptions = {
   cache?: RequestCache;
 };
 
+export type ApiSuccessResponse<T> = {
+  success: true;
+  message: string;
+  data?: T;
+  meta?: Record<string, unknown>;
+};
+
+export type ApiErrorResponse = {
+  success: false;
+  message: string;
+  details?: unknown;
+};
+
+export class ApiClientError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+    public readonly details?: unknown,
+  ) {
+    super(message);
+    this.name = "ApiClientError";
+  }
+}
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 
@@ -19,11 +43,19 @@ async function request<T>(path: string, options: RequestOptions = {}) {
     cache: options.cache ?? "no-store",
   });
 
+  const isJson = response.headers.get("content-type")?.includes("application/json");
+  const payload = isJson ? await response.json().catch(() => undefined) : undefined;
+
   if (!response.ok) {
-    throw new Error(`API request failed with status ${response.status}`);
+    const errorPayload = payload as ApiErrorResponse | undefined;
+    throw new ApiClientError(
+      response.status,
+      errorPayload?.message ?? `API request failed with status ${response.status}`,
+      errorPayload?.details,
+    );
   }
 
-  return (await response.json()) as T;
+  return payload as T;
 }
 
 export const apiClient = {

@@ -39,10 +39,25 @@ pnpm dev
 
 ```bash
 cd client && pnpm build && pnpm lint
+cd client && pnpm test
 cd server && pnpm typecheck && pnpm build && pnpm test
 cd server && pnpm prisma:migrate:deploy && pnpm prisma:seed
 cd server && pnpm db:reset
 ```
+
+## Frontend Auth Demo (Phase 2.1)
+
+Manual demo chain for the current frontend implementation:
+
+1. User A opens `/register`, creates an account, and is auto-signed in.
+2. User A opens `/dashboard` and creates an invitation token.
+3. User B signs in (or registers) and opens `/invitations/accept` with the token.
+4. User B accepts the invitation and sees updated tenant membership context.
+
+Notes:
+
+- This is a manual demo flow, not an automatic chained workflow.
+- Invitation delivery is token-based in-app for now (no email sending in this phase).
 
 ## Docker Development
 
@@ -122,4 +137,4 @@ docker compose -f docker-compose.dev.yml down -v
 ## Notes
 
 - Phase 1 data layer is implemented and validated with migration + seed + backend tests.
-- Auth APIs, tenant context middleware, and RBAC enforcement are planned for the next phase.
+- Phase 2 backend Auth/Tenant Context/RBAC and Phase 2.1 frontend Auth flow are implemented.

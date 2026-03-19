@@ -2,21 +2,20 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AppShell } from "@/components/ui/app-shell";
 import { SectionCard } from "@/components/ui/section-card";
-import { loginSchema, type LoginFormValues } from "@/features/auth/login-schema";
+import { registerSchema, type RegisterFormValues } from "@/features/auth";
 import { useAuthStore } from "@/store/auth-store";
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const login = useAuthStore((state) => state.login);
+  const registerUser = useAuthStore((state) => state.register);
   const status = useAuthStore((state) => state.status);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const nextPath = useMemo(() => {
     const rawNext = searchParams.get("next");
@@ -31,55 +30,64 @@ export default function LoginPage() {
     if (status === "authenticated") {
       router.replace(nextPath);
     }
-  }, [status, nextPath, router]);
+  }, [nextPath, router, status]);
 
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<LoginFormValues>({
-    resolver: zodResolver(loginSchema),
+  } = useForm<RegisterFormValues>({
+    resolver: zodResolver(registerSchema),
     defaultValues: {
-      email: "owner@acme.example",
-      password: "owner-password-123",
+      email: "",
+      password: "",
+      displayName: "",
+      tenantName: "",
     },
   });
 
-  const onSubmit = async (values: LoginFormValues) => {
+  const onSubmit = async (values: RegisterFormValues) => {
     setSubmitError(null);
 
     try {
-      await login(values);
+      await registerUser({
+        email: values.email,
+        password: values.password,
+        displayName: values.displayName,
+        tenantName: values.tenantName?.trim() ? values.tenantName : undefined,
+      });
       router.push(nextPath);
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Login failed. Please try again.";
+        error instanceof Error
+          ? error.message
+          : "Registration failed. Please try again.";
       setSubmitError(message);
     }
   };
 
   return (
     <AppShell
-      title="Sign in to OpsFlow"
-      description="Use your account to access protected operational modules. Session refresh and tenant context are now connected to the backend."
+      title="Create your OpsFlow workspace"
+      description="Register a new account and tenant, then continue directly into your operational dashboard."
     >
       <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[0.95fr_1.05fr]">
         <SectionCard
-          eyebrow="Auth flow"
-          title="Production-like session behavior"
-          description="Access token, refresh token, and tenant context are handled in the client auth store and validated by backend APIs."
+          eyebrow="Onboarding"
+          title="Fast account bootstrap"
+          description="Registration creates your initial tenant and signs you in immediately."
         >
           <ul className="space-y-3 text-sm text-slate-600">
-            <li>Validated with Zod before submit.</li>
-            <li>Managed with React Hook Form for ergonomics.</li>
-            <li>Auto refreshes expired access tokens once when possible.</li>
+            <li>Securely validated with Zod + React Hook Form.</li>
+            <li>Returns access and refresh tokens after account creation.</li>
+            <li>Redirects to your dashboard when setup is complete.</li>
           </ul>
         </SectionCard>
 
         <SectionCard
           eyebrow="Form"
-          title="Sign in to OpsFlow"
-          description="Use seeded users from your local database or your own account. Successful login redirects to your target page."
+          title="Register account"
+          description="Tenant name is optional. If omitted, OpsFlow creates a default workspace name."
         >
           <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
             <label className="block space-y-2">
@@ -100,13 +108,36 @@ export default function LoginPage() {
                 {...register("password")}
                 type="password"
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
-                placeholder="owner-password-123"
+                placeholder="minimum 8 characters"
               />
               {errors.password ? (
-                <p className="text-sm text-rose-600">
-                  {errors.password.message}
-                </p>
+                <p className="text-sm text-rose-600">{errors.password.message}</p>
               ) : null}
+            </label>
+
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-slate-700">
+                Display Name
+              </span>
+              <input
+                {...register("displayName")}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+                placeholder="Avery Owner"
+              />
+              {errors.displayName ? (
+                <p className="text-sm text-rose-600">{errors.displayName.message}</p>
+              ) : null}
+            </label>
+
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-slate-700">
+                Tenant Name (optional)
+              </span>
+              <input
+                {...register("tenantName")}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+                placeholder="Acme Home Services"
+              />
             </label>
 
             <button
@@ -114,7 +145,7 @@ export default function LoginPage() {
               disabled={isSubmitting}
               className="w-full rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
             >
-              {isSubmitting ? "Signing in..." : "Sign in"}
+              {isSubmitting ? "Creating account..." : "Create account"}
             </button>
 
             {submitError ? (
@@ -122,12 +153,12 @@ export default function LoginPage() {
             ) : null}
 
             <p className="text-sm text-slate-600">
-              New to OpsFlow?{" "}
+              Already have an account?{" "}
               <Link
-                href={`/register?next=${encodeURIComponent(nextPath)}`}
+                href={`/login?next=${encodeURIComponent(nextPath)}`}
                 className="font-semibold text-cyan-700 hover:text-cyan-800"
               >
-                Create an account
+                Sign in
               </Link>
             </p>
           </form>

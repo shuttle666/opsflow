@@ -1,6 +1,7 @@
 export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
 export type MembershipRole = "OWNER" | "MANAGER" | "STAFF";
+export type InvitationStatus = "PENDING" | "ACCEPTED" | "CANCELLED" | "EXPIRED";
 
 export type AuthUser = {
   id: string;
@@ -62,5 +63,34 @@ export type InvitationCreatedResult = {
   email: string;
   role: Extract<MembershipRole, "MANAGER" | "STAFF">;
   expiresAt: string;
-  token: string;
+};
+
+export type MyInvitationItem = {
+  id: string;
+  tenantId: string;
+  tenantName: string;
+  role: MembershipRole;
+  status: InvitationStatus;
+  expiresAt: string;
+  createdAt: string;
+};
+
+export type TenantInvitationItem = {
+  id: string;
+  email: string;
+  role: MembershipRole;
+  status: InvitationStatus;
+  expiresAt: string;
+  createdAt: string;
+  invitedBy: {
+    id: string;
+    email: string;
+    displayName: string;
+  };
+};
+
+export type TenantInvitationMutationResult = {
+  id: string;
+  status: InvitationStatus;
+  expiresAt: string;
 };

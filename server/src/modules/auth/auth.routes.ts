@@ -4,13 +4,18 @@ import { authenticate } from "../../middleware/authenticate";
 import { requireRole } from "../../middleware/require-role";
 import { requireTenantAccess } from "../../middleware/require-tenant-access";
 import {
+  acceptInvitationByIdHandler,
   acceptInvitationHandler,
+  cancelTenantInvitationHandler,
   createInvitationHandler,
+  listMyInvitationsHandler,
+  listTenantInvitationsHandler,
   loginHandler,
   logoutHandler,
   meHandler,
   refreshHandler,
   registerHandler,
+  resendTenantInvitationHandler,
   switchTenantHandler,
 } from "./auth.controller";
 
@@ -32,8 +37,30 @@ tenantRouter.post(
   requireRole(MembershipRole.OWNER, MembershipRole.MANAGER),
   createInvitationHandler,
 );
+tenantRouter.get(
+  "/:tenantId/invitations",
+  authenticate,
+  requireTenantAccess,
+  requireRole(MembershipRole.OWNER, MembershipRole.MANAGER),
+  listTenantInvitationsHandler,
+);
+tenantRouter.post(
+  "/:tenantId/invitations/:invitationId/resend",
+  authenticate,
+  requireTenantAccess,
+  requireRole(MembershipRole.OWNER, MembershipRole.MANAGER),
+  resendTenantInvitationHandler,
+);
+tenantRouter.post(
+  "/:tenantId/invitations/:invitationId/cancel",
+  authenticate,
+  requireTenantAccess,
+  requireRole(MembershipRole.OWNER, MembershipRole.MANAGER),
+  cancelTenantInvitationHandler,
+);
 
 invitationRouter.post("/accept", authenticate, acceptInvitationHandler);
+invitationRouter.get("/mine", authenticate, listMyInvitationsHandler);
+invitationRouter.post("/:invitationId/accept", authenticate, acceptInvitationByIdHandler);
 
 export { authRouter, invitationRouter, tenantRouter };
-

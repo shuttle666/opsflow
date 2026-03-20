@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: OpsFlow API
-  version: phase2-v1
+  version: phase2-v2
   license:
     name: MIT
     identifier: MIT
   description: |
     OpenAPI specification for currently implemented Phase 2 backend APIs.
-    Scope includes health, auth, tenant invitation creation, and invitation acceptance.
+    Scope includes health, auth, tenant invitation management, and invitation acceptance.
 servers:
   - url: http://localhost:3000
 security:
@@ -21,6 +21,7 @@ tags:
     description: Tenant-scoped management endpoints.
   - name: Invitation
     description: Invitation lifecycle endpoints.
+
 paths:
   /api/health:
     get:
@@ -41,9 +42,7 @@ paths:
                 data:
                   status: ok
                   environment: development
-                  timestamp: "2026-03-19T08:30:00.000Z"
-        "400":
-          $ref: "#/components/responses/BadRequest"
+                  timestamp: "2026-03-20T04:00:00.000Z"
         "500":
           $ref: "#/components/responses/InternalServerError"
 
@@ -71,27 +70,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiSuccessAuthResponse"
-              example:
-                success: true
-                message: Registration successful.
-                data:
-                  accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.example
-                  refreshToken: 267f078dbf2f4fd4af952f0f08be166786c92b6ba4185f72
-                  expiresInMinutes: 15
-                  user:
-                    id: 2c9613f8-bf4d-444e-bd49-27c2b0f5f1be
-                    email: owner@acme.test
-                    displayName: Acme Owner
-                  currentTenant:
-                    tenantId: 2a8eb353-a5ec-4ab7-a07f-2a39b95d8938
-                    tenantName: Acme Home Services
-                    tenantSlug: acme-home-services
-                    role: OWNER
-                  availableTenants:
-                    - tenantId: 2a8eb353-a5ec-4ab7-a07f-2a39b95d8938
-                      tenantName: Acme Home Services
-                      tenantSlug: acme-home-services
-                      role: OWNER
         "400":
           $ref: "#/components/responses/BadRequest"
         "409":
@@ -122,27 +100,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiSuccessAuthResponse"
-              example:
-                success: true
-                message: Login successful.
-                data:
-                  accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.example
-                  refreshToken: 5932e6ce2a2c44cf8f7ea7c48e749cf760f0f6d4c06dc98d
-                  expiresInMinutes: 15
-                  user:
-                    id: 2c9613f8-bf4d-444e-bd49-27c2b0f5f1be
-                    email: owner@acme.test
-                    displayName: Acme Owner
-                  currentTenant:
-                    tenantId: 2a8eb353-a5ec-4ab7-a07f-2a39b95d8938
-                    tenantName: Acme Home Services
-                    tenantSlug: acme-home-services
-                    role: OWNER
-                  availableTenants:
-                    - tenantId: 2a8eb353-a5ec-4ab7-a07f-2a39b95d8938
-                      tenantName: Acme Home Services
-                      tenantSlug: acme-home-services
-                      role: OWNER
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -173,27 +130,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiSuccessAuthResponse"
-              example:
-                success: true
-                message: Token refresh successful.
-                data:
-                  accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refreshed
-                  refreshToken: 0cb9170f936248a8a1f0f5f4137f9aeb1d06f6a5eb2ff4d0
-                  expiresInMinutes: 15
-                  user:
-                    id: 2c9613f8-bf4d-444e-bd49-27c2b0f5f1be
-                    email: owner@acme.test
-                    displayName: Acme Owner
-                  currentTenant:
-                    tenantId: 2a8eb353-a5ec-4ab7-a07f-2a39b95d8938
-                    tenantName: Acme Home Services
-                    tenantSlug: acme-home-services
-                    role: OWNER
-                  availableTenants:
-                    - tenantId: 2a8eb353-a5ec-4ab7-a07f-2a39b95d8938
-                      tenantName: Acme Home Services
-                      tenantSlug: acme-home-services
-                      role: OWNER
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -225,11 +161,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiSuccessMessageResponse"
-              example:
-                success: true
-                message: Logout successful.
-        "400":
-          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "500":
@@ -249,24 +180,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiSuccessMeResponse"
-              example:
-                success: true
-                message: Current user loaded.
-                data:
-                  user:
-                    id: 2c9613f8-bf4d-444e-bd49-27c2b0f5f1be
-                    email: owner@acme.test
-                    displayName: Acme Owner
-                  currentTenant:
-                    tenantId: 2a8eb353-a5ec-4ab7-a07f-2a39b95d8938
-                    tenantName: Acme Home Services
-                    tenantSlug: acme-home-services
-                    role: OWNER
-                  availableTenants:
-                    - tenantId: 2a8eb353-a5ec-4ab7-a07f-2a39b95d8938
-                      tenantName: Acme Home Services
-                      tenantSlug: acme-home-services
-                      role: OWNER
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -296,27 +209,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiSuccessAuthResponse"
-              example:
-                success: true
-                message: Tenant switched successfully.
-                data:
-                  accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.switched
-                  refreshToken: 2286097f0e3b4f8bbf89f9be2f4f4d33d0c4a0b8be03ff35
-                  expiresInMinutes: 15
-                  user:
-                    id: 2c9613f8-bf4d-444e-bd49-27c2b0f5f1be
-                    email: owner@acme.test
-                    displayName: Acme Owner
-                  currentTenant:
-                    tenantId: 2a8eb353-a5ec-4ab7-a07f-2a39b95d8938
-                    tenantName: Acme Home Services
-                    tenantSlug: acme-home-services
-                    role: OWNER
-                  availableTenants:
-                    - tenantId: 2a8eb353-a5ec-4ab7-a07f-2a39b95d8938
-                      tenantName: Acme Home Services
-                      tenantSlug: acme-home-services
-                      role: OWNER
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -359,8 +251,7 @@ paths:
                   tenantId: 2a8eb353-a5ec-4ab7-a07f-2a39b95d8938
                   email: new-member@acme.test
                   role: STAFF
-                  expiresAt: "2026-03-26T00:00:00.000Z"
-                  token: 9cc2169845f1478ea6ce088f4f8708015a31bb2f6fbfca76
+                  expiresAt: "2026-03-28T12:00:00.000Z"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -371,12 +262,175 @@ paths:
           $ref: "#/components/responses/Conflict"
         "500":
           $ref: "#/components/responses/InternalServerError"
+    get:
+      tags: [Tenant]
+      operationId: listTenantInvitations
+      summary: List invitations in current tenant (OWNER/MANAGER only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantIdPathParam"
+        - $ref: "#/components/parameters/InvitationStatusQueryParam"
+      responses:
+        "200":
+          description: Tenant invitations loaded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccessTenantInvitationsResponse"
+              example:
+                success: true
+                message: Tenant invitations loaded.
+                data:
+                  - id: 525f53d4-c563-49f7-be7b-a638f3f9d88b
+                    email: new-member@acme.test
+                    role: STAFF
+                    status: PENDING
+                    expiresAt: "2026-03-28T12:00:00.000Z"
+                    createdAt: "2026-03-20T04:00:00.000Z"
+                    invitedBy:
+                      id: 2c9613f8-bf4d-444e-bd49-27c2b0f5f1be
+                      email: owner@acme.test
+                      displayName: Acme Owner
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/tenants/{tenantId}/invitations/{invitationId}/resend:
+    post:
+      tags: [Tenant]
+      operationId: resendInvitation
+      summary: Resend (extend) a pending invitation
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantIdPathParam"
+        - $ref: "#/components/parameters/InvitationIdPathParam"
+      responses:
+        "200":
+          description: Invitation resent.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccessTenantInvitationMutationResponse"
+              example:
+                success: true
+                message: Invitation resent.
+                data:
+                  id: 525f53d4-c563-49f7-be7b-a638f3f9d88b
+                  status: PENDING
+                  expiresAt: "2026-03-30T12:00:00.000Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/tenants/{tenantId}/invitations/{invitationId}/cancel:
+    post:
+      tags: [Tenant]
+      operationId: cancelInvitation
+      summary: Cancel a pending invitation
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantIdPathParam"
+        - $ref: "#/components/parameters/InvitationIdPathParam"
+      responses:
+        "200":
+          description: Invitation cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccessTenantInvitationMutationResponse"
+              example:
+                success: true
+                message: Invitation cancelled.
+                data:
+                  id: 525f53d4-c563-49f7-be7b-a638f3f9d88b
+                  status: CANCELLED
+                  expiresAt: "2026-03-30T12:00:00.000Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/invitations/mine:
+    get:
+      tags: [Invitation]
+      operationId: listMyInvitations
+      summary: List pending invitations visible to current user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: My invitations loaded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccessMyInvitationsResponse"
+              example:
+                success: true
+                message: My invitations loaded.
+                data:
+                  - id: 525f53d4-c563-49f7-be7b-a638f3f9d88b
+                    tenantId: 2a8eb353-a5ec-4ab7-a07f-2a39b95d8938
+                    tenantName: Acme Home Services
+                    role: STAFF
+                    status: PENDING
+                    expiresAt: "2026-03-28T12:00:00.000Z"
+                    createdAt: "2026-03-20T04:00:00.000Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/invitations/{invitationId}/accept:
+    post:
+      tags: [Invitation]
+      operationId: acceptInvitationById
+      summary: Accept invitation by invitation id
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/InvitationIdPathParam"
+      responses:
+        "200":
+          description: Invitation accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccessInvitationAcceptedResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
   /api/invitations/accept:
     post:
       tags: [Invitation]
-      operationId: acceptInvitation
-      summary: Accept an invitation for the signed-in user
+      operationId: acceptInvitationByToken
+      summary: Accept invitation by token (fallback)
       security:
         - bearerAuth: []
       requestBody:
@@ -394,12 +448,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiSuccessInvitationAcceptedResponse"
-              example:
-                success: true
-                message: Invitation accepted.
-                data:
-                  tenantId: 2a8eb353-a5ec-4ab7-a07f-2a39b95d8938
-                  role: STAFF
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -429,6 +477,20 @@ components:
       schema:
         type: string
         format: uuid
+    InvitationIdPathParam:
+      name: invitationId
+      in: path
+      required: true
+      description: Invitation UUID.
+      schema:
+        type: string
+        format: uuid
+    InvitationStatusQueryParam:
+      name: status
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/InvitationStatus"
 
   responses:
     BadRequest:
@@ -506,6 +568,10 @@ components:
     MembershipRole:
       type: string
       enum: [OWNER, MANAGER, STAFF]
+
+    InvitationStatus:
+      type: string
+      enum: [PENDING, ACCEPTED, CANCELLED, EXPIRED]
 
     RegisterRequest:
       type: object
@@ -648,7 +714,7 @@ components:
 
     InvitationCreatedResult:
       type: object
-      required: [id, tenantId, email, role, expiresAt, token]
+      required: [id, tenantId, email, role, expiresAt]
       properties:
         id:
           type: string
@@ -665,8 +731,6 @@ components:
         expiresAt:
           type: string
           format: date-time
-        token:
-          type: string
 
     InvitationAcceptedResult:
       type: object
@@ -677,6 +741,72 @@ components:
           format: uuid
         role:
           $ref: "#/components/schemas/MembershipRole"
+
+    MyInvitationItem:
+      type: object
+      required: [id, tenantId, tenantName, role, status, expiresAt, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        tenantName:
+          type: string
+        role:
+          $ref: "#/components/schemas/MembershipRole"
+        status:
+          $ref: "#/components/schemas/InvitationStatus"
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    TenantInvitationItem:
+      type: object
+      required:
+        - id
+        - email
+        - role
+        - status
+        - expiresAt
+        - createdAt
+        - invitedBy
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        role:
+          $ref: "#/components/schemas/MembershipRole"
+        status:
+          $ref: "#/components/schemas/InvitationStatus"
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        invitedBy:
+          $ref: "#/components/schemas/UserSummary"
+
+    TenantInvitationMutationResult:
+      type: object
+      required: [id, status, expiresAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/InvitationStatus"
+        expiresAt:
+          type: string
+          format: date-time
 
     HealthData:
       type: object
@@ -700,6 +830,10 @@ components:
           enum: [true]
         message:
           type: string
+        data:
+          type: object
+          additionalProperties: true
+          nullable: true
         meta:
           type: object
           additionalProperties: true
@@ -775,6 +909,55 @@ components:
           type: string
         data:
           $ref: "#/components/schemas/InvitationAcceptedResult"
+        meta:
+          type: object
+          additionalProperties: true
+
+    ApiSuccessMyInvitationsResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/MyInvitationItem"
+        meta:
+          type: object
+          additionalProperties: true
+
+    ApiSuccessTenantInvitationsResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/TenantInvitationItem"
+        meta:
+          type: object
+          additionalProperties: true
+
+    ApiSuccessTenantInvitationMutationResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        message:
+          type: string
+        data:
+          $ref: "#/components/schemas/TenantInvitationMutationResult"
         meta:
           type: object
           additionalProperties: true

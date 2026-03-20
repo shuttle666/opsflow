@@ -2,6 +2,7 @@
 
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { InvitationCreateCard } from "@/components/auth/invitation-create-card";
+import { InvitationInboxCard } from "@/components/auth/invitation-inbox-card";
 import { AppShell } from "@/components/ui/app-shell";
 import { SectionCard } from "@/components/ui/section-card";
 import { useAuthStore } from "@/store/auth-store";
@@ -60,7 +61,10 @@ export default function DashboardPage() {
           </div>
         </SectionCard>
 
-        <InvitationCreateCard />
+        <div className="grid gap-4 lg:grid-cols-2">
+          <InvitationInboxCard />
+          <InvitationCreateCard />
+        </div>
       </AuthGuard>
     </AppShell>
   );

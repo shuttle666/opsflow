@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { SectionCard } from "@/components/ui/section-card";
 import {
@@ -9,7 +9,7 @@ import {
   type InvitationCreateFormValues,
 } from "@/features/auth";
 import { useAuthStore } from "@/store/auth-store";
-import type { MembershipRole } from "@/types/auth";
+import type { MembershipRole, TenantInvitationItem } from "@/types/auth";
 
 const INVITER_ROLES: MembershipRole[] = ["OWNER", "MANAGER"];
 
@@ -21,38 +21,21 @@ function canCreateInvitation(role: MembershipRole | undefined) {
   return INVITER_ROLES.includes(role);
 }
 
-async function copyText(text: string) {
-  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-
-  if (typeof document === "undefined") {
-    return;
-  }
-
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.style.position = "fixed";
-  textarea.style.left = "-9999px";
-  document.body.appendChild(textarea);
-  textarea.focus();
-  textarea.select();
-  document.execCommand("copy");
-  document.body.removeChild(textarea);
+function formatDate(value: string) {
+  return new Date(value).toLocaleString();
 }
 
 export function InvitationCreateCard() {
   const currentTenant = useAuthStore((state) => state.currentTenant);
   const createInvitation = useAuthStore((state) => state.createInvitation);
+  const listTenantInvitations = useAuthStore((state) => state.listTenantInvitations);
+  const resendInvitation = useAuthStore((state) => state.resendInvitation);
+  const cancelInvitation = useAuthStore((state) => state.cancelInvitation);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [created, setCreated] = useState<{
-    token: string;
-    expiresAt: string;
-    email: string;
-    role: "MANAGER" | "STAFF";
-  } | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [invitations, setInvitations] = useState<TenantInvitationItem[]>([]);
+  const [loadingList, setLoadingList] = useState(false);
+  const [actingId, setActingId] = useState<string | null>(null);
 
   const {
     register,
@@ -67,11 +50,39 @@ export function InvitationCreateCard() {
     },
   });
 
+  const reloadInvitations = useCallback(async () => {
+    setLoadingList(true);
+
+    try {
+      const rows = await listTenantInvitations();
+      setInvitations(rows);
+    } catch (loadError) {
+      const message =
+        loadError instanceof Error
+          ? loadError.message
+          : "Failed to load tenant invitations.";
+      setError(message);
+    } finally {
+      setLoadingList(false);
+    }
+  }, [listTenantInvitations]);
+
+  const currentTenantId = currentTenant?.tenantId;
+  const currentRole = currentTenant?.role;
+
+  useEffect(() => {
+    if (!currentTenantId || !canCreateInvitation(currentRole)) {
+      return;
+    }
+
+    void reloadInvitations();
+  }, [currentTenantId, currentRole, reloadInvitations]);
+
   if (!currentTenant) {
     return (
       <SectionCard
         eyebrow="Team access"
-        title="Create invitation"
+        title="Invitation management"
         description="Tenant context is not available yet."
       >
         <p className="text-sm text-slate-600">Please refresh your session first.</p>
@@ -84,7 +95,7 @@ export function InvitationCreateCard() {
     return (
       <SectionCard
         eyebrow="Team access"
-        title="Create invitation"
+        title="Invitation management"
         description="Only OWNER or MANAGER can invite members in this tenant."
       >
         <p className="text-sm text-slate-600">
@@ -97,27 +108,25 @@ export function InvitationCreateCard() {
   return (
     <SectionCard
       eyebrow="Team access"
-      title="Create invitation"
-      description="Invite team members with MANAGER or STAFF role. Token sharing is manual in this stage."
+      title="Invitation management"
+      description="Create, review, resend, and cancel invitations directly from Dashboard."
     >
       <form
         className="space-y-4"
         onSubmit={handleSubmit(async (values) => {
           setError(null);
-          setCopied(false);
+          setSuccess(null);
 
           try {
             const result = await createInvitation(values);
-            setCreated({
-              token: result.token,
-              expiresAt: result.expiresAt,
-              email: result.email,
-              role: result.role,
-            });
+            setSuccess(
+              `Invitation created for ${result.email} (${result.role}), expires at ${formatDate(result.expiresAt)}.`,
+            );
             reset({
               email: "",
               role: values.role,
             });
+            await reloadInvitations();
           } catch (submitError) {
             const message =
               submitError instanceof Error
@@ -160,36 +169,100 @@ export function InvitationCreateCard() {
         >
           {isSubmitting ? "Creating..." : "Create invitation"}
         </button>
-
-        {error ? <p className="text-sm text-rose-600">{error}</p> : null}
       </form>
 
-      {created ? (
-        <div className="mt-5 space-y-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
-          <p className="font-semibold">Invitation created successfully.</p>
-          <p>Email: {created.email}</p>
-          <p>Role: {created.role}</p>
-          <p>Expires at: {new Date(created.expiresAt).toLocaleString()}</p>
-          <p className="break-all font-mono text-xs">Token: {created.token}</p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                void copyText(created.token).then(() => setCopied(true));
-              }}
-              className="rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100"
-            >
-              {copied ? "Copied" : "Copy token"}
-            </button>
-            <a
-              href={`/invitations/accept?token=${encodeURIComponent(created.token)}`}
-              className="rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100"
-            >
-              Open accept page
-            </a>
+      {error ? <p className="mt-4 text-sm text-rose-600">{error}</p> : null}
+      {success ? <p className="mt-4 text-sm text-emerald-700">{success}</p> : null}
+
+      <div className="mt-6 space-y-3">
+        <p className="text-sm font-semibold text-slate-800">Invitation list</p>
+
+        {loadingList ? (
+          <p className="text-sm text-slate-600">Loading invitations...</p>
+        ) : null}
+
+        {!loadingList && invitations.length === 0 ? (
+          <p className="text-sm text-slate-600">No invitations yet.</p>
+        ) : null}
+
+        {invitations.map((invitation) => (
+          <div
+            key={invitation.id}
+            className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm"
+          >
+            <p className="font-semibold text-slate-900">{invitation.email}</p>
+            <p className="text-slate-600">
+              Role: {invitation.role} | Status: {invitation.status}
+            </p>
+            <p className="text-slate-600">Expires: {formatDate(invitation.expiresAt)}</p>
+            <p className="text-slate-600">
+              Invited by: {invitation.invitedBy.displayName} ({invitation.invitedBy.email})
+            </p>
+
+            {invitation.status === "PENDING" ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={actingId === invitation.id}
+                  onClick={() => {
+                    setError(null);
+                    setSuccess(null);
+                    setActingId(invitation.id);
+                    void resendInvitation(invitation.id)
+                      .then(async (result) => {
+                        setSuccess(
+                          `Invitation resent. New expiry: ${formatDate(result.expiresAt)}.`,
+                        );
+                        await reloadInvitations();
+                      })
+                      .catch((actionError) => {
+                        const message =
+                          actionError instanceof Error
+                            ? actionError.message
+                            : "Failed to resend invitation.";
+                        setError(message);
+                      })
+                      .finally(() => {
+                        setActingId(null);
+                      });
+                  }}
+                  className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {actingId === invitation.id ? "Working..." : "Resend"}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={actingId === invitation.id}
+                  onClick={() => {
+                    setError(null);
+                    setSuccess(null);
+                    setActingId(invitation.id);
+                    void cancelInvitation(invitation.id)
+                      .then(async () => {
+                        setSuccess("Invitation cancelled.");
+                        await reloadInvitations();
+                      })
+                      .catch((actionError) => {
+                        const message =
+                          actionError instanceof Error
+                            ? actionError.message
+                            : "Failed to cancel invitation.";
+                        setError(message);
+                      })
+                      .finally(() => {
+                        setActingId(null);
+                      });
+                  }}
+                  className="rounded-xl border border-rose-300 bg-white px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {actingId === invitation.id ? "Working..." : "Cancel"}
+                </button>
+              </div>
+            ) : null}
           </div>
-        </div>
-      ) : null}
+        ))}
+      </div>
     </SectionCard>
   );
 }

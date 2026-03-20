@@ -21,7 +21,7 @@ const publicNavigation = [
 const authenticatedNavigation = [
   { href: "/", label: "Home" },
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/invitations/accept", label: "Accept Invitation" },
+  { href: "/invitations/accept", label: "Accept (Fallback)" },
 ];
 
 export function AppShell({ title, description, children }: AppShellProps) {

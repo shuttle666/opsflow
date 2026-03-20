@@ -1,4 +1,9 @@
-import { AuditAction, MembershipRole, MembershipStatus } from "@prisma/client";
+import {
+  AuditAction,
+  InvitationStatus,
+  MembershipRole,
+  MembershipStatus,
+} from "@prisma/client";
 import request from "supertest";
 import { createApp } from "../src/app";
 import { prisma } from "../src/lib/prisma";
@@ -140,5 +145,256 @@ describeIfDb("auth api integration", () => {
     });
 
     expect(forbiddenAudit).not.toBeNull();
+  });
+
+  it("returns only current user's invitations in /invitations/mine", async () => {
+    const passwordHash = await hashPassword("password123");
+    const [tenantA, tenantB, owner, invitee] = await Promise.all([
+      prisma.tenant.create({
+        data: {
+          name: "Mine Tenant A",
+          slug: "mine-tenant-a",
+        },
+      }),
+      prisma.tenant.create({
+        data: {
+          name: "Mine Tenant B",
+          slug: "mine-tenant-b",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "mine-owner@test.dev",
+          passwordHash,
+          displayName: "Mine Owner",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "mine-invitee@test.dev",
+          passwordHash,
+          displayName: "Mine Invitee",
+        },
+      }),
+    ]);
+
+    await prisma.membership.createMany({
+      data: [
+        {
+          userId: owner.id,
+          tenantId: tenantA.id,
+          role: MembershipRole.OWNER,
+          status: MembershipStatus.ACTIVE,
+        },
+        {
+          userId: invitee.id,
+          tenantId: tenantB.id,
+          role: MembershipRole.OWNER,
+          status: MembershipStatus.ACTIVE,
+        },
+      ],
+    });
+
+    const ownerLogin = await request(app).post("/api/auth/login").send({
+      email: owner.email,
+      password: "password123",
+      tenantId: tenantA.id,
+    });
+    const inviteeLogin = await request(app).post("/api/auth/login").send({
+      email: invitee.email,
+      password: "password123",
+      tenantId: tenantB.id,
+    });
+
+    const createdVisible = await request(app)
+      .post(`/api/tenants/${tenantA.id}/invitations`)
+      .set("Authorization", `Bearer ${ownerLogin.body.data.accessToken}`)
+      .send({
+        email: invitee.email,
+        role: "STAFF",
+      });
+    expect(createdVisible.status).toBe(201);
+
+    const createdHidden = await request(app)
+      .post(`/api/tenants/${tenantA.id}/invitations`)
+      .set("Authorization", `Bearer ${ownerLogin.body.data.accessToken}`)
+      .send({
+        email: "hidden-user@test.dev",
+        role: "STAFF",
+      });
+    expect(createdHidden.status).toBe(201);
+
+    const mineRes = await request(app)
+      .get("/api/invitations/mine")
+      .set("Authorization", `Bearer ${inviteeLogin.body.data.accessToken}`);
+
+    expect(mineRes.status).toBe(200);
+    expect(Array.isArray(mineRes.body.data)).toBe(true);
+    expect(mineRes.body.data).toHaveLength(1);
+    expect(mineRes.body.data[0].id).toBe(createdVisible.body.data.id);
+  });
+
+  it("accepts invitation by id and activates membership", async () => {
+    const passwordHash = await hashPassword("password123");
+    const [tenantA, tenantB, owner, invitee] = await Promise.all([
+      prisma.tenant.create({
+        data: {
+          name: "Accept Tenant A",
+          slug: "accept-tenant-a",
+        },
+      }),
+      prisma.tenant.create({
+        data: {
+          name: "Accept Tenant B",
+          slug: "accept-tenant-b",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "accept-owner@test.dev",
+          passwordHash,
+          displayName: "Accept Owner",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "accept-invitee@test.dev",
+          passwordHash,
+          displayName: "Accept Invitee",
+        },
+      }),
+    ]);
+
+    await prisma.membership.createMany({
+      data: [
+        {
+          userId: owner.id,
+          tenantId: tenantA.id,
+          role: MembershipRole.OWNER,
+          status: MembershipStatus.ACTIVE,
+        },
+        {
+          userId: invitee.id,
+          tenantId: tenantB.id,
+          role: MembershipRole.OWNER,
+          status: MembershipStatus.ACTIVE,
+        },
+      ],
+    });
+
+    const ownerLogin = await request(app).post("/api/auth/login").send({
+      email: owner.email,
+      password: "password123",
+      tenantId: tenantA.id,
+    });
+    const inviteeLogin = await request(app).post("/api/auth/login").send({
+      email: invitee.email,
+      password: "password123",
+      tenantId: tenantB.id,
+    });
+
+    const created = await request(app)
+      .post(`/api/tenants/${tenantA.id}/invitations`)
+      .set("Authorization", `Bearer ${ownerLogin.body.data.accessToken}`)
+      .send({
+        email: invitee.email,
+        role: "MANAGER",
+      });
+    expect(created.status).toBe(201);
+
+    const accepted = await request(app)
+      .post(`/api/invitations/${created.body.data.id}/accept`)
+      .set("Authorization", `Bearer ${inviteeLogin.body.data.accessToken}`)
+      .send({});
+
+    expect(accepted.status).toBe(200);
+    expect(accepted.body.data.tenantId).toBe(tenantA.id);
+    expect(accepted.body.data.role).toBe("MANAGER");
+
+    const membership = await prisma.membership.findUnique({
+      where: {
+        userId_tenantId: {
+          userId: invitee.id,
+          tenantId: tenantA.id,
+        },
+      },
+    });
+    expect(membership?.status).toBe(MembershipStatus.ACTIVE);
+    expect(membership?.role).toBe(MembershipRole.MANAGER);
+
+    const invitation = await prisma.tenantInvitation.findUnique({
+      where: { id: created.body.data.id },
+      select: { status: true },
+    });
+    expect(invitation?.status).toBe(InvitationStatus.ACCEPTED);
+  });
+
+  it("supports owner invitation management list/resend/cancel and enforces pending-only transitions", async () => {
+    const passwordHash = await hashPassword("password123");
+    const [tenant, owner] = await Promise.all([
+      prisma.tenant.create({
+        data: {
+          name: "Manage Tenant",
+          slug: "manage-tenant",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "manage-owner@test.dev",
+          passwordHash,
+          displayName: "Manage Owner",
+        },
+      }),
+    ]);
+
+    await prisma.membership.create({
+      data: {
+        userId: owner.id,
+        tenantId: tenant.id,
+        role: MembershipRole.OWNER,
+        status: MembershipStatus.ACTIVE,
+      },
+    });
+
+    const ownerLogin = await request(app).post("/api/auth/login").send({
+      email: owner.email,
+      password: "password123",
+      tenantId: tenant.id,
+    });
+
+    const created = await request(app)
+      .post(`/api/tenants/${tenant.id}/invitations`)
+      .set("Authorization", `Bearer ${ownerLogin.body.data.accessToken}`)
+      .send({
+        email: "managed-user@test.dev",
+        role: "STAFF",
+      });
+    expect(created.status).toBe(201);
+
+    const listed = await request(app)
+      .get(`/api/tenants/${tenant.id}/invitations`)
+      .set("Authorization", `Bearer ${ownerLogin.body.data.accessToken}`);
+    expect(listed.status).toBe(200);
+    expect(listed.body.data.some((item: { id: string }) => item.id === created.body.data.id)).toBe(true);
+
+    const resent = await request(app)
+      .post(`/api/tenants/${tenant.id}/invitations/${created.body.data.id}/resend`)
+      .set("Authorization", `Bearer ${ownerLogin.body.data.accessToken}`)
+      .send({});
+    expect(resent.status).toBe(200);
+    expect(resent.body.data.status).toBe("PENDING");
+
+    const cancelled = await request(app)
+      .post(`/api/tenants/${tenant.id}/invitations/${created.body.data.id}/cancel`)
+      .set("Authorization", `Bearer ${ownerLogin.body.data.accessToken}`)
+      .send({});
+    expect(cancelled.status).toBe(200);
+    expect(cancelled.body.data.status).toBe("CANCELLED");
+
+    const resendAgain = await request(app)
+      .post(`/api/tenants/${tenant.id}/invitations/${created.body.data.id}/resend`)
+      .set("Authorization", `Bearer ${ownerLogin.body.data.accessToken}`)
+      .send({});
+    expect(resendAgain.status).toBe(409);
   });
 });

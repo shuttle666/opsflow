@@ -49,6 +49,36 @@ type AuthResult = {
   availableTenants: ActiveMembership[];
 };
 
+type MyInvitationItem = {
+  id: string;
+  tenantId: string;
+  tenantName: string;
+  role: MembershipRole;
+  status: InvitationStatus;
+  expiresAt: Date;
+  createdAt: Date;
+};
+
+type TenantInvitationItem = {
+  id: string;
+  email: string;
+  role: MembershipRole;
+  status: InvitationStatus;
+  expiresAt: Date;
+  createdAt: Date;
+  invitedBy: {
+    id: string;
+    email: string;
+    displayName: string;
+  };
+};
+
+type TenantInvitationMutationResult = {
+  id: string;
+  status: InvitationStatus;
+  expiresAt: Date;
+};
+
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
@@ -139,6 +169,151 @@ function pickTenantMembership(
   }
 
   return selected;
+}
+
+async function expirePendingInvitations(where: Prisma.TenantInvitationWhereInput) {
+  await prisma.tenantInvitation.updateMany({
+    where: {
+      ...where,
+      status: InvitationStatus.PENDING,
+      expiresAt: {
+        lte: new Date(),
+      },
+    },
+    data: {
+      status: InvitationStatus.EXPIRED,
+    },
+  });
+}
+
+async function getActiveUserOrThrow(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      isActive: true,
+    },
+  });
+
+  if (!user || !user.isActive) {
+    throw new AuthError("INVALID_CREDENTIALS", "User account is inactive.", 401);
+  }
+
+  return user;
+}
+
+async function ensureInvitationAcceptable(input: {
+  invitation: {
+    id: string;
+    tenantId: string;
+    role: MembershipRole;
+    email: string;
+    status: InvitationStatus;
+    expiresAt: Date;
+    tenant: {
+      status: TenantStatus;
+      deletedAt: Date | null;
+    };
+  };
+  userEmail: string;
+}) {
+  const { invitation, userEmail } = input;
+
+  if (invitation.status !== InvitationStatus.PENDING) {
+    throw new AuthError(
+      "INVITATION_ALREADY_USED",
+      "Invitation is no longer pending.",
+      409,
+    );
+  }
+
+  if (invitation.expiresAt <= new Date()) {
+    await prisma.tenantInvitation.update({
+      where: { id: invitation.id },
+      data: {
+        status: InvitationStatus.EXPIRED,
+      },
+    });
+    throw new AuthError("INVITATION_EXPIRED", "Invitation has expired.", 409);
+  }
+
+  if (
+    invitation.tenant.status !== TenantStatus.ACTIVE ||
+    invitation.tenant.deletedAt
+  ) {
+    throw new AuthError("TENANT_INACTIVE", "Tenant is inactive.", 403);
+  }
+
+  if (normalizeEmail(userEmail) !== normalizeEmail(invitation.email)) {
+    throw new AuthError(
+      "INVITATION_USER_MISMATCH",
+      "Invitation email does not match the signed-in user.",
+      403,
+    );
+  }
+}
+
+async function acceptInvitationTransaction(input: {
+  invitationId: string;
+  tenantId: string;
+  role: MembershipRole;
+  userId: string;
+  metadata?: RequestMetadata;
+}) {
+  await prisma.$transaction(async (tx) => {
+    const membership = await tx.membership.findUnique({
+      where: {
+        userId_tenantId: {
+          userId: input.userId,
+          tenantId: input.tenantId,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (membership) {
+      await tx.membership.update({
+        where: { id: membership.id },
+        data: {
+          role: input.role,
+          status: MembershipStatus.ACTIVE,
+        },
+      });
+    } else {
+      await tx.membership.create({
+        data: {
+          userId: input.userId,
+          tenantId: input.tenantId,
+          role: input.role,
+          status: MembershipStatus.ACTIVE,
+        },
+      });
+    }
+
+    await tx.tenantInvitation.update({
+      where: { id: input.invitationId },
+      data: {
+        status: InvitationStatus.ACCEPTED,
+        acceptedAt: new Date(),
+        invitedUserId: input.userId,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        action: AuditAction.TENANT_INVITATION_ACCEPTED,
+        tenantId: input.tenantId,
+        userId: input.userId,
+        targetType: "tenant_invitation",
+        targetId: input.invitationId,
+        ipAddress: input.metadata?.ipAddress,
+        userAgent: input.metadata?.userAgent,
+      },
+    });
+  });
 }
 
 async function createSessionAndTokens(
@@ -666,8 +841,7 @@ export async function createTenantInvitation(
     throw new ApiError(409, "User is already an active member in this tenant.");
   }
 
-  const rawToken = generateRefreshToken();
-  const tokenHash = hashRefreshToken(rawToken);
+  const tokenHash = hashRefreshToken(generateRefreshToken());
   const expiresAt = getInvitationExpiryDate();
 
   const invitation = await prisma.$transaction(async (tx) => {
@@ -733,38 +907,174 @@ export async function createTenantInvitation(
     return createdInvitation;
   });
 
-  return {
-    ...invitation,
-    token: rawToken,
-  };
+  return invitation;
 }
 
-export async function acceptTenantInvitation(
+export async function listMyInvitations(auth: AuthContext) {
+  const user = await getActiveUserOrThrow(auth.userId);
+  const normalizedEmail = normalizeEmail(user.email);
+  const inviteVisibilityWhere: Prisma.TenantInvitationWhereInput = {
+    OR: [{ invitedUserId: user.id }, { email: normalizedEmail }],
+  };
+
+  await expirePendingInvitations(inviteVisibilityWhere);
+
+  const invitations = await prisma.tenantInvitation.findMany({
+    where: {
+      ...inviteVisibilityWhere,
+      status: InvitationStatus.PENDING,
+    },
+    select: {
+      id: true,
+      tenantId: true,
+      role: true,
+      status: true,
+      expiresAt: true,
+      createdAt: true,
+      tenant: {
+        select: {
+          name: true,
+        },
+      },
+    },
+    orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }],
+  });
+
+  return invitations.map((invitation) => ({
+    id: invitation.id,
+    tenantId: invitation.tenantId,
+    tenantName: invitation.tenant.name,
+    role: invitation.role,
+    status: invitation.status,
+    expiresAt: invitation.expiresAt,
+    createdAt: invitation.createdAt,
+  })) satisfies MyInvitationItem[];
+}
+
+export async function listTenantInvitations(
   auth: AuthContext,
-  input: AcceptInvitationInput,
-  metadata?: RequestMetadata,
+  tenantId: string,
+  status?: InvitationStatus,
 ) {
-  const tokenHash = hashRefreshToken(input.token);
-  const user = await prisma.user.findUnique({
-    where: { id: auth.userId },
+  if (auth.tenantId !== tenantId) {
+    throw new AuthError(
+      "TENANT_NOT_FOUND",
+      "Cross-tenant invitation requests are not allowed.",
+      403,
+    );
+  }
+
+  await expirePendingInvitations({ tenantId });
+
+  const invitations = await prisma.tenantInvitation.findMany({
+    where: {
+      tenantId,
+      ...(status ? { status } : {}),
+    },
     select: {
       id: true,
       email: true,
-      isActive: true,
+      role: true,
+      status: true,
+      expiresAt: true,
+      createdAt: true,
+      invitedBy: {
+        select: {
+          id: true,
+          email: true,
+          displayName: true,
+        },
+      },
     },
+    orderBy: [{ createdAt: "desc" }],
   });
 
-  if (!user || !user.isActive) {
-    throw new AuthError("INVALID_CREDENTIALS", "User account is inactive.", 401);
-  }
+  return invitations.map((invitation) => ({
+    id: invitation.id,
+    email: invitation.email,
+    role: invitation.role,
+    status: invitation.status,
+    expiresAt: invitation.expiresAt,
+    createdAt: invitation.createdAt,
+    invitedBy: {
+      id: invitation.invitedBy.id,
+      email: invitation.invitedBy.email,
+      displayName: invitation.invitedBy.displayName,
+    },
+  })) satisfies TenantInvitationItem[];
+}
+
+export async function acceptTenantInvitationById(
+  auth: AuthContext,
+  invitationId: string,
+  metadata?: RequestMetadata,
+) {
+  const user = await getActiveUserOrThrow(auth.userId);
 
   const invitation = await prisma.tenantInvitation.findUnique({
-    where: { tokenHash },
+    where: { id: invitationId },
     select: {
       id: true,
       tenantId: true,
       role: true,
       email: true,
+      status: true,
+      expiresAt: true,
+      tenant: {
+        select: {
+          status: true,
+          deletedAt: true,
+        },
+      },
+    },
+  });
+
+  if (!invitation) {
+    throw new AuthError("INVITATION_NOT_FOUND", "Invitation not found.", 404);
+  }
+
+  await ensureInvitationAcceptable({
+    invitation,
+    userEmail: user.email,
+  });
+
+  await acceptInvitationTransaction({
+    invitationId: invitation.id,
+    tenantId: invitation.tenantId,
+    role: invitation.role,
+    userId: user.id,
+    metadata,
+  });
+
+  return {
+    tenantId: invitation.tenantId,
+    role: invitation.role,
+  };
+}
+
+export async function resendTenantInvitation(
+  auth: AuthContext,
+  tenantId: string,
+  invitationId: string,
+  metadata?: RequestMetadata,
+) {
+  if (auth.tenantId !== tenantId) {
+    throw new AuthError(
+      "TENANT_NOT_FOUND",
+      "Cross-tenant invitation requests are not allowed.",
+      403,
+    );
+  }
+
+  await expirePendingInvitations({ id: invitationId, tenantId });
+
+  const invitation = await prisma.tenantInvitation.findFirst({
+    where: {
+      id: invitationId,
+      tenantId,
+    },
+    select: {
+      id: true,
       status: true,
       expiresAt: true,
     },
@@ -777,81 +1087,158 @@ export async function acceptTenantInvitation(
   if (invitation.status !== InvitationStatus.PENDING) {
     throw new AuthError(
       "INVITATION_ALREADY_USED",
-      "Invitation is no longer pending.",
+      "Only pending invitations can be resent.",
       409,
     );
   }
 
-  if (invitation.expiresAt <= new Date()) {
-    await prisma.tenantInvitation.update({
-      where: { id: invitation.id },
-      data: {
-        status: InvitationStatus.EXPIRED,
-      },
-    });
-    throw new AuthError("INVITATION_EXPIRED", "Invitation has expired.", 409);
-  }
-
-  if (normalizeEmail(user.email) !== normalizeEmail(invitation.email)) {
-    throw new AuthError(
-      "INVITATION_USER_MISMATCH",
-      "Invitation email does not match the signed-in user.",
-      403,
-    );
-  }
+  const refreshedExpiry = getInvitationExpiryDate();
 
   await prisma.$transaction(async (tx) => {
-    const membership = await tx.membership.findUnique({
-      where: {
-        userId_tenantId: {
-          userId: user.id,
-          tenantId: invitation.tenantId,
-        },
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    if (membership) {
-      await tx.membership.update({
-        where: { id: membership.id },
-        data: {
-          role: invitation.role,
-          status: MembershipStatus.ACTIVE,
-        },
-      });
-    } else {
-      await tx.membership.create({
-        data: {
-          userId: user.id,
-          tenantId: invitation.tenantId,
-          role: invitation.role,
-          status: MembershipStatus.ACTIVE,
-        },
-      });
-    }
-
     await tx.tenantInvitation.update({
       where: { id: invitation.id },
       data: {
-        status: InvitationStatus.ACCEPTED,
-        acceptedAt: new Date(),
-        invitedUserId: user.id,
+        tokenHash: hashRefreshToken(generateRefreshToken()),
+        expiresAt: refreshedExpiry,
       },
     });
 
     await tx.auditLog.create({
       data: {
-        action: AuditAction.TENANT_INVITATION_ACCEPTED,
-        tenantId: invitation.tenantId,
-        userId: user.id,
+        action: AuditAction.TENANT_INVITATION_CREATED,
+        tenantId,
+        userId: auth.userId,
         targetType: "tenant_invitation",
         targetId: invitation.id,
         ipAddress: metadata?.ipAddress,
         userAgent: metadata?.userAgent,
+        metadata: {
+          operation: "resend",
+        },
       },
     });
+  });
+
+  return {
+    id: invitation.id,
+    status: InvitationStatus.PENDING,
+    expiresAt: refreshedExpiry,
+  } satisfies TenantInvitationMutationResult;
+}
+
+export async function cancelTenantInvitation(
+  auth: AuthContext,
+  tenantId: string,
+  invitationId: string,
+  metadata?: RequestMetadata,
+) {
+  if (auth.tenantId !== tenantId) {
+    throw new AuthError(
+      "TENANT_NOT_FOUND",
+      "Cross-tenant invitation requests are not allowed.",
+      403,
+    );
+  }
+
+  await expirePendingInvitations({ id: invitationId, tenantId });
+
+  const invitation = await prisma.tenantInvitation.findFirst({
+    where: {
+      id: invitationId,
+      tenantId,
+    },
+    select: {
+      id: true,
+      status: true,
+      expiresAt: true,
+    },
+  });
+
+  if (!invitation) {
+    throw new AuthError("INVITATION_NOT_FOUND", "Invitation not found.", 404);
+  }
+
+  if (invitation.status !== InvitationStatus.PENDING) {
+    throw new AuthError(
+      "INVITATION_ALREADY_USED",
+      "Only pending invitations can be cancelled.",
+      409,
+    );
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.tenantInvitation.update({
+      where: { id: invitation.id },
+      data: {
+        status: InvitationStatus.CANCELLED,
+        cancelledAt: new Date(),
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        action: AuditAction.TENANT_INVITATION_CREATED,
+        tenantId,
+        userId: auth.userId,
+        targetType: "tenant_invitation",
+        targetId: invitation.id,
+        ipAddress: metadata?.ipAddress,
+        userAgent: metadata?.userAgent,
+        metadata: {
+          operation: "cancel",
+        },
+      },
+    });
+  });
+
+  return {
+    id: invitation.id,
+    status: InvitationStatus.CANCELLED,
+    expiresAt: invitation.expiresAt,
+  } satisfies TenantInvitationMutationResult;
+}
+
+export async function acceptTenantInvitation(
+  auth: AuthContext,
+  input: AcceptInvitationInput,
+  metadata?: RequestMetadata,
+) {
+  const tokenHash = hashRefreshToken(input.token);
+  const user = await getActiveUserOrThrow(auth.userId);
+
+  const invitation = await prisma.tenantInvitation.findUnique({
+    where: { tokenHash },
+    select: {
+      id: true,
+      tenantId: true,
+      role: true,
+      email: true,
+      status: true,
+      expiresAt: true,
+      tenant: {
+        select: {
+          status: true,
+          deletedAt: true,
+        },
+      },
+    },
+  });
+
+  if (!invitation) {
+    throw new AuthError("INVITATION_NOT_FOUND", "Invitation not found.", 404);
+  }
+
+  await ensureInvitationAcceptable({
+    invitation,
+    userEmail: user.email,
+  });
+
+  await acceptInvitationTransaction({
+    invitationId: invitation.id,
+    tenantId: invitation.tenantId,
+    role: invitation.role,
+    userId: user.id,
+    metadata,
   });
 
   return {

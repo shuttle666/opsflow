@@ -1,14 +1,19 @@
 import { create } from "zustand";
 import {
+  acceptInvitationByIdRequest,
   acceptInvitationRequest,
+  cancelInvitationRequest,
   clearStoredTokens,
   createInvitationRequest,
+  listMyInvitationsRequest,
+  listTenantInvitationsRequest,
   loginRequest,
   logoutRequest,
   meRequest,
   readStoredTokens,
   registerRequest,
   refreshRequest,
+  resendInvitationRequest,
   switchTenantRequest,
   writeStoredTokens,
 } from "@/features/auth";
@@ -22,6 +27,10 @@ import type {
   InvitationCreatedResult,
   InvitationAcceptedResult,
   RegisterInput,
+  MyInvitationItem,
+  TenantInvitationItem,
+  TenantInvitationMutationResult,
+  InvitationStatus,
   TenantMembership,
 } from "@/types/auth";
 
@@ -40,6 +49,19 @@ type AuthStore = {
   createInvitation: (
     input: InvitationCreateInput,
   ) => Promise<InvitationCreatedResult>;
+  listMyInvitations: () => Promise<MyInvitationItem[]>;
+  acceptInvitationById: (
+    invitationId: string,
+  ) => Promise<InvitationAcceptedResult>;
+  listTenantInvitations: (
+    status?: InvitationStatus,
+  ) => Promise<TenantInvitationItem[]>;
+  resendInvitation: (
+    invitationId: string,
+  ) => Promise<TenantInvitationMutationResult>;
+  cancelInvitation: (
+    invitationId: string,
+  ) => Promise<TenantInvitationMutationResult>;
   acceptInvitation: (token: string) => Promise<InvitationAcceptedResult>;
   clearSession: () => void;
   refreshAccessToken: () => Promise<AuthResult>;
@@ -197,6 +219,58 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
     return get().withAccessTokenRetry((accessToken) =>
       createInvitationRequest(accessToken, tenantId, input),
+    );
+  },
+  listMyInvitations: async () =>
+    get().withAccessTokenRetry((accessToken) =>
+      listMyInvitationsRequest(accessToken),
+    ),
+  acceptInvitationById: async (invitationId: string) => {
+    const accepted = await get().withAccessTokenRetry((accessToken) =>
+      acceptInvitationByIdRequest(accessToken, invitationId),
+    );
+
+    const me = await get().withAccessTokenRetry((accessToken) =>
+      meRequest(accessToken),
+    );
+
+    set({
+      status: "authenticated",
+      user: me.user,
+      currentTenant: me.currentTenant,
+      availableTenants: me.availableTenants,
+    });
+
+    return accepted;
+  },
+  listTenantInvitations: async (status) => {
+    const tenantId = get().currentTenant?.tenantId;
+    if (!tenantId) {
+      throw new Error("No active tenant selected.");
+    }
+
+    return get().withAccessTokenRetry((accessToken) =>
+      listTenantInvitationsRequest(accessToken, tenantId, status),
+    );
+  },
+  resendInvitation: async (invitationId: string) => {
+    const tenantId = get().currentTenant?.tenantId;
+    if (!tenantId) {
+      throw new Error("No active tenant selected.");
+    }
+
+    return get().withAccessTokenRetry((accessToken) =>
+      resendInvitationRequest(accessToken, tenantId, invitationId),
+    );
+  },
+  cancelInvitation: async (invitationId: string) => {
+    const tenantId = get().currentTenant?.tenantId;
+    if (!tenantId) {
+      throw new Error("No active tenant selected.");
+    }
+
+    return get().withAccessTokenRetry((accessToken) =>
+      cancelInvitationRequest(accessToken, tenantId, invitationId),
     );
   },
   acceptInvitation: async (token: string) => {

@@ -46,15 +46,15 @@ export default function AcceptInvitationPage() {
 
   return (
     <AppShell
-      title="Accept tenant invitation"
-      description="Use your invitation token to join a tenant workspace. You must be signed in with the invited email."
+      title="Accept tenant invitation (fallback)"
+      description="Primary flow is now Dashboard invitation inbox. This page remains as compatibility fallback for token links."
     >
       <AuthGuard>
         <div className="mx-auto grid w-full max-w-3xl gap-6">
           <SectionCard
             eyebrow="Invitation"
             title="Join workspace"
-            description="Paste the invitation token or open this page from an invitation link that already includes it."
+            description="Paste a token if you received one from legacy flow."
           >
             <form className="space-y-4" onSubmit={onSubmit}>
               <label className="block space-y-2">

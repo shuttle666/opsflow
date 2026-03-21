@@ -3,13 +3,23 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useCallback, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
+import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
+import { FormActions, FormSection } from "@/components/ui/form-surface";
 import { SectionCard } from "@/components/ui/section-card";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   invitationCreateSchema,
   type InvitationCreateFormValues,
 } from "@/features/auth";
 import { useAuthStore } from "@/store/auth-store";
 import type { MembershipRole, TenantInvitationItem } from "@/types/auth";
+import {
+  inputClassName,
+  primaryButtonClassName,
+  selectClassName,
+  secondaryButtonClassName,
+  subtleButtonClassName,
+} from "@/components/ui/styles";
 
 const INVITER_ROLES: MembershipRole[] = ["OWNER", "MANAGER"];
 
@@ -96,7 +106,7 @@ export function InvitationCreateCard() {
       <SectionCard
         eyebrow="Team access"
         title="Invitation management"
-        description="Only OWNER or MANAGER can invite members in this tenant."
+        description="Only owner and manager roles can invite new members."
       >
         <p className="text-sm text-slate-600">
           Your current role is <span className="font-semibold">{currentTenant.role}</span>.
@@ -108,8 +118,8 @@ export function InvitationCreateCard() {
   return (
     <SectionCard
       eyebrow="Team access"
-      title="Invitation management"
-      description="Create, review, resend, and cancel invitations directly from Dashboard."
+      title="Invite new members"
+      description="Send workspace access to managers and staff, then keep pending invites moving."
     >
       <form
         className="space-y-4"
@@ -136,64 +146,75 @@ export function InvitationCreateCard() {
           }
         })}
       >
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-slate-700">Invitee email</span>
-          <input
-            {...register("email")}
-            placeholder="new.member@example.com"
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
-          />
-          {errors.email ? (
-            <p className="text-sm text-rose-600">{errors.email.message}</p>
-          ) : null}
-        </label>
-
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-slate-700">Role</span>
-          <select
-            {...register("role")}
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
-          >
-            <option value="MANAGER">MANAGER</option>
-            <option value="STAFF">STAFF</option>
-          </select>
-          {errors.role ? (
-            <p className="text-sm text-rose-600">{errors.role.message}</p>
-          ) : null}
-        </label>
-
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+        <FormSection
+          title="Create invitation"
+          description="Send access directly from the workspace without leaving the current tenant."
         >
-          {isSubmitting ? "Creating..." : "Create invitation"}
-        </button>
+          <div className="grid gap-4 md:grid-cols-[1.4fr_0.8fr]">
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-slate-700">Invitee email</span>
+              <input
+                {...register("email")}
+                placeholder="new.member@example.com"
+                className={inputClassName}
+              />
+              {errors.email ? (
+                <p className="text-sm text-rose-600">{errors.email.message}</p>
+              ) : null}
+            </label>
+
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-slate-700">Role</span>
+              <select {...register("role")} className={selectClassName}>
+                <option value="MANAGER">MANAGER</option>
+                <option value="STAFF">STAFF</option>
+              </select>
+              {errors.role ? (
+                <p className="text-sm text-rose-600">{errors.role.message}</p>
+              ) : null}
+            </label>
+          </div>
+        </FormSection>
+
+        <FormActions>
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className={primaryButtonClassName}
+          >
+            {isSubmitting ? "Creating..." : "Create invitation"}
+          </button>
+        </FormActions>
       </form>
 
       {error ? <p className="mt-4 text-sm text-rose-600">{error}</p> : null}
       {success ? <p className="mt-4 text-sm text-emerald-700">{success}</p> : null}
 
       <div className="mt-6 space-y-3">
-        <p className="text-sm font-semibold text-slate-800">Invitation list</p>
+        <p className="text-sm font-semibold text-slate-800">Pending invitations</p>
 
         {loadingList ? (
           <p className="text-sm text-slate-600">Loading invitations...</p>
         ) : null}
 
         {!loadingList && invitations.length === 0 ? (
-          <p className="text-sm text-slate-600">No invitations yet.</p>
+          <EmptyStatePanel
+            compact
+            title="No invitations yet"
+            description="As you invite managers and staff, pending invitations will be tracked in this list."
+          />
         ) : null}
 
         {invitations.map((invitation) => (
           <div
             key={invitation.id}
-            className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm"
+            className="rounded-[24px] border border-white/70 bg-white p-4 text-sm shadow-sm"
           >
             <p className="font-semibold text-slate-900">{invitation.email}</p>
-            <p className="text-slate-600">
-              Role: {invitation.role} | Status: {invitation.status}
-            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <StatusBadge kind="role" value={invitation.role} />
+              <StatusBadge kind="invitation" value={invitation.status} />
+            </div>
             <p className="text-slate-600">Expires: {formatDate(invitation.expiresAt)}</p>
             <p className="text-slate-600">
               Invited by: {invitation.invitedBy.displayName} ({invitation.invitedBy.email})
@@ -226,7 +247,7 @@ export function InvitationCreateCard() {
                         setActingId(null);
                       });
                   }}
-                  className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  className={subtleButtonClassName}
                 >
                   {actingId === invitation.id ? "Working..." : "Resend"}
                 </button>
@@ -254,7 +275,7 @@ export function InvitationCreateCard() {
                         setActingId(null);
                       });
                   }}
-                  className="rounded-xl border border-rose-300 bg-white px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  className={secondaryButtonClassName}
                 >
                   {actingId === invitation.id ? "Working..." : "Cancel"}
                 </button>

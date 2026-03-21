@@ -10,12 +10,12 @@ vi.mock("next/navigation", () => ({
     replace: replaceMock,
   }),
   usePathname: () => "/dashboard",
-  useSearchParams: () => new URLSearchParams("view=compact"),
 }));
 
 describe("AuthGuard", () => {
   beforeEach(() => {
     replaceMock.mockReset();
+    window.history.replaceState({}, "", "/dashboard?view=compact");
     useAuthStore.setState({
       status: "unauthenticated",
       user: null,

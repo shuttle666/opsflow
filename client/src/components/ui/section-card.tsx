@@ -1,8 +1,11 @@
+import { cn, surfaceClassName } from "@/components/ui/styles";
+
 type SectionCardProps = {
   eyebrow?: string;
   title: string;
-  description: string;
+  description?: string;
   children?: React.ReactNode;
+  className?: string;
 };
 
 export function SectionCard({
@@ -10,19 +13,20 @@ export function SectionCard({
   title,
   description,
   children,
+  className,
 }: SectionCardProps) {
   return (
-    <section className="rounded-[1.75rem] border border-app-border bg-app-panel p-6 shadow-sm">
-      <div className="space-y-3">
+    <section className={cn(surfaceClassName, "p-6", className)}>
+      <div className="space-y-2">
         {eyebrow ? (
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
             {eyebrow}
           </p>
         ) : null}
-        <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
-          {title}
-        </h2>
-        <p className="text-sm leading-7 text-slate-600">{description}</p>
+        <h2 className="text-lg font-bold text-slate-900">{title}</h2>
+        {description ? (
+          <p className="text-sm leading-6 text-slate-500">{description}</p>
+        ) : null}
       </div>
 
       {children ? <div className="mt-6">{children}</div> : null}

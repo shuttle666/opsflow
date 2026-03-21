@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
 import { SectionCard } from "@/components/ui/section-card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { primaryButtonClassName } from "@/components/ui/styles";
 import { useAuthStore } from "@/store/auth-store";
 import type { MyInvitationItem } from "@/types/auth";
 
@@ -60,7 +63,7 @@ export function InvitationInboxCard() {
     <SectionCard
       eyebrow="Invitation inbox"
       title="Pending invitations"
-      description="Invitations sent to your account email show up here. Accept in one click, no manual token paste required."
+      description="Invitations sent to your account email can be accepted in one click."
     >
       {isLoading ? (
         <p className="text-sm text-slate-600">Loading invitations...</p>
@@ -70,21 +73,33 @@ export function InvitationInboxCard() {
       {success ? <p className="text-sm text-emerald-700">{success}</p> : null}
 
       {!isLoading && invitations.length === 0 ? (
-        <p className="text-sm text-slate-600">No pending invitations right now.</p>
+        <EmptyStatePanel
+          compact
+          title="No pending invitations right now."
+          description="When another tenant invites this account, the one-click accept flow will appear here."
+        />
       ) : null}
 
       <div className="space-y-3">
         {invitations.map((invitation) => (
-          <div
-            key={invitation.id}
-            className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-          >
-            <p className="text-sm font-semibold text-slate-900">
-              {invitation.tenantName}
-            </p>
-            <p className="text-xs text-slate-600">
-              Role: {invitation.role} | Expires: {formatDate(invitation.expiresAt)}
-            </p>
+        <div
+          key={invitation.id}
+          className="rounded-[24px] border border-white/70 bg-white p-4 shadow-sm"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-2">
+                <p className="text-sm font-semibold text-slate-900">
+                  {invitation.tenantName}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <StatusBadge kind="role" value={invitation.role} />
+                  <StatusBadge kind="invitation" value={invitation.status} />
+                </div>
+                <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-slate-400">
+                  Expires {formatDate(invitation.expiresAt)}
+                </p>
+              </div>
+            </div>
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"
@@ -111,7 +126,7 @@ export function InvitationInboxCard() {
                       setActingId(null);
                     });
                 }}
-                className="rounded-xl bg-slate-950 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                className={primaryButtonClassName}
               >
                 {actingId === invitation.id ? "Accepting..." : "Accept"}
               </button>

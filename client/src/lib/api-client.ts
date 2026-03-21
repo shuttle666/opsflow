@@ -63,4 +63,6 @@ export const apiClient = {
     request<T>(path, { ...options, method: "GET" }),
   post: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, "method" | "body">) =>
     request<T>(path, { ...options, method: "POST", body }),
+  patch: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, "method" | "body">) =>
+    request<T>(path, { ...options, method: "PATCH", body }),
 };

@@ -48,7 +48,7 @@ describe("InvitationCreateCard", () => {
     render(<InvitationCreateCard />);
 
     expect(
-      screen.getByText("Only OWNER or MANAGER can invite members in this tenant."),
+      screen.getByText("Only owner and manager roles can invite new members."),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Create invitation" }),

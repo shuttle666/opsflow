@@ -1,3 +1,4 @@
 # Job Module
 
-Placeholder module directory for future job management workflows.
+Job management module for tenant-scoped job listing, creation, detail loading,
+and updates. Status transitions remain handled by the dedicated domain service.

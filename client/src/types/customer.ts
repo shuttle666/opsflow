@@ -1,0 +1,51 @@
+import type { JobStatus } from "@/types/job";
+
+export type CustomerListQuery = {
+  q?: string;
+  page?: number;
+  pageSize?: number;
+  sort?: "createdAt_desc" | "createdAt_asc" | "name_asc" | "name_desc";
+};
+
+export type CustomerListItem = {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CustomerJobSummary = {
+  id: string;
+  title: string;
+  status: JobStatus;
+  scheduledAt: string | null;
+  assignedToName?: string;
+};
+
+export type CustomerDetail = CustomerListItem & {
+  createdBy: {
+    id: string;
+    displayName: string;
+    email: string;
+  };
+  jobs: CustomerJobSummary[];
+};
+
+export type CreateCustomerInput = {
+  name: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+};
+
+export type UpdateCustomerInput = CreateCustomerInput;
+
+export type PaginationMeta = {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};

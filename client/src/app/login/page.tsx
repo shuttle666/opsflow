@@ -1,31 +1,48 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AppShell } from "@/components/ui/app-shell";
-import { SectionCard } from "@/components/ui/section-card";
+import { PublicShell } from "@/components/ui/app-shell";
+import { ArrowRight } from "@/components/ui/icons";
+import {
+  inputClassName,
+  primaryButtonClassName,
+  strongSurfaceClassName,
+  surfaceClassName,
+} from "@/components/ui/styles";
 import { loginSchema, type LoginFormValues } from "@/features/auth/login-schema";
 import { useAuthStore } from "@/store/auth-store";
 
-export default function LoginPage() {
+const seededAccounts = [
+  {
+    label: "Owner",
+    email: "owner@acme.example",
+    password: "owner-password-123",
+  },
+  {
+    label: "Manager",
+    email: "manager@acme.example",
+    password: "manager-password-123",
+  },
+  {
+    label: "Staff",
+    email: "staff@acme.example",
+    password: "staff-password-123",
+  },
+] as const;
+
+function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const login = useAuthStore((state) => state.login);
   const status = useAuthStore((state) => state.status);
 
-  const nextPath = useMemo(() => {
-    const rawNext = searchParams.get("next");
-    if (!rawNext || !rawNext.startsWith("/")) {
-      return "/dashboard";
-    }
-
-    return rawNext;
-  }, [searchParams]);
+  const rawNext = searchParams.get("next");
+  const nextPath = rawNext && rawNext.startsWith("/") ? rawNext : "/dashboard";
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -40,8 +57,8 @@ export default function LoginPage() {
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: "owner@acme.example",
-      password: "owner-password-123",
+      email: "",
+      password: "",
     },
   });
 
@@ -59,80 +76,111 @@ export default function LoginPage() {
   };
 
   return (
-    <AppShell
-      title="Sign in to OpsFlow"
-      description="Use your account to access protected operational modules. Session refresh and tenant context are now connected to the backend."
-    >
-      <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-        <SectionCard
-          eyebrow="Auth flow"
-          title="Production-like session behavior"
-          description="Access token, refresh token, and tenant context are handled in the client auth store and validated by backend APIs."
-        >
-          <ul className="space-y-3 text-sm text-slate-600">
-            <li>Validated with Zod before submit.</li>
-            <li>Managed with React Hook Form for ergonomics.</li>
-            <li>Auto refreshes expired access tokens once when possible.</li>
-          </ul>
-        </SectionCard>
+    <PublicShell>
+      <div className="flex min-h-[calc(100vh-7rem)] items-center justify-center py-6">
+        <div className="w-full max-w-[26rem]">
+          <section className={`${strongSurfaceClassName} p-8 sm:p-10`}>
+            <div className="flex items-center justify-center gap-3">
+              <span className="h-11 w-11 rounded-full bg-linear-to-br from-sky-500 to-cyan-600 shadow-[0_16px_28px_-18px_rgba(8,145,178,0.8)]" />
+              <span className="text-[2rem] font-semibold tracking-tight text-slate-950">
+                OpsFlow
+              </span>
+            </div>
 
-        <SectionCard
-          eyebrow="Form"
-          title="Sign in to OpsFlow"
-          description="Use seeded users from your local database or your own account. Successful login redirects to your target page."
-        >
-          <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-slate-700">Email</span>
-              <input
-                {...register("email")}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
-                placeholder="owner@acme.example"
-              />
-              {errors.email ? (
-                <p className="text-sm text-rose-600">{errors.email.message}</p>
-              ) : null}
-            </label>
+            <div className="mt-8 text-center">
+              <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
+                Welcome back
+              </h1>
+              <p className="mt-2 text-sm text-slate-500">
+                Sign in to your workspace
+              </p>
+            </div>
 
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-slate-700">Password</span>
-              <input
-                {...register("password")}
-                type="password"
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
-                placeholder="owner-password-123"
-              />
-              {errors.password ? (
-                <p className="text-sm text-rose-600">
-                  {errors.password.message}
-                </p>
-              ) : null}
-            </label>
+            <form className="mt-8 space-y-5" onSubmit={handleSubmit(onSubmit)}>
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Email</span>
+                <input
+                  {...register("email")}
+                  className={`${inputClassName} mt-1`}
+                  placeholder="name@company.com"
+                  autoComplete="email"
+                />
+                {errors.email ? (
+                  <p className="mt-2 text-sm text-rose-600">{errors.email.message}</p>
+                ) : null}
+              </label>
 
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-            >
-              {isSubmitting ? "Signing in..." : "Sign in"}
-            </button>
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Password</span>
+                <input
+                  {...register("password")}
+                  type="password"
+                  className={`${inputClassName} mt-1`}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                />
+                {errors.password ? (
+                  <p className="mt-2 text-sm text-rose-600">{errors.password.message}</p>
+                ) : null}
+              </label>
 
-            {submitError ? (
-              <p className="text-sm text-rose-600">{submitError}</p>
-            ) : null}
-
-            <p className="text-sm text-slate-600">
-              New to OpsFlow?{" "}
-              <Link
-                href={`/register?next=${encodeURIComponent(nextPath)}`}
-                className="font-semibold text-cyan-700 hover:text-cyan-800"
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className={`${primaryButtonClassName} mt-2 w-full`}
               >
-                Create an account
-              </Link>
-            </p>
-          </form>
-        </SectionCard>
+                {isSubmitting ? "Signing in..." : "Sign in"}
+                <ArrowRight className="h-4 w-4" />
+              </button>
+
+              {submitError ? (
+                <p className="text-sm text-center text-rose-600">{submitError}</p>
+              ) : null}
+
+              <p className="text-center text-sm text-slate-500">
+                Don&apos;t have an account?{" "}
+                <Link
+                  href={`/register?next=${encodeURIComponent(nextPath)}`}
+                  className="font-semibold text-cyan-600 transition hover:text-cyan-700"
+                >
+                  Register
+                </Link>
+              </p>
+            </form>
+          </section>
+
+          <details className={`${surfaceClassName} mt-4 px-5 py-4 text-sm text-slate-600`}>
+            <summary className="cursor-pointer list-none font-semibold text-slate-700">
+              Local dev accounts
+            </summary>
+            <ul className="mt-4 space-y-3">
+              {seededAccounts.map((account) => (
+                <li
+                  key={account.email}
+                  className="rounded-[1rem] border border-white/80 bg-white/80 px-4 py-3"
+                >
+                  <p className="font-semibold text-slate-950">{account.label}</p>
+                  <p className="mt-1">
+                    Email: <span className="font-mono text-[13px]">{account.email}</span>
+                  </p>
+                  <p>
+                    Password:{" "}
+                    <span className="font-mono text-[13px]">{account.password}</span>
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </details>
+        </div>
       </div>
-    </AppShell>
+    </PublicShell>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

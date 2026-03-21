@@ -1,14 +1,20 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthGuard } from "@/components/auth/auth-guard";
-import { AppShell } from "@/components/ui/app-shell";
-import { SectionCard } from "@/components/ui/section-card";
+import { PublicShell } from "@/components/ui/app-shell";
+import { ArrowRight } from "@/components/ui/icons";
+import {
+  inputClassName,
+  primaryButtonClassName,
+  secondaryButtonClassName,
+  strongSurfaceClassName,
+} from "@/components/ui/styles";
 import { useAuthStore } from "@/store/auth-store";
 import type { InvitationAcceptedResult } from "@/types/auth";
 
-export default function AcceptInvitationPage() {
+function AcceptInvitationPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const acceptInvitation = useAuthStore((state) => state.acceptInvitation);
@@ -45,59 +51,67 @@ export default function AcceptInvitationPage() {
   };
 
   return (
-    <AppShell
-      title="Accept tenant invitation (fallback)"
-      description="Primary flow is now Dashboard invitation inbox. This page remains as compatibility fallback for token links."
-    >
+    <PublicShell>
       <AuthGuard>
-        <div className="mx-auto grid w-full max-w-3xl gap-6">
-          <SectionCard
-            eyebrow="Invitation"
-            title="Join workspace"
-            description="Paste a token if you received one from legacy flow."
-          >
+        <div className="flex min-h-[calc(100vh-7rem)] items-center justify-center py-6">
+          <section className={`${strongSurfaceClassName} w-full max-w-[28rem] p-8 sm:p-10`}>
+            <div className="space-y-3 text-center">
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-700">
+                Invitation
+              </p>
+              <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
+                Accept workspace invite
+              </h1>
+              <p className="text-sm leading-6 text-slate-500">
+                Use this compatibility page when you arrive from a legacy invite link.
+              </p>
+            </div>
+
             <form className="space-y-4" onSubmit={onSubmit}>
-              <label className="block space-y-2">
-                <span className="text-sm font-medium text-slate-700">
-                  Invitation token
-                </span>
+              <label className="mt-8 block space-y-2">
+                <span className="text-sm font-medium text-slate-700">Invitation token</span>
                 <input
                   value={token}
                   onChange={(event) => setToken(event.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+                  className={`${inputClassName} mt-1`}
                   placeholder="Paste invitation token"
                   required
                 />
               </label>
 
-              <button
-                type="submit"
-                disabled={submitting}
-                className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-              >
+              <button type="submit" disabled={submitting} className={primaryButtonClassName}>
                 {submitting ? "Accepting..." : "Accept invitation"}
+                <ArrowRight className="h-4 w-4" />
               </button>
             </form>
 
-            {error ? <p className="mt-4 text-sm text-rose-600">{error}</p> : null}
+            {error ? <p className="mt-4 text-sm text-center text-rose-600">{error}</p> : null}
 
             {result ? (
-              <div className="mt-4 space-y-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+              <div className="mt-4 space-y-2 rounded-[28px] border border-emerald-200 bg-emerald-50/90 p-4 text-sm text-emerald-800">
                 <p className="font-semibold">Invitation accepted successfully.</p>
                 <p>Tenant ID: {result.tenantId}</p>
                 <p>Role: {result.role}</p>
                 <button
                   type="button"
                   onClick={() => router.push("/dashboard")}
-                  className="mt-2 rounded-xl border border-emerald-300 bg-white px-4 py-2 font-medium text-emerald-700 transition hover:bg-emerald-100"
+                  className={secondaryButtonClassName}
                 >
                   Go to dashboard
                 </button>
               </div>
             ) : null}
-          </SectionCard>
+          </section>
         </div>
       </AuthGuard>
-    </AppShell>
+    </PublicShell>
+  );
+}
+
+export default function AcceptInvitationPage() {
+  return (
+    <Suspense fallback={null}>
+      <AcceptInvitationPageContent />
+    </Suspense>
   );
 }

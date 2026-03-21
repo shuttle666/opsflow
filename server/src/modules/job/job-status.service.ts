@@ -1,18 +1,29 @@
-import { JobStatus, TenantStatus } from "@prisma/client";
+import { AuditAction, JobStatus, TenantStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
+import type { RequestMetadata } from "../../types/auth";
 import { JobDomainError } from "./job-errors";
 import { assertValidTransition } from "./job-status-machine";
 
-export type TransitionJobStatusInput = {
+export type TransitionJobStatusServiceInput = {
   tenantId: string;
   jobId: string;
   toStatus: JobStatus;
   changedById?: string | null;
   reason?: string;
+  metadata?: RequestMetadata;
 };
 
-export async function transitionJobStatus(input: TransitionJobStatusInput) {
-  const { tenantId, jobId, toStatus, changedById, reason } = input;
+export async function transitionJobStatus(input: TransitionJobStatusServiceInput) {
+  const { tenantId, jobId, toStatus, changedById, reason, metadata } = input;
+  const normalizedReason = reason?.trim() ? reason.trim() : null;
+
+  if (toStatus === JobStatus.CANCELLED && !normalizedReason) {
+    throw new JobDomainError(
+      "TRANSITION_REASON_REQUIRED",
+      "Cancelling a job requires a reason.",
+      { toStatus },
+    );
+  }
 
   return prisma.$transaction(async (tx) => {
     const tenant = await tx.tenant.findUnique({
@@ -78,7 +89,24 @@ export async function transitionJobStatus(input: TransitionJobStatusInput) {
         fromStatus: job.status,
         toStatus,
         changedById: changedById ?? null,
-        reason: reason?.trim() ? reason.trim() : null,
+        reason: normalizedReason,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        action: AuditAction.JOB_STATUS_TRANSITION,
+        tenantId,
+        userId: changedById ?? null,
+        targetType: "job",
+        targetId: job.id,
+        ipAddress: metadata?.ipAddress,
+        userAgent: metadata?.userAgent,
+        metadata: {
+          fromStatus: job.status,
+          toStatus,
+          reason: normalizedReason,
+        },
       },
     });
 
@@ -88,4 +116,3 @@ export async function transitionJobStatus(input: TransitionJobStatusInput) {
     };
   });
 }
-

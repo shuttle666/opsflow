@@ -1,4 +1,4 @@
-import { JobStatus, MembershipRole, MembershipStatus, TenantStatus } from "@prisma/client";
+import { AuditAction, JobStatus, MembershipRole, MembershipStatus, TenantStatus } from "@prisma/client";
 import { prisma } from "../src/lib/prisma";
 import { JobDomainError, transitionJobStatus } from "../src/modules/job";
 import { describeIfDb, resetDatabase } from "./helpers/db";
@@ -161,6 +161,15 @@ describeIfDb("job transition service + schema constraints", () => {
       where: { jobId: job.id },
     });
     expect(history).toHaveLength(1);
+
+    const auditLogs = await prisma.auditLog.findMany({
+      where: {
+        tenantId: tenant.id,
+        targetId: job.id,
+        action: AuditAction.JOB_STATUS_TRANSITION,
+      },
+    });
+    expect(auditLogs).toHaveLength(1);
   });
 
   it("rejects invalid status transitions", async () => {
@@ -206,6 +215,52 @@ describeIfDb("job transition service + schema constraints", () => {
       }),
     ).rejects.toMatchObject<JobDomainError>({
       code: "INVALID_STATUS_TRANSITION",
+    });
+  });
+
+  it("requires a reason when cancelling a job", async () => {
+    const creator = await prisma.user.create({
+      data: {
+        email: "cancel@test.dev",
+        passwordHash: "hash",
+        displayName: "Cancel User",
+      },
+    });
+
+    const tenant = await prisma.tenant.create({
+      data: {
+        name: "Cancel Tenant",
+        slug: "cancel-tenant",
+      },
+    });
+
+    const customer = await prisma.customer.create({
+      data: {
+        tenantId: tenant.id,
+        name: "Cancel Customer",
+        createdById: creator.id,
+      },
+    });
+
+    const job = await prisma.job.create({
+      data: {
+        tenantId: tenant.id,
+        customerId: customer.id,
+        title: "Cancel Transition Job",
+        status: JobStatus.NEW,
+        createdById: creator.id,
+      },
+    });
+
+    await expect(
+      transitionJobStatus({
+        tenantId: tenant.id,
+        jobId: job.id,
+        toStatus: JobStatus.CANCELLED,
+        changedById: creator.id,
+      }),
+    ).rejects.toMatchObject<JobDomainError>({
+      code: "TRANSITION_REASON_REQUIRED",
     });
   });
 

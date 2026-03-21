@@ -1,6 +1,7 @@
 export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
 export type MembershipRole = "OWNER" | "MANAGER" | "STAFF";
+export type MembershipStatus = "ACTIVE" | "INVITED" | "DISABLED";
 export type InvitationStatus = "PENDING" | "ACCEPTED" | "CANCELLED" | "EXPIRED";
 
 export type AuthUser = {

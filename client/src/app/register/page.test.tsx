@@ -18,6 +18,8 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/components/ui/app-shell", () => ({
   AppShell: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  PublicShell: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  primaryButtonClassName: "primary-button",
 }));
 
 vi.mock("@/components/ui/section-card", () => ({

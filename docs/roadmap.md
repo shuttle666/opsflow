@@ -7,7 +7,7 @@
 - Base Prisma setup
 
 ## Phase 2
-- Status: Completed (data layer)
+- Status: Completed
 - Prisma core models
   - User
   - Tenant
@@ -20,22 +20,36 @@
 - Job status transition rules (domain layer)
 
 ## Phase 3
-- Status: In progress (planned next)
+- Status: Completed
 - Authentication
 - Tenant context
 - Basic RBAC
+- Stationary invitation inbox UX
+- OpenAPI for implemented auth/invitation APIs
 
 ## Phase 4
+- Status: Completed
 - Customer feature (end-to-end)
 
 ## Phase 5
+- Status: Completed
 - Job feature (end-to-end)
 
 ## Phase 6
-- Workflow (status transitions)
+- Status: Completed
+- Team management
+- Assignment system
+- Staff workspace (`/jobs/my`)
 
 ## Phase 7
-- Attachments
+- Status: Completed
+- Workflow API (`/jobs/:id/history`, `/jobs/:id/status-transitions`)
+- Live job timeline UI
+- Dashboard activity feed
 
 ## Phase 8
-- Assignment system
+- Status: Planned next
+- Attachments / upload
+
+## Phase 9
+- Dashboard hardening

@@ -1,6 +1,6 @@
 # OpsFlow
 
-OpsFlow is a full-stack operations platform foundation with a Next.js client, an Express API, and lightweight planning docs. The project now includes a Phase 1 data layer implementation with Prisma core models, migrations, seed data, and backend domain tests.
+OpsFlow is a full-stack operations platform foundation with a Next.js client, an Express API, and lightweight planning docs. The project now includes a multi-tenant data layer, auth + RBAC, customer/job workflows, team assignment, and a live workflow timeline + activity feed.
 
 ## Project Structure
 
@@ -14,6 +14,7 @@ OpsFlow is a full-stack operations platform foundation with a Next.js client, an
 - Backend: Express, TypeScript, dotenv, Zod, cors, helmet, morgan
 - Database: PostgreSQL + Prisma 7 with adapter-based runtime connection (`@prisma/adapter-pg` + `pg`)
 - Data layer delivered: `User`, `Tenant`, `Membership`, `Customer`, `Job`, `JobStatusHistory`, migration, and seed
+- Business modules delivered: Auth, invitations, customer management, job management, team assignment flows, and Phase 6 workflow/activity surfaces
 - Local development: Docker Compose with `client`, `server`, and `postgres` services
 
 ## Getting Started
@@ -140,3 +141,7 @@ docker compose -f docker-compose.dev.yml down -v
 
 - Phase 1 data layer is implemented and validated with migration + seed + backend tests.
 - Phase 2 backend Auth/Tenant Context/RBAC and Phase 2.2 frontend in-app invitation inbox flow are implemented.
+- Phase 3 customer management is now available end-to-end in both API and frontend pages.
+- Phase 4 job management is now available end-to-end and linked from customer detail into job creation flow.
+- Phase 5 team management is now available with membership review, owner-only membership updates, job assignment, and a staff-only assigned-jobs workspace.
+- Phase 6 workflow is now live with job status transitions, job history timeline, and dashboard activity feed backed by audit logs.

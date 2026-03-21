@@ -1,30 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AppShell } from "@/components/ui/app-shell";
-import { SectionCard } from "@/components/ui/section-card";
+import { PublicShell } from "@/components/ui/app-shell";
+import { ArrowRight } from "@/components/ui/icons";
+import {
+  inputClassName,
+  primaryButtonClassName,
+  strongSurfaceClassName,
+} from "@/components/ui/styles";
 import { registerSchema, type RegisterFormValues } from "@/features/auth";
 import { useAuthStore } from "@/store/auth-store";
 
-export default function RegisterPage() {
+function RegisterPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const registerUser = useAuthStore((state) => state.register);
   const status = useAuthStore((state) => state.status);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const nextPath = useMemo(() => {
-    const rawNext = searchParams.get("next");
-    if (!rawNext || !rawNext.startsWith("/")) {
-      return "/dashboard";
-    }
-
-    return rawNext;
-  }, [searchParams]);
+  const rawNext = searchParams.get("next");
+  const nextPath = rawNext && rawNext.startsWith("/") ? rawNext : "/dashboard";
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -67,34 +66,34 @@ export default function RegisterPage() {
   };
 
   return (
-    <AppShell
-      title="Create your OpsFlow workspace"
-      description="Register a new account and tenant, then continue directly into your operational dashboard."
-    >
-      <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-        <SectionCard
-          eyebrow="Onboarding"
-          title="Fast account bootstrap"
-          description="Registration creates your initial tenant and signs you in immediately."
-        >
-          <ul className="space-y-3 text-sm text-slate-600">
-            <li>Securely validated with Zod + React Hook Form.</li>
-            <li>Returns access and refresh tokens after account creation.</li>
-            <li>Redirects to your dashboard when setup is complete.</li>
-          </ul>
-        </SectionCard>
+    <PublicShell>
+      <div className="flex min-h-[calc(100vh-7rem)] items-center justify-center py-6">
+        <section className={`${strongSurfaceClassName} w-full max-w-[28rem] p-8 sm:p-10`}>
+          <div className="space-y-3 text-center">
+            <div className="flex items-center justify-center gap-3">
+              <span className="h-11 w-11 rounded-full bg-linear-to-br from-sky-500 to-cyan-600 shadow-[0_16px_28px_-18px_rgba(8,145,178,0.8)]" />
+              <span className="text-[2rem] font-semibold tracking-tight text-slate-950">
+                OpsFlow
+              </span>
+            </div>
+            <p className="pt-4 text-xs font-semibold uppercase tracking-[0.28em] text-cyan-700">
+              Register
+            </p>
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
+              Create your workspace
+            </h1>
+            <p className="text-sm leading-6 text-slate-500">
+              Create the first account for your tenant and continue straight into
+              the workspace.
+            </p>
+          </div>
 
-        <SectionCard
-          eyebrow="Form"
-          title="Register account"
-          description="Tenant name is optional. If omitted, OpsFlow creates a default workspace name."
-        >
-          <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
+          <form className="mt-8 space-y-5" onSubmit={handleSubmit(onSubmit)}>
             <label className="block space-y-2">
               <span className="text-sm font-medium text-slate-700">Email</span>
               <input
                 {...register("email")}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+                className={`${inputClassName} mt-1`}
                 placeholder="owner@acme.example"
               />
               {errors.email ? (
@@ -107,7 +106,7 @@ export default function RegisterPage() {
               <input
                 {...register("password")}
                 type="password"
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+                className={`${inputClassName} mt-1`}
                 placeholder="minimum 8 characters"
               />
               {errors.password ? (
@@ -116,12 +115,10 @@ export default function RegisterPage() {
             </label>
 
             <label className="block space-y-2">
-              <span className="text-sm font-medium text-slate-700">
-                Display Name
-              </span>
+              <span className="text-sm font-medium text-slate-700">Display Name</span>
               <input
                 {...register("displayName")}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+                className={`${inputClassName} mt-1`}
                 placeholder="Avery Owner"
               />
               {errors.displayName ? (
@@ -135,7 +132,7 @@ export default function RegisterPage() {
               </span>
               <input
                 {...register("tenantName")}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+                className={`${inputClassName} mt-1`}
                 placeholder="Acme Home Services"
               />
             </label>
@@ -143,27 +140,36 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+              className={`${primaryButtonClassName} w-full`}
             >
               {isSubmitting ? "Creating account..." : "Create account"}
+              <ArrowRight className="h-4 w-4" />
             </button>
 
             {submitError ? (
-              <p className="text-sm text-rose-600">{submitError}</p>
+              <p className="text-sm text-center text-rose-600">{submitError}</p>
             ) : null}
 
-            <p className="text-sm text-slate-600">
+            <p className="text-center text-sm text-slate-500">
               Already have an account?{" "}
               <Link
                 href={`/login?next=${encodeURIComponent(nextPath)}`}
-                className="font-semibold text-cyan-700 hover:text-cyan-800"
+                className="font-semibold text-cyan-600 transition hover:text-cyan-700"
               >
                 Sign in
               </Link>
             </p>
           </form>
-        </SectionCard>
+        </section>
       </div>
-    </AppShell>
+    </PublicShell>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegisterPageContent />
+    </Suspense>
   );
 }

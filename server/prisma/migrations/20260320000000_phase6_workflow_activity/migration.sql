@@ -1,0 +1,11 @@
+-- AlterEnum
+ALTER TYPE "AuditAction" ADD VALUE 'JOB_STATUS_TRANSITION';
+
+-- AlterEnum
+ALTER TYPE "AuditAction" ADD VALUE 'JOB_ASSIGNED';
+
+-- AlterEnum
+ALTER TYPE "AuditAction" ADD VALUE 'JOB_UNASSIGNED';
+
+-- AlterEnum
+ALTER TYPE "AuditAction" ADD VALUE 'MEMBERSHIP_UPDATED';

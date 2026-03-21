@@ -1,6 +1,7 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
 import {
+  AuditAction,
   JobStatus,
   MembershipRole,
   MembershipStatus,
@@ -328,6 +329,79 @@ async function main() {
         fromStatus: JobStatus.IN_PROGRESS,
         toStatus: JobStatus.COMPLETED,
         changedById: ids.staff,
+      },
+    ],
+  });
+
+  await prisma.auditLog.createMany({
+    data: [
+      {
+        tenantId: ids.tenant,
+        userId: ids.owner,
+        action: AuditAction.MEMBERSHIP_UPDATED,
+        targetType: "membership",
+        metadata: {
+          memberEmail: "staff@acme.example",
+          memberDisplayName: "Sam Staff",
+          previousRole: "STAFF",
+          nextRole: "STAFF",
+          previousStatus: "ACTIVE",
+          nextStatus: "ACTIVE",
+        },
+        createdAt: new Date("2026-03-18T00:30:00.000Z"),
+      },
+      {
+        tenantId: ids.tenant,
+        userId: ids.manager,
+        action: AuditAction.JOB_ASSIGNED,
+        targetType: "job",
+        targetId: ids.jobs[1],
+        metadata: {
+          jobTitle: "Blocked bathroom drain",
+          assigneeId: ids.staff,
+          assigneeName: "Sam Staff",
+          assigneeEmail: "staff@acme.example",
+        },
+        createdAt: new Date("2026-03-19T22:00:00.000Z"),
+      },
+      {
+        tenantId: ids.tenant,
+        userId: ids.manager,
+        action: AuditAction.JOB_STATUS_TRANSITION,
+        targetType: "job",
+        targetId: ids.jobs[1],
+        metadata: {
+          fromStatus: JobStatus.NEW,
+          toStatus: JobStatus.SCHEDULED,
+          reason: "Scheduled for the next available technician.",
+        },
+        createdAt: new Date("2026-03-19T22:15:00.000Z"),
+      },
+      {
+        tenantId: ids.tenant,
+        userId: ids.staff,
+        action: AuditAction.JOB_STATUS_TRANSITION,
+        targetType: "job",
+        targetId: ids.jobs[2],
+        metadata: {
+          fromStatus: JobStatus.SCHEDULED,
+          toStatus: JobStatus.IN_PROGRESS,
+          reason: "Technician arrived on site.",
+        },
+        createdAt: new Date("2026-03-20T00:10:00.000Z"),
+      },
+      {
+        tenantId: ids.tenant,
+        userId: ids.staff,
+        action: AuditAction.JOB_STATUS_TRANSITION,
+        targetType: "job",
+        targetId: ids.jobs[3],
+        metadata: {
+          fromStatus: JobStatus.IN_PROGRESS,
+          toStatus: JobStatus.COMPLETED,
+          reason: "Preventive service completed successfully.",
+        },
+        createdAt: new Date("2026-03-20T01:30:00.000Z"),
       },
     ],
   });

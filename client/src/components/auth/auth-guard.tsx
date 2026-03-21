@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth-store";
 
 type AuthGuardProps = {
@@ -11,18 +11,17 @@ type AuthGuardProps = {
 export function AuthGuard({ children }: AuthGuardProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const status = useAuthStore((state) => state.status);
-  const query = searchParams.toString();
 
   useEffect(() => {
     if (status !== "unauthenticated") {
       return;
     }
 
-    const nextPath = query ? `${pathname}?${query}` : pathname;
+    const query = typeof window !== "undefined" ? window.location.search : "";
+    const nextPath = query ? `${pathname}${query}` : pathname;
     router.replace(`/login?next=${encodeURIComponent(nextPath)}`);
-  }, [status, pathname, query, router]);
+  }, [status, pathname, router]);
 
   if (status === "loading") {
     return (

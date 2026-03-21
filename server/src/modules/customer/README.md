@@ -1,3 +1,4 @@
 # Customer Module
 
-Placeholder module directory for future customer-related API work.
+Customer management module for tenant-scoped customer listing, creation,
+detail loading, and updates.

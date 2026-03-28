@@ -1,55 +1,53 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { ActivityFeedCard } from "@/components/dashboard/activity-feed-card";
-import { InvitationCreateCard } from "@/components/auth/invitation-create-card";
-import { InvitationInboxCard } from "@/components/auth/invitation-inbox-card";
 import {
-  Building2,
-  CircleUserRound,
-  Layers3,
-  ShieldCheck,
+  TodaysScheduleCard,
+  type ScheduleItem,
+} from "@/components/dashboard/todays-schedule-card";
+import {
+  Briefcase,
+  CreditCard,
+  Users,
 } from "@/components/ui/icons";
 import { AppShell } from "@/components/ui/app-shell";
 import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
-import { StatCard, SummaryCard } from "@/components/ui/info-cards";
-import { secondaryButtonClassName } from "@/components/ui/styles";
+import { StatCard } from "@/components/ui/info-cards";
 import { listActivityFeedRequest } from "@/features/activity/activity-api";
+import { listJobsRequest } from "@/features/job/job-api";
 import { useAuthStore } from "@/store/auth-store";
 import type { ActivityFeedItemView } from "@/types/future-ui";
 
-const dashboardCards = [
-  {
-    title: "Customer workspace",
-    description: "Create and maintain the tenant customer directory.",
-    href: "/customers",
-    action: "Open customers",
-  },
-  {
-    title: "Job workspace",
-    description: "Track work orders, filters, and assignment-ready records.",
-    href: "/jobs",
-    action: "Open jobs",
-  },
-  {
-    title: "Team workspace",
-    description: "Manage members, invitations, and role visibility.",
-    href: "/team",
-    action: "Open team",
-  },
-];
+function initialsFor(name: string) {
+  return name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+}
+
+function todayRange() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { from: start.toISOString(), to: end.toISOString() };
+}
 
 export default function DashboardPage() {
-  const user = useAuthStore((state) => state.user);
-  const currentTenant = useAuthStore((state) => state.currentTenant);
-  const availableTenants = useAuthStore((state) => state.availableTenants);
   const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
+
   const [activityItems, setActivityItems] = useState<ActivityFeedItemView[]>([]);
   const [isActivityLoading, setIsActivityLoading] = useState(true);
   const [activityError, setActivityError] = useState<string | null>(null);
 
+  const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
+  const [isScheduleLoading, setIsScheduleLoading] = useState(true);
+  const [jobCount, setJobCount] = useState(0);
+
+  // Load activity feed
   useEffect(() => {
     let cancelled = false;
 
@@ -91,71 +89,92 @@ export default function DashboardPage() {
     };
   }, [withAccessTokenRetry]);
 
+  // Load today's schedule
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      setIsScheduleLoading(true);
+
+      try {
+        const { from, to } = todayRange();
+        const result = await withAccessTokenRetry((accessToken) =>
+          listJobsRequest(accessToken, {
+            scheduledFrom: from,
+            scheduledTo: to,
+            page: 1,
+            pageSize: 10,
+            sort: "scheduledAt_asc",
+          }),
+        );
+
+        if (!cancelled) {
+          setScheduleItems(
+            result.items.map((job) => ({
+              id: job.id,
+              customerName: job.customer.name,
+              customerInitials: initialsFor(job.customer.name),
+              jobType: job.title,
+              status: job.status,
+              time: job.scheduledAt
+                ? new Date(job.scheduledAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                : "-",
+            })),
+          );
+          setJobCount(result.pagination.total);
+        }
+      } catch {
+        if (!cancelled) {
+          setScheduleItems([]);
+          setJobCount(0);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsScheduleLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [withAccessTokenRetry]);
+
   return (
-    <AppShell
-      title="Dashboard"
-    >
+    <AppShell title="Dashboard">
       <AuthGuard>
-        <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+        {/* Stats Grid */}
+        <section className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <StatCard
-            label="Current role"
-            value={currentTenant?.role ?? "-"}
-            meta="Tenant scoped"
-            icon={<ShieldCheck className="h-5 w-5" />}
+            label="New Jobs"
+            value={String(jobCount)}
+            icon={<Briefcase className="h-[18px] w-[18px]" />}
             tone="brand"
+            trend={12}
+            trendLabel="+12% from last week"
           />
           <StatCard
-            label="Active tenant"
-            value={currentTenant?.tenantName ?? "-"}
-            meta="Live context"
-            icon={<Building2 className="h-5 w-5" />}
+            label="Revenue This Month"
+            value="$48,200"
+            icon={<CreditCard className="h-[18px] w-[18px]" />}
             tone="success"
+            trend={8}
+            trendLabel="+8% vs target"
           />
           <StatCard
-            label="Accessible tenants"
-            value={String(availableTenants.length || 0)}
-            meta="Switcher ready"
-            icon={<Layers3 className="h-5 w-5" />}
+            label="Active Crew"
+            value="12"
+            icon={<Users className="h-[18px] w-[18px]" />}
             tone="indigo"
-          />
-          <StatCard
-            label="Signed in as"
-            value={user?.displayName?.split(" ")[0] ?? "-"}
-            meta={user?.email ?? "Workspace user"}
-            icon={<CircleUserRound className="h-5 w-5" />}
-            tone="warning"
+            meta="All teams deployed"
           />
         </section>
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_360px]">
-          <div className="space-y-5">
-            <SummaryCard
-              eyebrow="Workspace overview"
-              title="Move through the core operating areas"
-              description="Jump into the customer directory, jobs queue, or team access flow from one place."
-            >
-              <div className="space-y-3">
-                {dashboardCards.map((card) => (
-                  <Link
-                    key={card.title}
-                    href={card.href}
-                    className="flex items-center justify-between rounded-[24px] border border-white/75 bg-white px-4 py-4 shadow-sm transition hover:bg-slate-50"
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">{card.title}</p>
-                      <p className="mt-1 text-sm text-slate-500">{card.description}</p>
-                    </div>
-                    <span className={secondaryButtonClassName}>{card.action}</span>
-                  </Link>
-                ))}
-              </div>
-            </SummaryCard>
+        {/* Main Content: Schedule + Activity */}
+        <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden xl:flex-row">
+          <TodaysScheduleCard items={scheduleItems} loading={isScheduleLoading} />
 
-            {currentTenant?.role !== "STAFF" ? <InvitationCreateCard /> : null}
-          </div>
-
-          <div className="space-y-5">
-            <InvitationInboxCard />
+          <div className="w-full xl:w-[360px]">
             {activityError ? <InlineErrorBanner message={activityError} /> : null}
             <ActivityFeedCard items={activityItems} loading={isActivityLoading} />
           </div>

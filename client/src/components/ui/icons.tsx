@@ -188,3 +188,51 @@ export function Layers3(props: IconProps) {
     </IconBase>
   );
 }
+
+export function Calendar(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4" />
+      <path d="M8 2v4" />
+      <path d="M3 10h18" />
+    </IconBase>
+  );
+}
+
+export function CreditCard(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect x="2" y="5" width="20" height="14" rx="2" />
+      <path d="M2 10h20" />
+    </IconBase>
+  );
+}
+
+export function TrendingUp(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="m22 7-8.5 8.5-5-5L2 17" />
+      <path d="M16 7h6v6" />
+    </IconBase>
+  );
+}
+
+export function TrendingDown(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="m22 17-8.5-8.5-5 5L2 7" />
+      <path d="M16 17h6v-6" />
+    </IconBase>
+  );
+}
+
+export function MoreHorizontal(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="19" cy="12" r="1" />
+      <circle cx="5" cy="12" r="1" />
+    </IconBase>
+  );
+}

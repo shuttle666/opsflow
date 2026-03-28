@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
   Briefcase,
-  Building2,
   Home,
   LogOut,
   Search,
@@ -53,26 +52,24 @@ const publicNavigation = [
 type WorkspaceNavItem = {
   href: string;
   label: string;
-  hint: string;
   icon: IconComponent;
 };
 
 function getWorkspaceNavigation(role: string | undefined) {
   if (role === "STAFF") {
     return [
-      { href: "/dashboard", label: "Dashboard", hint: "Overview", icon: Home },
-      { href: "/customers", label: "Customers", hint: "Directory", icon: Users },
-      { href: "/jobs/my", label: "My Jobs", hint: "Assigned work", icon: Briefcase },
-      { href: "/invitations/accept", label: "Invitations", hint: "Fallback", icon: UserPlus },
+      { href: "/dashboard", label: "Dashboard", icon: Home },
+      { href: "/customers", label: "Customers", icon: Users },
+      { href: "/jobs/my", label: "My Jobs", icon: Briefcase },
+      { href: "/invitations/accept", label: "Invitations", icon: UserPlus },
     ] satisfies WorkspaceNavItem[];
   }
 
   return [
-    { href: "/dashboard", label: "Dashboard", hint: "Overview", icon: Home },
-    { href: "/customers", label: "Customers", hint: "Directory", icon: Users },
-    { href: "/jobs", label: "Jobs", hint: "Operations", icon: Briefcase },
-    { href: "/team", label: "Team", hint: "Access", icon: UserPlus },
-    { href: "/invitations/accept", label: "Invitations", hint: "Fallback", icon: Building2 },
+    { href: "/dashboard", label: "Dashboard", icon: Home },
+    { href: "/customers", label: "Customers", icon: Users },
+    { href: "/jobs", label: "Jobs", icon: Briefcase },
+    { href: "/team", label: "Team", icon: UserPlus },
   ] satisfies WorkspaceNavItem[];
 }
 
@@ -113,17 +110,14 @@ function WorkspaceNav({
             key={item.href}
             href={item.href}
             className={cn(
-              "flex items-center gap-3 rounded-full px-4 py-3 text-sm transition-colors",
+              "flex items-center gap-3 rounded-full px-4 py-3 text-sm font-medium transition-colors",
               active
-                ? "bg-cyan-100/90 text-cyan-700"
-                : "text-slate-500 hover:bg-white/55 hover:text-slate-700",
+                ? "bg-cyan-500/10 text-cyan-600"
+                : "text-slate-500 hover:bg-white/40 hover:text-slate-700",
             )}
           >
             <Icon className="h-5 w-5" />
-            <div className="min-w-0">
-              <span className="block font-medium">{item.label}</span>
-              <span className="block text-[11px] text-slate-400">{item.hint}</span>
-            </div>
+            <span>{item.label}</span>
           </Link>
         );
       })}
@@ -252,33 +246,27 @@ export function WorkspaceShell({
           {actionError ? <p className="mt-3 text-sm text-rose-600">{actionError}</p> : null}
 
           {user && currentTenant ? (
-            <div className="mt-5 rounded-[28px] border border-white/60 bg-white/72 p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-500">
-                  {initialsFor(user.displayName)}
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-900">
-                    {user.displayName}
-                  </p>
-                  <p className="truncate text-xs text-slate-500">{user.email}</p>
-                </div>
+            <div className="mt-5 flex items-center gap-3 rounded-full border border-white/50 bg-white/50 p-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-bold text-slate-600">
+                {initialsFor(user.displayName)}
               </div>
-
-              <div className="mt-4 flex items-center justify-between gap-2">
-                <span className="inline-flex rounded-full bg-cyan-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-700">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold text-slate-900">
+                  {user.displayName}
+                </p>
+                <p className="truncate text-[11px] font-medium text-slate-500">
                   {currentTenant.role}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  disabled={isPending}
-                  className={subtleButtonClassName}
-                >
-                  <LogOut className="h-4 w-4" />
-                  {isPending ? "Working..." : "Logout"}
-                </button>
+                </p>
               </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={isPending}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-white/60 hover:text-slate-600"
+                aria-label="Logout"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
             </div>
           ) : null}
         </aside>

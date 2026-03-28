@@ -137,11 +137,71 @@ docker compose -f docker-compose.dev.yml down -v
 - `./server` is mounted into `/app` in the `server` container.
 - `/app/node_modules` is a Docker-managed named volume in each container, which avoids common cross-platform module issues.
 
-## Notes
+## Production Deployment On A Single EC2
 
-- Phase 1 data layer is implemented and validated with migration + seed + backend tests.
-- Phase 2 backend Auth/Tenant Context/RBAC and Phase 2.2 frontend in-app invitation inbox flow are implemented.
-- Phase 3 customer management is now available end-to-end in both API and frontend pages.
-- Phase 4 job management is now available end-to-end and linked from customer detail into job creation flow.
-- Phase 5 team management is now available with membership review, owner-only membership updates, job assignment, and a staff-only assigned-jobs workspace.
-- Phase 6 workflow is now live with job status transitions, job history timeline, and dashboard activity feed backed by audit logs.
+This repository now includes a production-oriented Docker Compose setup for a single EC2 host:
+
+- `client/Dockerfile` - Multi-stage production image for the Next.js app.
+- `server/Dockerfile` - Multi-stage production image for the Express + Prisma API.
+- `docker-compose.prod.yml` - Runs `postgres`, `server`, `client`, `nginx`, and an on-demand `certbot` service.
+- `deploy/nginx/` - Bootstrap + HTTPS nginx configuration for `app` and `api` subdomains.
+- `.env.production.example` - Template for required production environment variables.
+
+### Production Services
+
+- `postgres` stays private inside the Docker network and persists data via a named volume.
+- `server` connects to PostgreSQL through the internal hostname `postgres`.
+- `client` is built with `NEXT_PUBLIC_API_URL` pointing at the public API domain.
+- `nginx` is the public entrypoint on ports `80` and `443`.
+- `certbot` is kept for manual certificate issuance and renewal commands.
+
+### First-Time EC2 Setup
+
+1. Provision an EC2 instance, install Docker Engine + Docker Compose plugin, and open ports `22`, `80`, and `443`.
+2. Point your DNS records at the EC2 public IP:
+   - `app.your-domain.com`
+   - `api.your-domain.com`
+3. Copy `.env.production.example` to `.env.production` and replace every placeholder value.
+
+### Start The Production Stack
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build postgres server client nginx
+```
+
+### Run Database Migrations
+
+Run this after the containers are up and any time a new migration is deployed:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml run --rm server pnpm prisma:migrate:deploy
+```
+
+### Issue The Initial HTTPS Certificate
+
+The nginx container starts in HTTP bootstrap mode until a certificate exists. After DNS is pointing at the EC2 instance and port 80 is reachable, request the certificate:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml --profile certbot run --rm certbot certonly --webroot -w /var/www/certbot --email you@example.com --agree-tos --no-eff-email --cert-name opsflow -d app.your-domain.com -d api.your-domain.com
+```
+
+After the certificate is issued, restart nginx so it switches to the HTTPS configuration:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml restart nginx
+```
+
+### Renew Certificates
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml --profile certbot run --rm certbot renew --webroot -w /var/www/certbot
+docker compose --env-file .env.production -f docker-compose.prod.yml exec nginx nginx -s reload
+```
+
+### Smoke Checks
+
+- Frontend: `https://app.your-domain.com`
+- API health: `https://api.your-domain.com/api/health`
+- Container logs: `docker compose --env-file .env.production -f docker-compose.prod.yml logs -f`
+
+

@@ -8,8 +8,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { PublicShell } from "@/components/ui/app-shell";
 import { ArrowRight } from "@/components/ui/icons";
 import {
+  darkButtonClassName,
   inputClassName,
-  primaryButtonClassName,
   strongSurfaceClassName,
   surfaceClassName,
 } from "@/components/ui/styles";
@@ -127,10 +127,10 @@ function LoginPageContent() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className={`${primaryButtonClassName} mt-2 w-full`}
+                className={`${darkButtonClassName} group mt-2`}
               >
-                {isSubmitting ? "Signing in..." : "Sign in"}
-                <ArrowRight className="h-4 w-4" />
+                <span>{isSubmitting ? "Signing in..." : "Sign In"}</span>
+                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               </button>
 
               {submitError ? (

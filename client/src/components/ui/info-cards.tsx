@@ -1,3 +1,4 @@
+import { TrendingUp, TrendingDown } from "@/components/ui/icons";
 import { cn, surfaceClassName } from "@/components/ui/styles";
 
 type InfoCardProps = {
@@ -14,6 +15,8 @@ type StatCardProps = {
   meta?: string;
   icon?: React.ReactNode;
   tone?: "brand" | "success" | "warning" | "indigo" | "neutral";
+  trend?: number;
+  trendLabel?: string;
 };
 
 function statToneClassName(tone: NonNullable<StatCardProps["tone"]>) {
@@ -72,13 +75,15 @@ export function StatCard({
   meta,
   icon,
   tone = "brand",
+  trend,
+  trendLabel,
 }: StatCardProps) {
   return (
-    <div className={`${surfaceClassName} flex flex-col gap-4 p-5`}>
+    <div className={`${surfaceClassName} flex flex-col gap-3 p-5 transition-shadow hover:shadow-[0_20px_44px_-28px_rgba(6,182,212,0.18)]`}>
       <div className="flex items-center gap-3">
         <div
           className={cn(
-            "flex h-11 w-11 items-center justify-center rounded-2xl",
+            "flex h-10 w-10 items-center justify-center rounded-xl",
             statToneClassName(tone),
           )}
         >
@@ -87,9 +92,22 @@ export function StatCard({
         <p className="text-sm font-medium text-slate-500">{label}</p>
       </div>
 
-      <div className="space-y-1">
+      <div className="flex flex-col items-start gap-1">
         <p className="font-mono text-3xl font-bold tracking-tight text-slate-900">{value}</p>
-        {meta ? <p className="text-xs font-semibold text-cyan-600">{meta}</p> : null}
+        {trend !== undefined && trendLabel ? (
+          <div className="mt-1 flex items-center gap-1.5">
+            {trend > 0 ? (
+              <TrendingUp className="h-4 w-4 text-emerald-500" />
+            ) : trend < 0 ? (
+              <TrendingDown className="h-4 w-4 text-rose-500" />
+            ) : null}
+            <span className={cn("text-xs font-semibold", trend > 0 ? "text-emerald-600" : trend < 0 ? "text-rose-600" : "text-slate-400")}>
+              {trendLabel}
+            </span>
+          </div>
+        ) : meta ? (
+          <p className="text-xs font-semibold text-cyan-600">{meta}</p>
+        ) : null}
       </div>
     </div>
   );

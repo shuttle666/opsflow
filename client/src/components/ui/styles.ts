@@ -29,3 +29,6 @@ export const subtleButtonClassName =
 
 export const badgeBaseClassName =
   "inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-mono font-semibold uppercase tracking-[0.08em]";
+
+export const darkButtonClassName =
+  "inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-slate-900 px-5 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 transition hover:bg-slate-800 hover:shadow-xl hover:shadow-slate-900/30 disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none";

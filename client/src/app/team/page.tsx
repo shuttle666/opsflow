@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { InvitationCreateCard } from "@/components/auth/invitation-create-card";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { AppShell } from "@/components/ui/app-shell";
@@ -10,6 +11,7 @@ import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
 import { LoadingPanel } from "@/components/ui/loading-panel";
 import { SummaryCard } from "@/components/ui/info-cards";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { UserPlus } from "@/components/ui/icons";
 import {
   inputClassName,
   primaryButtonClassName,
@@ -147,6 +149,13 @@ export default function TeamPage() {
   return (
     <AppShell
       title="Team Members"
+      actions={
+        allowManage ? (
+          <Link href="/invitations/accept" className={primaryButtonClassName}>
+            Invite Member
+          </Link>
+        ) : undefined
+      }
     >
       <AuthGuard>
         {!allowReview ? (
@@ -244,7 +253,7 @@ export default function TeamPage() {
                       return (
                         <article
                           key={membership.id}
-                          className="rounded-[28px] border border-white/75 bg-white p-6 shadow-sm"
+                          className="rounded-[28px] border border-white/75 bg-white p-6 shadow-sm transition hover:shadow-md"
                         >
                           <div className="flex flex-col items-center text-center">
                             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-sky-100 text-2xl font-bold text-sky-700">
@@ -392,6 +401,19 @@ export default function TeamPage() {
                         </article>
                       );
                     })}
+
+                    {/* Add New Member placeholder card */}
+                    {allowManage ? (
+                      <Link
+                        href="/invitations/accept"
+                        className="flex flex-col items-center justify-center gap-3 rounded-[28px] border-2 border-dashed border-slate-200 p-6 text-center transition hover:border-cyan-300 hover:bg-white/60"
+                      >
+                        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-sky-50">
+                          <UserPlus className="h-6 w-6 text-sky-500" />
+                        </div>
+                        <span className="text-sm font-semibold text-sky-600">Add New Member</span>
+                      </Link>
+                    ) : null}
                   </div>
                 )}
               </div>

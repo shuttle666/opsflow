@@ -18,14 +18,6 @@ export type TransitionActionView = {
   disabled?: boolean;
 };
 
-export type ActivityFeedItemView = {
-  id: string;
-  title: string;
-  description: string;
-  timestamp: string;
-  tone?: "brand" | "success" | "warning" | "neutral";
-};
-
 export type AttachmentItemView = {
   id: string;
   fileName: string;

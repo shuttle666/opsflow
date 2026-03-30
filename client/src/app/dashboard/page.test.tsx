@@ -2,8 +2,8 @@ import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import DashboardPage from "@/app/dashboard/page";
-import { listActivityFeedRequest } from "@/features/activity/activity-api";
 import { useAuthStore } from "@/store/auth-store";
+import { listJobsRequest } from "@/features/job/job-api";
 
 vi.mock("next/link", () => ({
   default: ({
@@ -37,8 +37,8 @@ vi.mock("@/components/auth/invitation-inbox-card", () => ({
   InvitationInboxCard: () => <div>Invitation inbox</div>,
 }));
 
-vi.mock("@/features/activity/activity-api", () => ({
-  listActivityFeedRequest: vi.fn(),
+vi.mock("@/features/job/job-api", () => ({
+  listJobsRequest: vi.fn(),
 }));
 
 describe("dashboard page", () => {
@@ -65,15 +65,20 @@ describe("dashboard page", () => {
     });
   });
 
-  it("loads and renders recent activity from the live feed endpoint", async () => {
-    vi.mocked(listActivityFeedRequest).mockResolvedValue({
+  it("loads and renders today's schedule without the activity card", async () => {
+    vi.mocked(listJobsRequest).mockResolvedValue({
       items: [
         {
-          id: "activity-1",
-          title: "Status moved to COMPLETED",
-          description: "Owner completed a job.",
-          timestamp: "2026-03-20T01:30:00.000Z",
-          tone: "success",
+          id: "job-1",
+          title: "Boiler inspection",
+          status: "SCHEDULED",
+          scheduledAt: "2026-03-20T01:30:00.000Z",
+          createdAt: "2026-03-20T00:30:00.000Z",
+          updatedAt: "2026-03-20T00:30:00.000Z",
+          customer: {
+            id: "customer-1",
+            name: "Noah Thompson",
+          },
         },
       ],
       pagination: { page: 1, pageSize: 10, total: 1, totalPages: 1 },
@@ -81,7 +86,7 @@ describe("dashboard page", () => {
 
     render(<DashboardPage />);
 
-    expect(await screen.findByText("Status moved to COMPLETED")).toBeInTheDocument();
-    expect(screen.getByText("Owner completed a job.")).toBeInTheDocument();
+    expect(await screen.findByText("Boiler inspection")).toBeInTheDocument();
+    expect(screen.queryByText("Recent Activity")).not.toBeInTheDocument();
   });
 });

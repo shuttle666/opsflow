@@ -4,11 +4,13 @@ import type {
   AssignJobRequest,
   CreateJobInput,
   JobDetail,
+  JobEvidenceItem,
   JobHistoryResult,
   JobListItem,
   JobListQuery,
   JobStatusTransitionRequest,
   JobStatusTransitionResult,
+  UploadJobEvidenceInput,
   UpdateJobInput,
 } from "@/types/job";
 
@@ -199,4 +201,61 @@ export async function transitionJobStatusRequest(
   );
 
   return requireData(response, "Job status transition response is missing payload.");
+}
+
+export async function listJobEvidenceRequest(accessToken: string, jobId: string) {
+  const response = await apiClient.get<ApiSuccessResponse<JobEvidenceItem[]>>(
+    `/jobs/${jobId}/evidence`,
+    {
+      headers: authHeader(accessToken),
+    },
+  );
+
+  return requireData(response, "Job evidence response is missing payload.");
+}
+
+export async function uploadJobEvidenceRequest(
+  accessToken: string,
+  jobId: string,
+  input: UploadJobEvidenceInput,
+) {
+  const formData = new FormData();
+  formData.set("kind", input.kind);
+  if (input.note?.trim()) {
+    formData.set("note", input.note.trim());
+  }
+  formData.set("file", input.file);
+
+  const response = await apiClient.postForm<ApiSuccessResponse<JobEvidenceItem>>(
+    `/jobs/${jobId}/evidence`,
+    formData,
+    {
+      headers: authHeader(accessToken),
+    },
+  );
+
+  return requireData(response, "Upload job evidence response is missing payload.");
+}
+
+export async function deleteJobEvidenceRequest(
+  accessToken: string,
+  jobId: string,
+  evidenceId: string,
+) {
+  await apiClient.delete<ApiSuccessResponse<undefined>>(
+    `/jobs/${jobId}/evidence/${evidenceId}`,
+    {
+      headers: authHeader(accessToken),
+    },
+  );
+}
+
+export async function downloadJobEvidenceRequest(
+  accessToken: string,
+  jobId: string,
+  evidenceId: string,
+) {
+  return apiClient.getBlob(`/jobs/${jobId}/evidence/${evidenceId}/download`, {
+    headers: authHeader(accessToken),
+  });
 }

@@ -97,7 +97,7 @@ describe("customers page", () => {
     render(<CustomersPage />);
 
     expect(await screen.findByText("Noah Thompson")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Create customer" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Add Customer" })).toBeInTheDocument();
   });
 
   it("applies search and hides create button for staff", async () => {
@@ -129,7 +129,7 @@ describe("customers page", () => {
       screen.getByPlaceholderText("Search customers..."),
       "Noah",
     );
-    await user.click(screen.getByRole("button", { name: "Apply" }));
+    await user.keyboard("{Enter}");
 
     await waitFor(() => {
       expect(vi.mocked(listCustomersRequest)).toHaveBeenLastCalledWith(
@@ -140,6 +140,6 @@ describe("customers page", () => {
       );
     });
 
-    expect(screen.queryByText("Create customer")).not.toBeInTheDocument();
+    expect(screen.queryByText("Add Customer")).not.toBeInTheDocument();
   });
 });

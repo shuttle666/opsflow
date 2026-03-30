@@ -22,6 +22,8 @@ const envSchema = z.object({
   AUTH_SESSION_LIMIT: z.coerce.number().int().positive().default(5),
   BCRYPT_SALT_ROUNDS: z.coerce.number().int().min(8).max(14).default(10),
   INVITATION_EXPIRES_IN_DAYS: z.coerce.number().int().positive().default(7),
+  EVIDENCE_DIR: z.string().min(1).default("./uploads/evidence"),
+  EVIDENCE_MAX_SIZE_BYTES: z.coerce.number().int().positive().default(10 * 1024 * 1024),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

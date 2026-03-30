@@ -69,6 +69,7 @@ type AuthStore = {
 };
 
 let refreshInFlight: Promise<AuthResult> | null = null;
+let bootstrapInFlight: Promise<void> | null = null;
 
 function getErrorMessage(error: unknown) {
   if (error instanceof ApiClientError) {
@@ -90,49 +91,57 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   accessToken: null,
   refreshToken: null,
   bootstrapSession: async () => {
-    const stored = readStoredTokens();
-    if (!stored) {
-      set({
-        status: "unauthenticated",
-        accessToken: null,
-        refreshToken: null,
-        user: null,
-        currentTenant: null,
-        availableTenants: [],
-      });
-      return;
-    }
-
-    set({
-      status: "loading",
-      accessToken: stored.accessToken,
-      refreshToken: stored.refreshToken,
-    });
-
-    try {
-      const loadMe = async () => {
-        const me = await meRequest(get().accessToken ?? "");
-        set({
-          status: "authenticated",
-          user: me.user,
-          currentTenant: me.currentTenant,
-          availableTenants: me.availableTenants,
-        });
-      };
-
-      try {
-        await loadMe();
-      } catch (error) {
-        if (!(error instanceof ApiClientError) || error.status !== 401) {
-          throw error;
+    if (!bootstrapInFlight) {
+      bootstrapInFlight = (async () => {
+        const stored = readStoredTokens();
+        if (!stored) {
+          set({
+            status: "unauthenticated",
+            accessToken: null,
+            refreshToken: null,
+            user: null,
+            currentTenant: null,
+            availableTenants: [],
+          });
+          return;
         }
 
-        await get().refreshAccessToken();
-        await loadMe();
-      }
-    } catch {
-      get().clearSession();
+        set({
+          status: "loading",
+          accessToken: stored.accessToken,
+          refreshToken: stored.refreshToken,
+        });
+
+        try {
+          const loadMe = async () => {
+            const me = await meRequest(get().accessToken ?? "");
+            set({
+              status: "authenticated",
+              user: me.user,
+              currentTenant: me.currentTenant,
+              availableTenants: me.availableTenants,
+            });
+          };
+
+          try {
+            await loadMe();
+          } catch (error) {
+            if (!(error instanceof ApiClientError) || error.status !== 401) {
+              throw error;
+            }
+
+            await get().refreshAccessToken();
+            await loadMe();
+          }
+        } catch {
+          get().clearSession();
+        }
+      })().finally(() => {
+        bootstrapInFlight = null;
+      });
     }
+
+    await bootstrapInFlight;
   },
   register: async (input) => {
     set({ status: "loading" });
@@ -339,7 +348,12 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     return refreshInFlight;
   },
   withAccessTokenRetry: async <T>(request: (accessToken: string) => Promise<T>) => {
-    const firstToken = get().accessToken;
+    let firstToken = get().accessToken;
+    if (!firstToken && get().status === "loading") {
+      await get().bootstrapSession();
+      firstToken = get().accessToken;
+    }
+
     if (!firstToken) {
       throw new ApiClientError(401, "Authentication is required.");
     }

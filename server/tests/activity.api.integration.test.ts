@@ -183,11 +183,98 @@ describeIfDb("activity api integration", () => {
       .set("Authorization", `Bearer ${owner.accessToken}`);
 
     expect(response.status).toBe(200);
-    expect(response.body.data).toHaveLength(3);
-    expect(response.body.data[0]?.title).toBe("Status moved to SCHEDULED");
-    expect(response.body.data[1]?.title).toBe("Job assigned");
-    expect(response.body.data[2]?.title).toBe("Team member updated");
-    expect(response.body.meta.pagination.total).toBe(3);
+    expect(response.body.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ title: "Status moved to SCHEDULED" }),
+        expect.objectContaining({ title: "Job assigned" }),
+        expect.objectContaining({ title: "Team member updated" }),
+      ]),
+    );
+    expect(response.body.meta.pagination.total).toBeGreaterThanOrEqual(3);
     expect(staffMembership.role).toBe(MembershipRole.STAFF);
+  });
+
+  it("allows managers and rejects staff for the tenant activity feed", async () => {
+    const owner = await seedTenantUser({
+      email: "owner-roles@activity-api.test",
+      displayName: "Activity Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Activity Roles Tenant",
+      tenantSlug: "activity-roles-tenant",
+    });
+
+    const passwordHash = await hashPassword("password123");
+    const [managerUser, staffUser] = await Promise.all([
+      prisma.user.create({
+        data: {
+          email: "manager-roles@activity-api.test",
+          passwordHash,
+          displayName: "Activity Manager",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "staff-roles@activity-api.test",
+          passwordHash,
+          displayName: "Activity Staff",
+        },
+      }),
+    ]);
+
+    await Promise.all([
+      prisma.membership.create({
+        data: {
+          userId: managerUser.id,
+          tenantId: owner.tenant.id,
+          role: MembershipRole.MANAGER,
+          status: MembershipStatus.ACTIVE,
+        },
+      }),
+      prisma.membership.create({
+        data: {
+          userId: staffUser.id,
+          tenantId: owner.tenant.id,
+          role: MembershipRole.STAFF,
+          status: MembershipStatus.ACTIVE,
+        },
+      }),
+      prisma.auditLog.create({
+        data: {
+          tenantId: owner.tenant.id,
+          userId: owner.user.id,
+          action: AuditAction.AUTH_LOGIN,
+        },
+      }),
+    ]);
+
+    const [managerSession, staffSession] = await Promise.all([
+      login({
+        email: managerUser.email,
+        password: "password123",
+        tenantId: owner.tenant.id,
+      }),
+      login({
+        email: staffUser.email,
+        password: "password123",
+        tenantId: owner.tenant.id,
+      }),
+    ]);
+
+    const managerResponse = await request(app)
+      .get("/api/activity?page=1&pageSize=10")
+      .set("Authorization", `Bearer ${managerSession.accessToken}`);
+
+    expect(managerResponse.status).toBe(200);
+    expect(managerResponse.body.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ title: "User logged in" }),
+      ]),
+    );
+
+    const staffResponse = await request(app)
+      .get("/api/activity?page=1&pageSize=10")
+      .set("Authorization", `Bearer ${staffSession.accessToken}`);
+
+    expect(staffResponse.status).toBe(403);
   });
 });

@@ -48,8 +48,9 @@
 - Dashboard activity feed
 
 ## Phase 8
-- Status: Planned next
-- Attachments / upload
+- Status: Completed
+- Job evidence / documents
 
 ## Phase 9
+- Status: Planned next
 - Dashboard hardening

@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: OpsFlow API
-  version: phase6-v1
+  version: phase7-v1
   license:
     name: MIT
     identifier: MIT
   description: |
-    OpenAPI specification for the currently implemented backend APIs through Phase 6.
-    Scope includes health, auth, invitations, customers, jobs, team membership management, assignment flows, workflow transitions, and tenant activity feed.
+    OpenAPI specification for the currently implemented backend APIs through Phase 7.
+    Scope includes health, auth, invitations, customers, jobs, team membership management, assignment flows, workflow transitions, tenant activity feed, and job evidence/document uploads.
 servers:
   - url: http://localhost:3000
 security:
@@ -957,6 +957,117 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
+  /api/jobs/{jobId}/evidence:
+    get:
+      tags: [Job]
+      operationId: listJobEvidence
+      summary: List evidence files attached to a visible job
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/JobIdPathParam"
+      responses:
+        "200":
+          description: Job evidence loaded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccessJobEvidenceListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    post:
+      tags: [Job]
+      operationId: uploadJobEvidence
+      summary: Upload a field-proof or supporting document for a visible job
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/JobIdPathParam"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/UploadJobEvidenceRequest"
+      responses:
+        "201":
+          description: Job evidence uploaded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccessJobEvidenceItemResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/jobs/{jobId}/evidence/{evidenceId}/download:
+    get:
+      tags: [Job]
+      operationId: downloadJobEvidence
+      summary: Download a previously uploaded evidence file for a visible job
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/JobIdPathParam"
+        - name: evidenceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Binary evidence file stream.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/jobs/{jobId}/evidence/{evidenceId}:
+    delete:
+      tags: [Job]
+      operationId: deleteJobEvidence
+      summary: Delete an evidence file from a visible job
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/JobIdPathParam"
+        - name: evidenceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Job evidence deleted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiSuccessMessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
   /api/jobs/{jobId}/assign:
     post:
       tags: [Job]
@@ -1449,6 +1560,19 @@ components:
         reason:
           type: string
 
+    UploadJobEvidenceRequest:
+      type: object
+      required: [kind, file]
+      properties:
+        kind:
+          $ref: "#/components/schemas/JobEvidenceKind"
+        note:
+          type: string
+          maxLength: 300
+        file:
+          type: string
+          format: binary
+
     UpdateMembershipRequest:
       type: object
       properties:
@@ -1837,6 +1961,45 @@ components:
           items:
             $ref: "#/components/schemas/JobStatus"
 
+    JobEvidenceKind:
+      type: string
+      enum: [SITE_PHOTO, COMPLETION_PROOF, CUSTOMER_DOCUMENT, ISSUE_EVIDENCE]
+
+    JobEvidenceItem:
+      type: object
+      required:
+        - id
+        - kind
+        - fileName
+        - mimeType
+        - sizeBytes
+        - createdAt
+        - downloadPath
+        - uploadedBy
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: "#/components/schemas/JobEvidenceKind"
+        fileName:
+          type: string
+        mimeType:
+          type: string
+        sizeBytes:
+          type: integer
+          minimum: 0
+        note:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        downloadPath:
+          type: string
+        uploadedBy:
+          $ref: "#/components/schemas/UserSummary"
+
     ActivityFeedItem:
       type: object
       required: [id, title, description, timestamp, tone]
@@ -1886,6 +2049,38 @@ components:
           type: object
           additionalProperties: true
           nullable: true
+        meta:
+          type: object
+          additionalProperties: true
+
+    ApiSuccessJobEvidenceListResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/JobEvidenceItem"
+        meta:
+          type: object
+          additionalProperties: true
+
+    ApiSuccessJobEvidenceItemResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        message:
+          type: string
+        data:
+          $ref: "#/components/schemas/JobEvidenceItem"
         meta:
           type: object
           additionalProperties: true

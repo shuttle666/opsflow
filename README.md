@@ -1,6 +1,6 @@
 # OpsFlow
 
-OpsFlow is a full-stack operations platform foundation with a Next.js client, an Express API, and lightweight planning docs. The project now includes a multi-tenant data layer, auth + RBAC, customer/job workflows, team assignment, and a live workflow timeline + activity feed.
+OpsFlow is a full-stack operations platform foundation with a Next.js client, an Express API, and lightweight planning docs. The project now includes a multi-tenant data layer, auth + RBAC, customer/job workflows, team assignment, live workflow timeline + activity feed, and job evidence uploads for field proof and completion documents.
 
 ## Project Structure
 
@@ -14,7 +14,7 @@ OpsFlow is a full-stack operations platform foundation with a Next.js client, an
 - Backend: Express, TypeScript, dotenv, Zod, cors, helmet, morgan
 - Database: PostgreSQL + Prisma 7 with adapter-based runtime connection (`@prisma/adapter-pg` + `pg`)
 - Data layer delivered: `User`, `Tenant`, `Membership`, `Customer`, `Job`, `JobStatusHistory`, migration, and seed
-- Business modules delivered: Auth, invitations, customer management, job management, team assignment flows, and Phase 6 workflow/activity surfaces
+- Business modules delivered: Auth, invitations, customer management, job management, team assignment flows, workflow/activity surfaces, and job evidence/document uploads
 - Local development: Docker Compose with `client`, `server`, and `postgres` services
 
 ## Getting Started
@@ -203,5 +203,4 @@ docker compose --env-file .env.production -f docker-compose.prod.yml exec nginx 
 - Frontend: `https://app.your-domain.com`
 - API health: `https://api.your-domain.com/api/health`
 - Container logs: `docker compose --env-file .env.production -f docker-compose.prod.yml logs -f`
-
 

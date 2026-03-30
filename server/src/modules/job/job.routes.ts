@@ -3,6 +3,7 @@ import { Router } from "express";
 import { authenticate } from "../../middleware/authenticate";
 import { requireRole } from "../../middleware/require-role";
 import { requireTenantAccess } from "../../middleware/require-tenant-access";
+import { evidenceRouter } from "../evidence/evidence.routes";
 import {
   assignJobHandler,
   createJobHandler,
@@ -30,6 +31,7 @@ jobRouter.post(
   requireRole(MembershipRole.OWNER, MembershipRole.MANAGER),
   createJobHandler,
 );
+jobRouter.use("/:jobId/evidence", evidenceRouter);
 jobRouter.get("/:jobId", getJobDetailHandler);
 jobRouter.get("/:jobId/history", getJobHistoryHandler);
 jobRouter.post("/:jobId/status-transitions", transitionJobStatusHandler);

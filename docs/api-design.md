@@ -1,4 +1,4 @@
-# API Design (Phase 6 - Workflow + Activity Live)
+# API Design (Phase 7 - Job Evidence / Documents Live)
 
 ## Current Status
 
@@ -7,6 +7,7 @@
 - Job CRUD APIs are implemented end-to-end.
 - Team membership management and job assignment APIs are now implemented.
 - Job workflow APIs are now implemented, including live history, status transitions, and tenant activity feed.
+- Job evidence APIs are now implemented, including upload, list, download, and delete flows scoped to the current tenant/job visibility.
 
 ## Auth
 
@@ -42,6 +43,10 @@ PATCH /jobs/:id
 POST /jobs/:id/status-transitions
 POST /jobs/:id/assign  
 POST /jobs/:id/unassign  
+GET /jobs/:id/evidence
+POST /jobs/:id/evidence
+GET /jobs/:id/evidence/:evidenceId/download
+DELETE /jobs/:id/evidence/:evidenceId
 
 ## Team
 
@@ -67,3 +72,4 @@ POST /invitations/accept
 - STAFF job visibility is now limited to assigned work via `/jobs/my`
 - Workflow transitions now write both `job_status_history` and `audit_logs`
 - Dashboard activity feed is driven by audit log data, not placeholder records
+- Job evidence is intended for field media, completion proof, customer documents, and issue evidence rather than generic tenant file storage

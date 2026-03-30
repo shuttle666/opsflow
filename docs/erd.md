@@ -7,6 +7,7 @@
 - Customer
 - Job
 - JobStatusHistory
+- JobEvidence
 
 ## Relationships
 
@@ -18,6 +19,7 @@
 - A Tenant can have many Jobs
 - A Customer can have many Jobs
 - A Job can have many JobStatusHistory records
+- A Job can have many JobEvidence records
 
 ## Notes
 - User ↔ Tenant is a many-to-many relationship via Membership
@@ -28,7 +30,6 @@
 
 ## Planned Models (Future)
 - Quote
-- Attachment
 - Assignment
 - Notification
 
@@ -43,6 +44,7 @@ erDiagram
     TENANTS ||--o{ JOBS : owns
     CUSTOMERS ||--o{ JOBS : has
     JOBS ||--o{ JOB_STATUS_HISTORY : records
+    JOBS ||--o{ JOB_EVIDENCE : stores
 
     MEMBERSHIPS {
         string id
@@ -81,4 +83,13 @@ erDiagram
         string job_id
         string from_status
         string to_status
+    }
+
+    JOB_EVIDENCE {
+        string id
+        string tenant_id
+        string job_id
+        string uploaded_by_id
+        string kind
+        string file_name
     }

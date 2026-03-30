@@ -1,4 +1,5 @@
 import type { ErrorRequestHandler } from "express";
+import { MulterError } from "multer";
 import { ZodError } from "zod";
 import { env } from "../config/env";
 import { ApiError } from "../utils/api-error";
@@ -17,6 +18,12 @@ export const errorHandler: ErrorRequestHandler = (
     statusCode = error.statusCode;
     message = error.message;
     details = error.details;
+  } else if (error instanceof MulterError) {
+    statusCode = 400;
+    message =
+      error.code === "LIMIT_FILE_SIZE"
+        ? "Evidence file exceeds the maximum allowed size."
+        : "Evidence upload failed.";
   } else if (error instanceof ZodError) {
     statusCode = 400;
     message = "Validation failed";

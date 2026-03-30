@@ -39,7 +39,7 @@ describe("login page", () => {
     expect(screen.getByLabelText("Password")).toHaveValue("");
     expect(screen.getByPlaceholderText("name@company.com")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("••••••••")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign In" })).toBeInTheDocument();
     expect(screen.getByText("Local dev accounts")).toBeInTheDocument();
 
     await user.click(screen.getByText("Local dev accounts"));
@@ -58,7 +58,7 @@ describe("login page", () => {
 
     await user.type(screen.getByLabelText("Email"), "owner@acme.example");
     await user.type(screen.getByLabelText("Password"), "owner-password-123");
-    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    await user.click(screen.getByRole("button", { name: "Sign In" }));
 
     await waitFor(() => {
       expect(login).toHaveBeenCalledWith({

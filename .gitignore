@@ -18,4 +18,5 @@ server/node_modules
 server/dist
 server/coverage
 server/generated
+server/uploads
 *.tsbuildinfo

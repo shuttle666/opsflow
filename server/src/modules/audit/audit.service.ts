@@ -130,6 +130,26 @@ function mapAuditToFeedItem(log: {
         ...(log.targetType ? { targetType: log.targetType } : {}),
         ...(log.targetId ? { targetId: log.targetId } : {}),
       };
+    case AuditAction.JOB_EVIDENCE_UPLOADED:
+      return {
+        id: log.id,
+        title: "Evidence added",
+        description: `${actor} uploaded ${(metadata.fileName as string | undefined) ?? "a file"} to ${(metadata.jobTitle as string | undefined) ?? "a job"}.`,
+        timestamp: log.createdAt,
+        tone: "brand",
+        ...(log.targetType ? { targetType: log.targetType } : {}),
+        ...(log.targetId ? { targetId: log.targetId } : {}),
+      };
+    case AuditAction.JOB_EVIDENCE_DELETED:
+      return {
+        id: log.id,
+        title: "Evidence removed",
+        description: `${actor} removed ${(metadata.fileName as string | undefined) ?? "a file"} from ${(metadata.jobTitle as string | undefined) ?? "a job"}.`,
+        timestamp: log.createdAt,
+        tone: "warning",
+        ...(log.targetType ? { targetType: log.targetType } : {}),
+        ...(log.targetId ? { targetId: log.targetId } : {}),
+      };
     case AuditAction.TENANT_INVITATION_CREATED:
       return {
         id: log.id,

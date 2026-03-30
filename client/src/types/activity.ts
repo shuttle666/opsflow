@@ -9,3 +9,10 @@ export type ActivityFeedItem = {
   targetType?: string;
   targetId?: string;
 };
+
+export type ActivityFeedPagination = {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};

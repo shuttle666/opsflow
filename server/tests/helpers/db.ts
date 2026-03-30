@@ -10,6 +10,7 @@ export async function resetDatabase() {
   await prisma.auditLog.deleteMany();
   await prisma.tenantInvitation.deleteMany();
   await prisma.authSession.deleteMany();
+  await prisma.jobEvidence.deleteMany();
   await prisma.jobStatusHistory.deleteMany();
   await prisma.job.deleteMany();
   await prisma.customer.deleteMany();
@@ -17,4 +18,3 @@ export async function resetDatabase() {
   await prisma.tenant.deleteMany();
   await prisma.user.deleteMany();
 }
-

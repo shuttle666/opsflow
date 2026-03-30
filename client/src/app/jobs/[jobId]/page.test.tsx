@@ -6,6 +6,7 @@ import JobDetailPage from "@/app/jobs/[jobId]/page";
 import {
   getJobDetailRequest,
   getJobHistoryRequest,
+  listJobEvidenceRequest,
   transitionJobStatusRequest,
 } from "@/features/job/job-api";
 import { useAuthStore } from "@/store/auth-store";
@@ -87,8 +88,8 @@ vi.mock("@/components/ui/detail-layout", () => ({
   ),
 }));
 
-vi.mock("@/components/job/attachment-panel", () => ({
-  AttachmentPanel: () => <div>Attachment panel</div>,
+vi.mock("@/components/job/job-evidence-panel", () => ({
+  JobEvidencePanel: () => <div>Job evidence panel</div>,
 }));
 
 vi.mock("@/components/job/job-assignment-card", () => ({
@@ -103,6 +104,7 @@ vi.mock("@/features/job/job-api", async () => {
     ...actual,
     getJobDetailRequest: vi.fn(),
     getJobHistoryRequest: vi.fn(),
+    listJobEvidenceRequest: vi.fn(),
     transitionJobStatusRequest: vi.fn(),
   };
 });
@@ -112,6 +114,7 @@ describe("job detail page", () => {
     vi.clearAllMocks();
     vi.mocked(getJobDetailRequest).mockResolvedValue(baseJob);
     vi.mocked(getJobHistoryRequest).mockResolvedValue(baseHistory);
+    vi.mocked(listJobEvidenceRequest).mockResolvedValue([]);
     useAuthStore.setState({
       status: "authenticated",
       user: {
@@ -159,6 +162,7 @@ describe("job detail page", () => {
     render(<JobDetailPage />);
 
     expect(await screen.findByText("Move to scheduled")).toBeInTheDocument();
+    expect(screen.getByText("Job evidence panel")).toBeInTheDocument();
     expect(screen.getByText("Job created by Owner.")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Move to scheduled" }));

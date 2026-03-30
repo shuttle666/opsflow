@@ -101,41 +101,44 @@
   - Manager 可以推动工单完成整个生命周期
   - 每一步状态变更都能在时间线上看到
 
-### Phase 7 — Attachments / Upload 能力
-目标：让工单真正像生产系统，而不是纯文本记录。
+### Phase 7 — Job Evidence / Documents
+目标：让工单不仅有结构化状态，还能保留现场证明材料与完成文档。
 
 - 后端：
-  - 新增 `Attachment` 模型，字段包含：
+  - 新增 `JobEvidence` 模型，字段包含：
     - `tenantId`
     - `jobId`
     - `uploadedById`
+    - `kind`
     - `fileName`
     - `mimeType`
     - `sizeBytes`
     - `storageKey`
+    - `note`
     - `createdAt`
   - 新增 migration
   - 新增接口：
-    - `POST /api/jobs/:jobId/attachments`
-    - `GET /api/jobs/:jobId/attachments`
-    - `DELETE /api/jobs/:jobId/attachments/:attachmentId`
+    - `POST /api/jobs/:jobId/evidence`
+    - `GET /api/jobs/:jobId/evidence`
+    - `GET /api/jobs/:jobId/evidence/:evidenceId/download`
+    - `DELETE /api/jobs/:jobId/evidence/:evidenceId`
   - 使用 `multipart/form-data`
   - dev 环境默认本地磁盘存储，但必须抽象成 storage layer，方便以后切到 S3
   - 权限规则：
-    - `OWNER/MANAGER` 可上传到任意当前 tenant 工单
-    - `STAFF` 只能上传到分配给自己的工单
+    - `OWNER/MANAGER` 可管理任意当前 tenant 工单的 evidence
+    - `STAFF` 只能管理分配给自己的工单 evidence
 - 前端：
-  - 在工单详情页加入上传区
-  - 展示附件列表
-  - 支持预览、下载、删除
+  - 在工单详情页加入 `Job Evidence` 区块
+  - 展示 evidence 列表
+  - 支持上传、下载、删除
   - 前端先做文件大小/类型校验
 - 类型/接口：
-  - 新增 `AttachmentItem`
-  - 新增上传返回结构
-  - 返回中包含可访问 URL 或下载路径字段
+  - 新增 `JobEvidenceKind`
+  - 新增 `JobEvidenceItem`
+  - 返回中包含受控下载路径字段
 - 验收结果：
-  - Staff 可以上传现场图片/文档
-  - Manager 可以在工单详情中看到这些附件
+  - Staff 可以上传现场图片、完成证明或问题证据
+  - Manager 可以在工单详情中查看并下载这些证据材料
 
 ### Phase 8 — Dashboard Metrics + 工程化完善
 目标：把项目从“功能 demo”升级成“成熟作品集项目”。
@@ -168,7 +171,7 @@
 - 新业务接口默认不在请求体中传 `tenantId`，tenant scope 由当前会话决定
 - `customers/jobs/memberships/activity` 的列表接口统一做分页返回
 - 新增持久化模型只有一个强制项：
-  - Phase 7 的 `Attachment`
+  - Phase 7 的 `JobEvidence`
 - Phase 8 默认只新增 dashboard summary DTO，不强制新增数据库表
 
 ## Test Plan
@@ -191,9 +194,9 @@
   - history 与 audit 正确写入
   - activity feed 只返回当前 tenant 数据
 - Phase 7：
-  - 上传校验
-  - 附件列表与删除权限
-  - `STAFF` 不能给未分配给自己的 job 上传附件
+  - evidence 上传校验
+  - evidence 列表、下载与删除权限
+  - `STAFF` 不能给未分配给自己的 job 上传 evidence
   - 存储元数据持久化正确
 - Phase 8：
   - Dashboard 指标准确性

@@ -2,14 +2,17 @@ import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
 import { BellRing, CheckCircle2, FileClock, History } from "@/components/ui/icons";
 import { LoadingPanel } from "@/components/ui/loading-panel";
 import { cn, surfaceClassName } from "@/components/ui/styles";
-import type { ActivityFeedItemView } from "@/types/future-ui";
+import type { ActivityFeedItem } from "@/types/activity";
 
-type ActivityFeedCardProps = {
-  items: ActivityFeedItemView[];
+type ActivityLogCardProps = {
+  items: ActivityFeedItem[];
   loading?: boolean;
+  title?: string;
+  emptyTitle?: string;
+  emptyDescription?: string;
 };
 
-function toneClassName(tone: ActivityFeedItemView["tone"]) {
+function toneClassName(tone: ActivityFeedItem["tone"]) {
   switch (tone) {
     case "success":
       return "bg-emerald-50 text-emerald-500";
@@ -22,7 +25,7 @@ function toneClassName(tone: ActivityFeedItemView["tone"]) {
   }
 }
 
-function iconForTone(tone: ActivityFeedItemView["tone"]) {
+function iconForTone(tone: ActivityFeedItem["tone"]) {
   switch (tone) {
     case "success":
       return CheckCircle2;
@@ -35,23 +38,29 @@ function iconForTone(tone: ActivityFeedItemView["tone"]) {
   }
 }
 
-export function ActivityFeedCard({ items, loading = false }: ActivityFeedCardProps) {
+export function ActivityLogCard({
+  items,
+  loading = false,
+  title = "Activity Log",
+  emptyTitle = "No activity yet",
+  emptyDescription = "Tenant events will appear here as work progresses.",
+}: ActivityLogCardProps) {
   return (
     <div className={cn(surfaceClassName, "flex flex-col p-6")}>
       <div className="mb-6 flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-50 text-sky-600">
           <History className="h-5 w-5" />
         </div>
-        <h2 className="text-lg font-bold text-slate-900">Recent Activity</h2>
+        <h2 className="text-lg font-bold text-slate-900">{title}</h2>
       </div>
 
-      {loading ? <LoadingPanel label="Loading activity..." compact /> : null}
+      {loading ? <LoadingPanel label="Loading activity log..." compact /> : null}
 
       {!loading && items.length === 0 ? (
         <EmptyStatePanel
           compact
-          title="No activity yet"
-          description="Actions will appear here as work progresses."
+          title={emptyTitle}
+          description={emptyDescription}
         />
       ) : null}
 
@@ -75,7 +84,7 @@ export function ActivityFeedCard({ items, loading = false }: ActivityFeedCardPro
                 </div>
                 <div className="min-w-0 flex-1">
                   <span className="text-sm font-semibold text-slate-900">{item.title}</span>
-                  <span className="mt-0.5 block text-xs text-slate-500 truncate">
+                  <span className="mt-0.5 block text-xs text-slate-500">
                     {item.description}
                   </span>
                 </div>

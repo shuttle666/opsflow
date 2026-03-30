@@ -31,6 +31,13 @@ enum JobStatus {
   CANCELLED
 }
 
+enum JobEvidenceKind {
+  SITE_PHOTO
+  COMPLETION_PROOF
+  CUSTOMER_DOCUMENT
+  ISSUE_EVIDENCE
+}
+
 enum InvitationStatus {
   PENDING
   ACCEPTED
@@ -52,6 +59,8 @@ enum AuditAction {
   JOB_ASSIGNED
   JOB_UNASSIGNED
   MEMBERSHIP_UPDATED
+  JOB_EVIDENCE_UPLOADED
+  JOB_EVIDENCE_DELETED
 }
 
 model User {
@@ -67,6 +76,7 @@ model User {
   createdJobs         Job[]              @relation("JobCreatedBy")
   assignedJobs        Job[]              @relation("JobAssignedTo")
   jobStatusChanges    JobStatusHistory[] @relation("JobStatusChangedBy")
+  uploadedEvidence    JobEvidence[]      @relation("JobEvidenceUploadedBy")
   authSessions        AuthSession[]
   sentInvitations     TenantInvitation[] @relation("TenantInvitationInvitedBy")
   receivedInvitations TenantInvitation[] @relation("TenantInvitationInvitedUser")
@@ -86,6 +96,7 @@ model Tenant {
   memberships      Membership[]
   customers        Customer[]
   jobs             Job[]
+  jobEvidence      JobEvidence[]
   jobStatusHistory JobStatusHistory[]
   authSessions     AuthSession[]
   invitations      TenantInvitation[]
@@ -146,6 +157,7 @@ model Job {
   customer      Customer           @relation(fields: [customerId, tenantId], references: [id, tenantId], onDelete: Restrict)
   assignedTo    User?              @relation("JobAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
   createdBy     User               @relation("JobCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  evidence      JobEvidence[]
   statusHistory JobStatusHistory[]
 
   @@unique([id, tenantId])
@@ -171,6 +183,29 @@ model JobStatusHistory {
   @@index([tenantId])
   @@index([jobId, changedAt])
   @@map("job_status_history")
+}
+
+model JobEvidence {
+  id           String          @id @default(uuid()) @db.Uuid
+  tenantId     String          @map("tenant_id") @db.Uuid
+  jobId        String          @map("job_id") @db.Uuid
+  uploadedById String          @map("uploaded_by_id") @db.Uuid
+  kind         JobEvidenceKind
+  fileName     String          @map("file_name")
+  mimeType     String          @map("mime_type")
+  sizeBytes    Int             @map("size_bytes")
+  storageKey   String          @map("storage_key")
+  note         String?
+  createdAt    DateTime        @default(now()) @map("created_at")
+  tenant       Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  job          Job             @relation(fields: [jobId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  uploadedBy   User            @relation("JobEvidenceUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@unique([id, tenantId])
+  @@index([tenantId])
+  @@index([jobId, createdAt])
+  @@index([uploadedById, createdAt])
+  @@map("job_evidence")
 }
 
 model AuthSession {

@@ -1,5 +1,11 @@
 export type JobStatus = "NEW" | "SCHEDULED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 
+export type JobEvidenceKind =
+  | "SITE_PHOTO"
+  | "COMPLETION_PROOF"
+  | "CUSTOMER_DOCUMENT"
+  | "ISSUE_EVIDENCE";
+
 export type AssignJobRequest = {
   membershipId: string;
 };
@@ -86,6 +92,28 @@ export type JobStatusTransitionResult = {
   job: JobDetail;
   historyEntry: JobHistoryItem;
   allowedTransitions: JobStatus[];
+};
+
+export type JobEvidenceItem = {
+  id: string;
+  kind: JobEvidenceKind;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  note: string | null;
+  createdAt: string;
+  downloadPath: string;
+  uploadedBy: {
+    id: string;
+    displayName: string;
+    email: string;
+  };
+};
+
+export type UploadJobEvidenceInput = {
+  kind: JobEvidenceKind;
+  note?: string;
+  file: File;
 };
 
 export type CreateJobInput = {

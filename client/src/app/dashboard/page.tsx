@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { AuthGuard } from "@/components/auth/auth-guard";
-import { ActivityFeedCard } from "@/components/dashboard/activity-feed-card";
 import {
   TodaysScheduleCard,
   type ScheduleItem,
@@ -13,12 +12,9 @@ import {
   Users,
 } from "@/components/ui/icons";
 import { AppShell } from "@/components/ui/app-shell";
-import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
 import { StatCard } from "@/components/ui/info-cards";
-import { listActivityFeedRequest } from "@/features/activity/activity-api";
 import { listJobsRequest } from "@/features/job/job-api";
 import { useAuthStore } from "@/store/auth-store";
-import type { ActivityFeedItemView } from "@/types/future-ui";
 
 function initialsFor(name: string) {
   return name
@@ -39,55 +35,9 @@ function todayRange() {
 export default function DashboardPage() {
   const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
 
-  const [activityItems, setActivityItems] = useState<ActivityFeedItemView[]>([]);
-  const [isActivityLoading, setIsActivityLoading] = useState(true);
-  const [activityError, setActivityError] = useState<string | null>(null);
-
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [isScheduleLoading, setIsScheduleLoading] = useState(true);
   const [jobCount, setJobCount] = useState(0);
-
-  // Load activity feed
-  useEffect(() => {
-    let cancelled = false;
-
-    void (async () => {
-      setIsActivityLoading(true);
-      setActivityError(null);
-
-      try {
-        const result = await withAccessTokenRetry((accessToken) =>
-          listActivityFeedRequest(accessToken, { page: 1, pageSize: 10 }),
-        );
-
-        if (!cancelled) {
-          setActivityItems(
-            result.items.map((item) => ({
-              id: item.id,
-              title: item.title,
-              description: item.description,
-              timestamp: new Date(item.timestamp).toLocaleString(),
-              tone: item.tone,
-            })),
-          );
-        }
-      } catch (loadError) {
-        if (!cancelled) {
-          setActivityError(
-            loadError instanceof Error ? loadError.message : "Failed to load activity feed.",
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setIsActivityLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [withAccessTokenRetry]);
 
   // Load today's schedule
   useEffect(() => {
@@ -170,14 +120,8 @@ export default function DashboardPage() {
           />
         </section>
 
-        {/* Main Content: Schedule + Activity */}
-        <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden xl:flex-row">
+        <div className="min-h-0 flex-1">
           <TodaysScheduleCard items={scheduleItems} loading={isScheduleLoading} />
-
-          <div className="w-full xl:w-[360px]">
-            {activityError ? <InlineErrorBanner message={activityError} /> : null}
-            <ActivityFeedCard items={activityItems} loading={isActivityLoading} />
-          </div>
         </div>
       </AuthGuard>
     </AppShell>

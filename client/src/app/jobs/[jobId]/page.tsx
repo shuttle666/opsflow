@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AuthGuard } from "@/components/auth/auth-guard";
-import { AttachmentPanel } from "@/components/job/attachment-panel";
+import { JobEvidencePanel } from "@/components/job/job-evidence-panel";
 import { JobAssignmentCard } from "@/components/job/job-assignment-card";
 import { WorkflowTimelineCard } from "@/components/job/workflow-timeline-card";
 import { AppShell } from "@/components/ui/app-shell";
@@ -15,13 +15,18 @@ import { LoadingPanel } from "@/components/ui/loading-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { secondaryButtonClassName } from "@/components/ui/styles";
 import {
+  deleteJobEvidenceRequest,
+  downloadJobEvidenceRequest,
   getJobDetailRequest,
   getJobHistoryRequest,
+  listJobEvidenceRequest,
   transitionJobStatusRequest,
+  uploadJobEvidenceRequest,
 } from "@/features/job/job-api";
 import { useAuthStore } from "@/store/auth-store";
 import type {
   JobDetail,
+  JobEvidenceItem,
   JobHistoryItem,
   JobHistoryResult,
   JobStatus,
@@ -140,11 +145,15 @@ export default function JobDetailPage() {
   const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
   const [job, setJob] = useState<JobDetail | null>(null);
   const [workflow, setWorkflow] = useState<JobHistoryResult | null>(null);
+  const [evidence, setEvidence] = useState<JobEvidenceItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
   const [workflowSuccess, setWorkflowSuccess] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [evidenceError, setEvidenceError] = useState<string | null>(null);
+  const [isUploadingEvidence, setIsUploadingEvidence] = useState(false);
+  const [isEvidenceLoading, setIsEvidenceLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -152,24 +161,29 @@ export default function JobDetailPage() {
     if (!jobId) {
       setError("Job id is missing.");
       setIsLoading(false);
+      setIsEvidenceLoading(false);
       return;
     }
 
     void (async () => {
       setIsLoading(true);
+      setIsEvidenceLoading(true);
       setError(null);
 
       try {
-        const [loadedJob, loadedHistory] = await Promise.all([
+        const [loadedJob, loadedHistory, loadedEvidence] = await Promise.all([
           withAccessTokenRetry((accessToken) => getJobDetailRequest(accessToken, jobId)),
           withAccessTokenRetry((accessToken) => getJobHistoryRequest(accessToken, jobId)),
+          withAccessTokenRetry((accessToken) => listJobEvidenceRequest(accessToken, jobId)),
         ]);
 
         if (!cancelled) {
           setJob(loadedJob);
           setWorkflow(loadedHistory);
+          setEvidence(loadedEvidence);
           setWorkflowError(null);
           setWorkflowSuccess(null);
+          setEvidenceError(null);
         }
       } catch (loadError) {
         if (!cancelled) {
@@ -178,6 +192,7 @@ export default function JobDetailPage() {
       } finally {
         if (!cancelled) {
           setIsLoading(false);
+          setIsEvidenceLoading(false);
         }
       }
     })();
@@ -188,6 +203,9 @@ export default function JobDetailPage() {
   }, [jobId, withAccessTokenRetry]);
 
   const canEdit = canManageJobs(currentTenant?.role);
+  const canManageEvidence = job
+    ? canTransitionJobs(currentTenant?.role, user?.id, job)
+    : false;
   const canTransition = job
     ? canTransitionJobs(currentTenant?.role, user?.id, job)
     : false;
@@ -227,6 +245,71 @@ export default function JobDetailPage() {
     } finally {
       setIsTransitioning(false);
     }
+  }
+
+  async function handleEvidenceUpload(input: {
+    kind: JobEvidenceItem["kind"];
+    note?: string;
+    file: File;
+  }) {
+    if (!job) {
+      return;
+    }
+
+    setIsUploadingEvidence(true);
+    setEvidenceError(null);
+
+    try {
+      const created = await withAccessTokenRetry((accessToken) =>
+        uploadJobEvidenceRequest(accessToken, job.id, input),
+      );
+      setEvidence((current) => [created, ...current]);
+    } catch (uploadError) {
+      setEvidenceError(
+        uploadError instanceof Error ? uploadError.message : "Failed to upload evidence.",
+      );
+      throw uploadError;
+    } finally {
+      setIsUploadingEvidence(false);
+    }
+  }
+
+  async function handleEvidenceDelete(evidenceId: string) {
+    if (!job) {
+      return;
+    }
+
+    setEvidenceError(null);
+
+    try {
+      await withAccessTokenRetry((accessToken) =>
+        deleteJobEvidenceRequest(accessToken, job.id, evidenceId),
+      );
+      setEvidence((current) => current.filter((item) => item.id !== evidenceId));
+    } catch (deleteError) {
+      setEvidenceError(
+        deleteError instanceof Error ? deleteError.message : "Failed to delete evidence.",
+      );
+      throw deleteError;
+    }
+  }
+
+  async function handleEvidenceDownload(item: JobEvidenceItem) {
+    if (!job) {
+      return;
+    }
+
+    const blob = await withAccessTokenRetry((accessToken) =>
+      downloadJobEvidenceRequest(accessToken, job.id, item.id),
+    );
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = item.fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(objectUrl);
   }
 
   return (
@@ -324,7 +407,16 @@ export default function JobDetailPage() {
                 </MetaCard>
 
                 <JobAssignmentCard job={job} onJobChange={setJob} />
-                <AttachmentPanel items={[]} />
+                <JobEvidencePanel
+                  items={evidence}
+                  canUpload={canManageEvidence}
+                  isLoading={isEvidenceLoading}
+                  isUploading={isUploadingEvidence}
+                  error={evidenceError}
+                  onUpload={handleEvidenceUpload}
+                  onDelete={handleEvidenceDelete}
+                  onDownload={handleEvidenceDownload}
+                />
               </>
             }
           />

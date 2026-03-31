@@ -76,6 +76,7 @@ function NewJobPageContent() {
               phone: selected.phone ?? null,
               email: selected.email ?? null,
               address: selected.address ?? null,
+              notes: selected.notes ?? null,
               createdAt: selected.createdAt,
               updatedAt: selected.updatedAt,
             },

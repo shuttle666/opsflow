@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { ActionCard } from "@/components/ui/info-cards";
-import { StatusBadge } from "@/components/ui/status-badge";
 import {
   primaryButtonClassName,
   secondaryButtonClassName,
@@ -101,9 +100,6 @@ export function JobAssignmentCard({ job, onJobChange }: JobAssignmentCardProps) 
             </span>
           </p>
           {job.assignedTo?.email ? <p>Email: {job.assignedTo.email}</p> : null}
-          <div className="mt-3">
-            <StatusBadge kind="job" value={job.status} />
-          </div>
         </div>
 
         {!assignable ? (

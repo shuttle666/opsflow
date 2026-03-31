@@ -5,6 +5,7 @@ export const createCustomerSchema = z.object({
   phone: z.string().trim().max(50).optional().or(z.literal("")),
   email: z.string().trim().email().optional().or(z.literal("")),
   address: z.string().trim().max(500).optional().or(z.literal("")),
+  notes: z.string().trim().max(2000).optional().or(z.literal("")),
 });
 
 export const updateCustomerSchema = createCustomerSchema;

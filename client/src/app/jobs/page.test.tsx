@@ -115,6 +115,7 @@ describe("jobs page", () => {
           phone: null,
           email: null,
           address: null,
+          notes: null,
           createdAt: "2026-03-20T00:00:00.000Z",
           updatedAt: "2026-03-20T00:00:00.000Z",
         },

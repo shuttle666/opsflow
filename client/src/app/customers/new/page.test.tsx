@@ -71,6 +71,7 @@ describe("new customer page", () => {
       phone: "0412 000 001",
       email: "noah@example.com",
       address: "12 Glenview Rd",
+      notes: null,
       createdAt: "2026-03-20T00:00:00.000Z",
       updatedAt: "2026-03-20T00:00:00.000Z",
     });

@@ -14,6 +14,7 @@ type CustomerListItem = {
   phone: string | null;
   email: string | null;
   address: string | null;
+  notes: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -135,6 +136,7 @@ export async function listCustomers(
         phone: true,
         email: true,
         address: true,
+        notes: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -164,6 +166,7 @@ export async function createCustomer(
       phone: normalizeOptionalString(input.phone),
       email: normalizeOptionalString(input.email),
       address: normalizeOptionalString(input.address),
+      notes: normalizeOptionalString(input.notes),
     },
     select: {
       id: true,
@@ -171,6 +174,7 @@ export async function createCustomer(
       phone: true,
       email: true,
       address: true,
+      notes: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -192,6 +196,7 @@ export async function getCustomerDetail(
       phone: true,
       email: true,
       address: true,
+      notes: true,
       createdAt: true,
       updatedAt: true,
       createdBy: {
@@ -231,6 +236,7 @@ export async function getCustomerDetail(
     phone: customer.phone,
     email: customer.email,
     address: customer.address,
+    notes: customer.notes,
     createdAt: customer.createdAt,
     updatedAt: customer.updatedAt,
     createdBy: customer.createdBy,
@@ -262,6 +268,7 @@ export async function updateCustomer(
       phone: normalizeOptionalString(input.phone),
       email: normalizeOptionalString(input.email),
       address: normalizeOptionalString(input.address),
+      notes: normalizeOptionalString(input.notes),
     },
     select: {
       id: true,
@@ -269,6 +276,7 @@ export async function updateCustomer(
       phone: true,
       email: true,
       address: true,
+      notes: true,
       createdAt: true,
       updatedAt: true,
     },

@@ -9,7 +9,7 @@ import { JobAssignmentCard } from "@/components/job/job-assignment-card";
 import { WorkflowTimelineCard } from "@/components/job/workflow-timeline-card";
 import { AppShell } from "@/components/ui/app-shell";
 import { DetailLayout } from "@/components/ui/detail-layout";
-import { MetaCard, SummaryCard } from "@/components/ui/info-cards";
+import { SummaryCard } from "@/components/ui/info-cards";
 import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
 import { LoadingPanel } from "@/components/ui/loading-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -332,13 +332,30 @@ export default function JobDetailPage() {
             main={
               <>
                 <SummaryCard
-                  eyebrow="Job profile"
-                  title="Job description"
-                  description="This is the canonical work order record for the current tenant."
+                  eyebrow="Overview"
+                  title={job.title}
                 >
                   <div className="space-y-5">
                     <div className="flex flex-wrap gap-2">
                       <StatusBadge kind="job" value={job.status} />
+                    </div>
+
+                    <div className="rounded-[24px] border border-white/75 bg-white p-5 shadow-sm">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        Customer
+                      </p>
+                      <p className="mt-3 text-sm font-semibold text-slate-900">
+                        {job.customer.name}
+                      </p>
+                      <div className="mt-3 space-y-1 text-sm text-slate-700">
+                        <p>Phone: {job.customer.phone ?? "-"}</p>
+                        <p>Email: {job.customer.email ?? "-"}</p>
+                      </div>
+                      <div className="mt-4">
+                        <Link href={`/customers/${job.customer.id}`} className={secondaryButtonClassName}>
+                          Open customer detail
+                        </Link>
+                      </div>
                     </div>
 
                     <div className="rounded-[24px] border border-white/75 bg-white p-5 shadow-sm">
@@ -376,36 +393,6 @@ export default function JobDetailPage() {
             }
             sidebar={
               <>
-                <SummaryCard
-                  eyebrow="Customer"
-                  title={job.customer.name}
-                  description="Customer details linked to this work order."
-                >
-                  <div className="space-y-2 text-sm text-slate-700">
-                    <p>Phone: {job.customer.phone ?? "-"}</p>
-                    <p>Email: {job.customer.email ?? "-"}</p>
-                    <div className="pt-2">
-                      <Link href={`/customers/${job.customer.id}`} className={secondaryButtonClassName}>
-                        Open customer detail
-                      </Link>
-                    </div>
-                  </div>
-                </SummaryCard>
-
-                <MetaCard
-                  eyebrow="Metadata"
-                  title="Record details"
-                  description="Audit-friendly information for this work order."
-                >
-                  <div className="space-y-3 text-sm text-slate-700">
-                    <p>Created by: {job.createdBy.displayName}</p>
-                    <p>Creator email: {job.createdBy.email}</p>
-                    <p>Assigned to: {job.assignedTo?.displayName ?? "-"}</p>
-                    <p>Created at: {formatDateTime(job.createdAt)}</p>
-                    <p>Updated at: {formatDateTime(job.updatedAt)}</p>
-                  </div>
-                </MetaCard>
-
                 <JobAssignmentCard job={job} onJobChange={setJob} />
                 <JobEvidencePanel
                   items={evidence}

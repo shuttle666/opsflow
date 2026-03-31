@@ -48,6 +48,9 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 
+RUN mkdir -p /app/uploads/evidence \
+  && chown -R opsflow:nodejs /app
+
 USER opsflow
 
 EXPOSE 4000

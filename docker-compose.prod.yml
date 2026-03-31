@@ -39,11 +39,14 @@ services:
       AUTH_SESSION_LIMIT: ${AUTH_SESSION_LIMIT}
       BCRYPT_SALT_ROUNDS: ${BCRYPT_SALT_ROUNDS}
       INVITATION_EXPIRES_IN_DAYS: ${INVITATION_EXPIRES_IN_DAYS}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy
     expose:
       - "4000"
+    volumes:
+      - server_uploads:/app/uploads
     healthcheck:
       test:
         [
@@ -123,6 +126,7 @@ services:
 
 volumes:
   postgres_data:
+  server_uploads:
   letsencrypt:
   certbot_webroot:
 

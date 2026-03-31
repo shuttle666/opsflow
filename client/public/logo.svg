@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="opsflow-bg" x1="64" y1="52" x2="438" y2="460" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#38bdf8" />
+      <stop offset="0.52" stop-color="#0ea5e9" />
+      <stop offset="1" stop-color="#06b6d4" />
+    </linearGradient>
+    <radialGradient id="opsflow-glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(166 118) rotate(39.5) scale(252 220)">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.68" />
+      <stop offset="0.42" stop-color="#ffffff" stop-opacity="0.16" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <rect x="16" y="16" width="480" height="480" rx="116" fill="url(#opsflow-bg)" />
+  <rect
+    x="16.5"
+    y="16.5"
+    width="479"
+    height="479"
+    rx="115.5"
+    stroke="#ffffff"
+    stroke-opacity="0.28"
+  />
+  <rect x="48" y="48" width="416" height="184" rx="92" fill="url(#opsflow-glow)" opacity="0.62" />
+  <ellipse cx="256" cy="382" rx="160" ry="72" fill="#ffffff" fill-opacity="0.08" />
+
+  <path
+    d="M148 164H248"
+    stroke="#ffffff"
+    stroke-width="36"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.96"
+  />
+  <path
+    d="M248 164L184 320"
+    stroke="#ffffff"
+    stroke-width="34"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.88"
+  />
+  <path
+    d="M248 164L318 312"
+    stroke="#ffffff"
+    stroke-width="34"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.88"
+  />
+
+  <rect x="96" y="130" width="96" height="68" rx="34" fill="#ffffff" />
+  <rect
+    x="216"
+    y="132"
+    width="64"
+    height="64"
+    rx="22"
+    fill="#ffffff"
+    fill-opacity="0.96"
+    transform="rotate(45 248 164)"
+  />
+  <rect
+    x="138"
+    y="288"
+    width="84"
+    height="84"
+    rx="28"
+    fill="#ffffff"
+    fill-opacity="0.92"
+    transform="rotate(-15 180 330)"
+  />
+  <rect x="270" y="278" width="132" height="132" rx="46" fill="#ffffff" />
+
+  <path
+    d="m310 344 22 22 42-47"
+    stroke="#0284c7"
+    stroke-width="18"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

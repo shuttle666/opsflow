@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { PublicShell } from "@/components/ui/app-shell";
+import { BrandMark } from "@/components/ui/brand-mark";
 import { ArrowRight } from "@/components/ui/icons";
 import {
   inputClassName,
@@ -71,7 +72,7 @@ function RegisterPageContent() {
         <section className={`${strongSurfaceClassName} w-full max-w-[28rem] p-8 sm:p-10`}>
           <div className="space-y-3 text-center">
             <div className="flex items-center justify-center gap-3">
-              <span className="h-11 w-11 rounded-full bg-linear-to-br from-sky-500 to-cyan-600 shadow-[0_16px_28px_-18px_rgba(8,145,178,0.8)]" />
+              <BrandMark className="h-11 w-11 drop-shadow-[0_16px_28px_-18px_rgba(8,145,178,0.8)]" />
               <span className="text-[2rem] font-semibold tracking-tight text-slate-950">
                 OpsFlow
               </span>

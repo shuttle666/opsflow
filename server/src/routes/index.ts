@@ -4,6 +4,7 @@ import { auditRouter } from "../modules/audit/audit.routes";
 import { customerRouter } from "../modules/customer/customer.routes";
 import { jobRouter } from "../modules/job/job.routes";
 import { membershipRouter } from "../modules/membership/membership.routes";
+import { agentRouter } from "../modules/agent/agent.routes";
 import { healthRouter } from "./health.routes";
 
 const router = Router();
@@ -16,5 +17,6 @@ router.use("/activity", auditRouter);
 router.use("/customers", customerRouter);
 router.use("/jobs", jobRouter);
 router.use("/memberships", membershipRouter);
+router.use("/agent", agentRouter);
 
 export const apiRouter = router;

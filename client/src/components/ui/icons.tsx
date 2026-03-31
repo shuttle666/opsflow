@@ -227,6 +227,24 @@ export function TrendingDown(props: IconProps) {
   );
 }
 
+export function Sparkles(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M12 3l1.5 5.5L19 10l-5.5 1.5L12 17l-1.5-5.5L5 10l5.5-1.5L12 3Z" />
+      <path d="M18 14l.7 2.3L21 17l-2.3.7L18 20l-.7-2.3L15 17l2.3-.7L18 14Z" />
+    </IconBase>
+  );
+}
+
+export function Send(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M22 2 11 13" />
+      <path d="M22 2 15 22l-4-9-9-4 20-7Z" />
+    </IconBase>
+  );
+}
+
 export function MoreHorizontal(props: IconProps) {
   return (
     <IconBase {...props}>

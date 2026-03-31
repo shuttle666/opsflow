@@ -15,3 +15,70 @@
   --shadow-panel: 0 18px 40px -28px rgba(14, 165, 233, 0.22);
   --shadow-floating: 0 26px 52px -34px rgba(8, 145, 178, 0.34);
 }
+
+/* Agent chat markdown */
+.agent-markdown {
+  line-height: 1.65;
+}
+.agent-markdown > *:first-child { margin-top: 0; }
+.agent-markdown > *:last-child { margin-bottom: 0; }
+
+.agent-markdown h2 {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--color-slate-800, #1e293b);
+  margin-top: 1em;
+  margin-bottom: 0.4em;
+}
+.agent-markdown h3 {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-slate-700, #334155);
+  margin-top: 0.8em;
+  margin-bottom: 0.3em;
+}
+.agent-markdown p {
+  margin-top: 0.35em;
+  margin-bottom: 0.35em;
+}
+.agent-markdown strong {
+  font-weight: 600;
+  color: var(--color-slate-800, #1e293b);
+}
+.agent-markdown ul,
+.agent-markdown ol {
+  padding-left: 1.25em;
+  margin-top: 0.3em;
+  margin-bottom: 0.3em;
+}
+.agent-markdown li {
+  margin-top: 0.15em;
+  margin-bottom: 0.15em;
+}
+.agent-markdown li::marker {
+  color: var(--color-brand);
+}
+.agent-markdown code {
+  font-family: var(--font-jetbrains-mono, "IBM Plex Mono", monospace);
+  font-size: 0.8em;
+  background: rgba(14, 165, 233, 0.08);
+  border-radius: 5px;
+  padding: 0.15em 0.35em;
+}
+.agent-markdown pre {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  padding: 0.75em 1em;
+  border-radius: 12px;
+  background: rgba(241, 245, 249, 0.8);
+  overflow-x: auto;
+}
+.agent-markdown pre code {
+  background: none;
+  padding: 0;
+}
+.agent-markdown hr {
+  border: none;
+  border-top: 1px solid rgba(203, 213, 225, 0.4);
+  margin: 0.75em 0;
+}

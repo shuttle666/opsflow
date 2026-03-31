@@ -8,12 +8,14 @@ import {
   Home,
   LogOut,
   Search,
+  Sparkles,
   UserPlus,
   Users,
   type IconComponent,
 } from "@/components/ui/icons";
 import { useState, useTransition } from "react";
 import { useAuthStore } from "@/store/auth-store";
+import { BrandMark } from "@/components/ui/brand-mark";
 import {
   cn,
   primaryButtonClassName,
@@ -61,6 +63,7 @@ function getWorkspaceNavigation(role: string | undefined) {
       { href: "/dashboard", label: "Dashboard", icon: Home },
       { href: "/customers", label: "Customers", icon: Users },
       { href: "/jobs/my", label: "My Jobs", icon: Briefcase },
+      { href: "/agent", label: "AI Dispatch", icon: Sparkles },
       { href: "/invitations/accept", label: "Invitations", icon: UserPlus },
     ] satisfies WorkspaceNavItem[];
   }
@@ -70,6 +73,7 @@ function getWorkspaceNavigation(role: string | undefined) {
     { href: "/customers", label: "Customers", icon: Users },
     { href: "/jobs", label: "Jobs", icon: Briefcase },
     { href: "/team", label: "Team", icon: UserPlus },
+    { href: "/agent", label: "AI Dispatch", icon: Sparkles },
   ] satisfies WorkspaceNavItem[];
 }
 
@@ -84,12 +88,6 @@ function initialsFor(name: string | undefined) {
 
   const parts = name.trim().split(/\s+/).slice(0, 2);
   return parts.map((part) => part.charAt(0).toUpperCase()).join("");
-}
-
-function BrandMark() {
-  return (
-    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-linear-to-r from-sky-500 to-cyan-500 shadow-[0_14px_28px_-20px_rgba(8,145,178,0.7)]" />
-  );
 }
 
 function WorkspaceNav({

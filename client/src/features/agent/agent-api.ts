@@ -3,7 +3,12 @@ import {
   apiClient,
   type ApiSuccessResponse,
 } from "@/lib/api-client";
-import type { ConversationDetail, ConversationSummary, SSEEvent } from "@/types/agent";
+import type {
+  ConfirmProposalResult,
+  ConversationDetail,
+  ConversationSummary,
+  SSEEvent,
+} from "@/types/agent";
 
 function requireData<T>(response: ApiSuccessResponse<T>, fallbackMessage: string) {
   if (response.data === undefined) {
@@ -59,6 +64,7 @@ export async function openMessageStreamRequest(
   accessToken: string,
   conversationId: string,
   content: string,
+  timezone: string,
   signal?: AbortSignal,
 ): Promise<Response> {
   const response = await fetch(
@@ -69,7 +75,7 @@ export async function openMessageStreamRequest(
         "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, timezone }),
       signal,
     },
   );
@@ -141,6 +147,11 @@ export async function consumeMessageStream(
             case "error":
               callbacks.onError(event.message);
               break;
+            case "proposal":
+              callbacks.onToolResult("save_dispatch_proposal", {
+                proposal: event.proposal,
+              });
+              break;
             case "done":
               finish();
               return;
@@ -158,4 +169,20 @@ export async function consumeMessageStream(
     }
     finish();
   }
+}
+
+export async function confirmProposalRequest(
+  accessToken: string,
+  conversationId: string,
+  proposalId: string,
+) {
+  const response = await apiClient.post<ApiSuccessResponse<ConfirmProposalResult>>(
+    `/agent/conversations/${conversationId}/proposals/${proposalId}/confirm`,
+    undefined,
+    {
+      headers: authHeader(accessToken),
+    },
+  );
+
+  return requireData(response, "Confirm proposal response is missing payload.");
 }

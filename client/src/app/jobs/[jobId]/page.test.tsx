@@ -17,7 +17,8 @@ const baseJob: JobDetail = {
   title: "Leaking kitchen tap",
   description: "Tap leaking overnight.",
   status: "NEW",
-  scheduledAt: null,
+  scheduledStartAt: null,
+  scheduledEndAt: null,
   createdAt: "2026-03-20T00:00:00.000Z",
   updatedAt: "2026-03-20T00:00:00.000Z",
   customer: {

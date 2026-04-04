@@ -72,7 +72,8 @@ describe("dashboard page", () => {
           id: "job-1",
           title: "Boiler inspection",
           status: "SCHEDULED",
-          scheduledAt: "2026-03-20T01:30:00.000Z",
+          scheduledStartAt: "2026-03-20T01:30:00.000Z",
+          scheduledEndAt: "2026-03-20T02:30:00.000Z",
           createdAt: "2026-03-20T00:30:00.000Z",
           updatedAt: "2026-03-20T00:30:00.000Z",
           customer: {

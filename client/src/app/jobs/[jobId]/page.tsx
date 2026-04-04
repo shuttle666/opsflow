@@ -23,6 +23,7 @@ import {
   transitionJobStatusRequest,
   uploadJobEvidenceRequest,
 } from "@/features/job/job-api";
+import { formatDateTime, formatScheduleRange } from "@/features/job";
 import { useAuthStore } from "@/store/auth-store";
 import type {
   JobDetail,
@@ -43,14 +44,6 @@ function canTransitionJobs(role: string | undefined, userId: string | undefined,
   }
 
   return role === "STAFF" && job.assignedTo?.id === userId;
-}
-
-function formatDateTime(value: string | null) {
-  if (!value) {
-    return "-";
-  }
-
-  return new Date(value).toLocaleString();
 }
 
 function formatStatusLabel(status: JobStatus) {
@@ -360,10 +353,10 @@ export default function JobDetailPage() {
 
                     <div className="rounded-[24px] border border-white/75 bg-white p-5 shadow-sm">
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                        Scheduled at
+                        Scheduled window
                       </p>
                       <p className="mt-3 text-sm text-slate-700">
-                        {formatDateTime(job.scheduledAt)}
+                        {formatScheduleRange(job.scheduledStartAt, job.scheduledEndAt)}
                       </p>
                       <p className="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                         Description

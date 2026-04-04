@@ -8,6 +8,8 @@ import type {
   JobHistoryResult,
   JobListItem,
   JobListQuery,
+  ScheduleConflictCheckResult,
+  ScheduleDayResult,
   JobStatusTransitionRequest,
   JobStatusTransitionResult,
   UploadJobEvidenceInput,
@@ -258,4 +260,51 @@ export async function downloadJobEvidenceRequest(
   return apiClient.getBlob(`/jobs/${jobId}/evidence/${evidenceId}/download`, {
     headers: authHeader(accessToken),
   });
+}
+
+export async function getScheduleDayRequest(
+  accessToken: string,
+  input: {
+    date: string;
+    assigneeId?: string;
+    timezoneOffsetMinutes?: number;
+  },
+) {
+  const params = new URLSearchParams();
+  params.set("date", input.date);
+  if (input.assigneeId) {
+    params.set("assigneeId", input.assigneeId);
+  }
+  if (input.timezoneOffsetMinutes !== undefined) {
+    params.set("timezoneOffsetMinutes", String(input.timezoneOffsetMinutes));
+  }
+
+  const response = await apiClient.get<ApiSuccessResponse<ScheduleDayResult>>(
+    `/jobs/schedule/day?${params.toString()}`,
+    {
+      headers: authHeader(accessToken),
+    },
+  );
+
+  return requireData(response, "Schedule day response is missing payload.");
+}
+
+export async function checkScheduleConflictsRequest(
+  accessToken: string,
+  input: {
+    assigneeUserId: string;
+    scheduledStartAt: string;
+    scheduledEndAt: string;
+    excludeJobId?: string;
+  },
+) {
+  const response = await apiClient.post<ApiSuccessResponse<ScheduleConflictCheckResult>>(
+    "/jobs/schedule/conflicts",
+    input,
+    {
+      headers: authHeader(accessToken),
+    },
+  );
+
+  return requireData(response, "Schedule conflict response is missing payload.");
 }

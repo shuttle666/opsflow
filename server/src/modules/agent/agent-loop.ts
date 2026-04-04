@@ -1,7 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { env } from "../../config/env";
 import type { AuthContext } from "../../types/auth";
-import { getToolDefinitions, executeTool } from "./agent-tools";
+import type { DispatchProposal } from "./agent.service";
+import { executeTool, getToolDefinitions } from "./agent-tools";
 
 const MAX_ITERATIONS = 10;
 
@@ -9,73 +10,84 @@ type AgentCallbacks = {
   onTextDelta: (text: string) => void;
   onToolUse: (toolName: string, input: unknown) => void;
   onToolResult: (toolName: string, result: unknown) => void;
+  onProposal: (proposal: DispatchProposal) => void;
 };
 
 type AgentLoopResult = {
   fullText: string;
   messages: Anthropic.MessageParam[];
   toolCalls: Array<{ name: string; input: unknown; result: unknown }>;
+  proposal?: DispatchProposal;
 };
 
-function buildSystemPrompt(): string {
-  return `You are an AI dispatch assistant for OpsFlow, a field operations management platform.
+function buildSystemPrompt(timezone: string): string {
+  return `You are the Dispatch Planner for OpsFlow, a field operations management platform.
 
-Your capabilities:
-- Search and create customers
-- Search, create, and manage jobs/work orders
-- Assign jobs to staff members
-- Check job status and transition between states
-- View team members and activity logs
+Your job is to help a manager prepare confirm-first operational proposals, not to directly execute business mutations.
 
-Guidelines:
+Capabilities:
+- Search customers
+- Search jobs
+- Search active team members
+- Check activity feed
+- Check schedule conflicts
+- Save a structured dispatch proposal for manager confirmation
+
+Rules:
 - Always respond in the same language the user writes in.
-- Current date and time: ${new Date().toISOString()}
-- Before creating a job, search for the customer first to get their ID. If the customer doesn't exist, ask the user if they want to create one.
-- Before assigning a job, search memberships to find the right staff member's membership ID.
-- When listing results, summarize them in a readable format rather than dumping raw data.
-- If a tool returns an error, explain the issue to the user in a helpful way.
-- Be concise but informative in your responses.`;
+- Current date/time (UTC): ${new Date().toISOString()}
+- User timezone: ${timezone}
+- When the user wants to create, schedule, or assign work, you must gather context with read tools first.
+- Do not attempt to directly create jobs, assign staff, or transition status.
+- When you have enough information, call save_dispatch_proposal exactly once.
+- The proposal should include customer resolution, job draft, schedule draft, assignee draft, warnings, and confidence.
+- If the user wants to create a customer, you should still prepare a proposal instead of refusing. Use intent="create_customer", set customer.status="new", and include any provided phone, email, address, or notes.
+- If the user wants to create both a customer and a job, use customer.status="new" and prepare the job as part of the same proposal.
+- If customer or assignee matching is ambiguous, mention it clearly in warnings and keep the proposal confirm-first.
+- Be concise and operational in your final response.`;
 }
 
 export async function runAgentLoop(
   messages: Anthropic.MessageParam[],
   auth: AuthContext,
+  input: {
+    conversationId: string;
+    timezone: string;
+  },
   callbacks: AgentCallbacks,
 ): Promise<AgentLoopResult> {
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   const tools = getToolDefinitions(auth);
   const allToolCalls: AgentLoopResult["toolCalls"] = [];
   let fullText = "";
+  let proposal: DispatchProposal | undefined;
 
-  // Work with a copy so we don't mutate the original
   const workingMessages = [...messages];
 
-  for (let i = 0; i < MAX_ITERATIONS; i++) {
+  for (let i = 0; i < MAX_ITERATIONS; i += 1) {
     const stream = await client.messages.stream({
       model: "claude-sonnet-4-20250514",
       max_tokens: 4096,
-      system: buildSystemPrompt(),
+      system: buildSystemPrompt(input.timezone),
       tools,
       messages: workingMessages,
     });
 
-    const toolUseBlocks: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
-    const contentBlocks: Anthropic.ContentBlock[] = [];
+    const toolUseBlocks: Array<{
+      id: string;
+      name: string;
+      input: Record<string, unknown>;
+    }> = [];
 
     for await (const event of stream) {
-      if (
-        event.type === "content_block_delta" &&
-        event.delta.type === "text_delta"
-      ) {
+      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
         fullText += event.delta.text;
         callbacks.onTextDelta(event.delta.text);
       }
     }
 
     const finalMessage = await stream.finalMessage();
-    contentBlocks.push(...finalMessage.content);
 
-    // Extract tool use blocks
     for (const block of finalMessage.content) {
       if (block.type === "tool_use") {
         toolUseBlocks.push({
@@ -86,24 +98,34 @@ export async function runAgentLoop(
       }
     }
 
-    // Add assistant message to working messages
     workingMessages.push({
       role: "assistant",
       content: finalMessage.content,
     });
 
-    // If no tool calls, we're done
     if (finalMessage.stop_reason !== "tool_use" || toolUseBlocks.length === 0) {
-      return { fullText, messages: workingMessages, toolCalls: allToolCalls };
+      return {
+        fullText,
+        messages: workingMessages,
+        toolCalls: allToolCalls,
+        ...(proposal ? { proposal } : {}),
+      };
     }
 
-    // Execute tool calls and collect results
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
 
     for (const toolUse of toolUseBlocks) {
       callbacks.onToolUse(toolUse.name, toolUse.input);
-      const result = await executeTool(auth, toolUse.name, toolUse.input);
+      const result = await executeTool(auth, toolUse.name, toolUse.input, {
+        conversationId: input.conversationId,
+      });
       callbacks.onToolResult(toolUse.name, result);
+
+      const maybeProposal = (result as { proposal?: DispatchProposal } | undefined)?.proposal;
+      if (maybeProposal) {
+        proposal = maybeProposal;
+        callbacks.onProposal(maybeProposal);
+      }
 
       allToolCalls.push({
         name: toolUse.name,
@@ -118,17 +140,17 @@ export async function runAgentLoop(
       });
     }
 
-    // Add tool results to messages
     workingMessages.push({
       role: "user",
       content: toolResults,
     });
   }
 
-  // If we hit max iterations, return what we have
   return {
-    fullText: "I've reached the maximum number of steps for this request. Please try breaking your request into smaller parts.",
+    fullText:
+      "I've reached the maximum number of steps for this request. Please try breaking your request into smaller parts.",
     messages: workingMessages,
     toolCalls: allToolCalls,
+    ...(proposal ? { proposal } : {}),
   };
 }

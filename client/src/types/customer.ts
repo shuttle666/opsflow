@@ -22,7 +22,8 @@ export type CustomerJobSummary = {
   id: string;
   title: string;
   status: JobStatus;
-  scheduledAt: string | null;
+  scheduledStartAt: string | null;
+  scheduledEndAt: string | null;
   assignedToName?: string;
 };
 

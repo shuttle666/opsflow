@@ -18,7 +18,7 @@ import {
   subtleButtonClassName,
 } from "@/components/ui/styles";
 import { listCustomersRequest } from "@/features/customer/customer-api";
-import { listJobsRequest } from "@/features/job/job-api";
+import { formatDateTime, formatScheduleRange, listJobsRequest } from "@/features/job";
 import { useAuthStore } from "@/store/auth-store";
 import type { CustomerListItem, PaginationMeta } from "@/types/customer";
 import type { JobListItem, JobStatus } from "@/types/job";
@@ -35,14 +35,6 @@ function canManageJobs(role: string | undefined) {
   return role === "OWNER" || role === "MANAGER";
 }
 
-function formatDateTime(value: string | null) {
-  if (!value) {
-    return "-";
-  }
-
-  return new Date(value).toLocaleString();
-}
-
 export default function JobsPage() {
   const currentTenant = useAuthStore((state) => state.currentTenant);
   const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
@@ -53,7 +45,7 @@ export default function JobsPage() {
   const [statusFilter, setStatusFilter] = useState<JobStatus | "">("");
   const [customerFilter, setCustomerFilter] = useState("");
   const [sort, setSort] = useState<
-    "createdAt_desc" | "createdAt_asc" | "scheduledAt_asc" | "scheduledAt_desc"
+    "createdAt_desc" | "createdAt_asc" | "scheduledStartAt_asc" | "scheduledStartAt_desc"
   >("createdAt_desc");
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState<PaginationMeta>({
@@ -251,16 +243,16 @@ export default function JobsPage() {
                           event.target.value as
                             | "createdAt_desc"
                             | "createdAt_asc"
-                            | "scheduledAt_asc"
-                            | "scheduledAt_desc",
+                            | "scheduledStartAt_asc"
+                            | "scheduledStartAt_desc",
                         );
                       }}
                       className={selectClassName}
                     >
                       <option value="createdAt_desc">Newest first</option>
                       <option value="createdAt_asc">Oldest first</option>
-                      <option value="scheduledAt_asc">Scheduled earliest</option>
-                      <option value="scheduledAt_desc">Scheduled latest</option>
+                      <option value="scheduledStartAt_asc">Scheduled earliest</option>
+                      <option value="scheduledStartAt_desc">Scheduled latest</option>
                     </select>
                   </label>
 
@@ -346,7 +338,7 @@ export default function JobsPage() {
                           <StatusBadge kind="job" value={job.status} />
                         </td>
                         <td className="border-y border-white px-4 py-4 group-hover:border-sky-100">
-                          {formatDateTime(job.scheduledAt)}
+                          {formatScheduleRange(job.scheduledStartAt, job.scheduledEndAt)}
                         </td>
                         <td className="border-y border-white px-4 py-4 group-hover:border-sky-100">
                           {job.assignedToName ?? "-"}

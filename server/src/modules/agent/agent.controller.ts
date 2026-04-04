@@ -3,9 +3,14 @@ import { env } from "../../config/env";
 import { ApiError } from "../../utils/api-error";
 import { asyncHandler } from "../../utils/async-handler";
 import { sendSuccess } from "../../utils/api-response";
-import { conversationIdParamSchema, sendMessageSchema } from "./agent-schemas";
+import {
+  conversationIdParamSchema,
+  proposalIdParamSchema,
+  sendMessageSchema,
+} from "./agent-schemas";
 import {
   createConversation,
+  confirmDispatchProposal,
   getConversation,
   listConversations,
   addUserMessage,
@@ -69,7 +74,7 @@ export const sendMessageHandler: RequestHandler = asyncHandler(
     if (!env.ANTHROPIC_API_KEY) throw new ApiError(503, "AI agent is not configured.");
 
     const { conversationId } = conversationIdParamSchema.parse(req.params);
-    const { content } = sendMessageSchema.parse(req.body);
+    const { content, timezone } = sendMessageSchema.parse(req.body);
 
     const conversation = getConversation(req.auth, conversationId);
     if (!conversation) throw new ApiError(404, "Conversation not found.");
@@ -90,6 +95,10 @@ export const sendMessageHandler: RequestHandler = asyncHandler(
         conversation.claudeMessages,
         auth,
         {
+          conversationId,
+          timezone,
+        },
+        {
           onTextDelta: (text) => {
             res.write(`data: ${JSON.stringify({ type: "text_delta", text })}\n\n`);
           },
@@ -101,6 +110,11 @@ export const sendMessageHandler: RequestHandler = asyncHandler(
           onToolResult: (toolName, result) => {
             res.write(
               `data: ${JSON.stringify({ type: "tool_result", tool: toolName, result })}\n\n`,
+            );
+          },
+          onProposal: (proposal) => {
+            res.write(
+              `data: ${JSON.stringify({ type: "proposal", proposal })}\n\n`,
             );
           },
         },
@@ -122,3 +136,17 @@ export const sendMessageHandler: RequestHandler = asyncHandler(
     res.end();
   },
 );
+
+export const confirmProposalHandler: RequestHandler = asyncHandler(async (req, res) => {
+  if (!req.auth) throw new ApiError(401, "Authentication is required.");
+
+  const { conversationId, proposalId } = proposalIdParamSchema.parse(req.params);
+
+  const result = await confirmDispatchProposal(req.auth, conversationId, proposalId);
+
+  sendSuccess(res, {
+    statusCode: 201,
+    message: "Dispatch proposal confirmed.",
+    data: result,
+  });
+});

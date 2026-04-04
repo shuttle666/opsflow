@@ -18,7 +18,7 @@ export type JobListQuery = {
   scheduledTo?: string;
   page?: number;
   pageSize?: number;
-  sort?: "createdAt_desc" | "createdAt_asc" | "scheduledAt_asc" | "scheduledAt_desc";
+  sort?: "createdAt_desc" | "createdAt_asc" | "scheduledStartAt_asc" | "scheduledStartAt_desc";
 };
 
 export type JobCustomerListSummary = {
@@ -30,7 +30,8 @@ export type JobListItem = {
   id: string;
   title: string;
   status: JobStatus;
-  scheduledAt: string | null;
+  scheduledStartAt: string | null;
+  scheduledEndAt: string | null;
   createdAt: string;
   updatedAt: string;
   customer: JobCustomerListSummary;
@@ -49,7 +50,8 @@ export type JobDetail = {
   title: string;
   description: string | null;
   status: JobStatus;
-  scheduledAt: string | null;
+  scheduledStartAt: string | null;
+  scheduledEndAt: string | null;
   createdAt: string;
   updatedAt: string;
   customer: JobCustomerDetailSummary;
@@ -120,7 +122,61 @@ export type CreateJobInput = {
   customerId: string;
   title: string;
   description?: string;
-  scheduledAt?: string;
+  scheduledStartAt?: string;
+  scheduledEndAt?: string;
 };
 
 export type UpdateJobInput = CreateJobInput;
+
+export type ScheduleDayJobItem = {
+  id: string;
+  title: string;
+  status: JobStatus;
+  scheduledStartAt: string | null;
+  scheduledEndAt: string | null;
+  hasConflict: boolean;
+  customer: {
+    id: string;
+    name: string;
+  };
+  assignedTo?: {
+    id: string;
+    displayName: string;
+    email: string;
+  };
+};
+
+export type ScheduleLane = {
+  key: string;
+  label: string;
+  membershipId?: string;
+  userId?: string;
+  jobs: ScheduleDayJobItem[];
+  hasConflict: boolean;
+};
+
+export type ScheduleDayResult = {
+  date: string;
+  rangeStart: string;
+  rangeEnd: string;
+  lanes: ScheduleLane[];
+  totalJobs: number;
+  conflictCount: number;
+};
+
+export type ScheduleConflictItem = {
+  id: string;
+  title: string;
+  status: JobStatus;
+  scheduledStartAt: string;
+  scheduledEndAt: string;
+  customer: {
+    id: string;
+    name: string;
+  };
+};
+
+export type ScheduleConflictCheckResult = {
+  hasConflict: boolean;
+  conflicts: ScheduleConflictItem[];
+};

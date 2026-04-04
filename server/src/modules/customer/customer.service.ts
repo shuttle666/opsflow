@@ -23,7 +23,8 @@ type CustomerJobSummary = {
   id: string;
   title: string;
   status: string;
-  scheduledAt: Date | null;
+  scheduledStartAt: Date | null;
+  scheduledEndAt: Date | null;
   assignedToName?: string;
 };
 
@@ -215,7 +216,8 @@ export async function getCustomerDetail(
           id: true,
           title: true,
           status: true,
-          scheduledAt: true,
+          scheduledStartAt: true,
+          scheduledEndAt: true,
           assignedTo: {
             select: {
               displayName: true,
@@ -244,7 +246,8 @@ export async function getCustomerDetail(
       id: job.id,
       title: job.title,
       status: job.status,
-      scheduledAt: job.scheduledAt,
+      scheduledStartAt: job.scheduledStartAt,
+      scheduledEndAt: job.scheduledEndAt,
       ...(job.assignedTo?.displayName
         ? { assignedToName: job.assignedTo.displayName }
         : {}),

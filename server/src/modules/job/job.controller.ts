@@ -1,4 +1,5 @@
 import type { RequestHandler } from "express";
+import { z } from "zod";
 import { getRequestMetadata } from "../auth/request-metadata";
 import { ApiError } from "../../utils/api-error";
 import { sendSuccess } from "../../utils/api-response";
@@ -8,12 +9,15 @@ import {
   createJobSchema,
   jobIdParamSchema,
   jobListQuerySchema,
+  scheduleDayQuerySchema,
   transitionJobStatusSchema,
   updateJobSchema,
 } from "./job-schemas";
 import {
   assignJob,
+  checkScheduleConflicts,
   createJob,
+  getScheduleDay,
   getJobDetail,
   getJobHistory,
   listJobs,
@@ -96,6 +100,45 @@ export const getJobHistoryHandler: RequestHandler = asyncHandler(async (req, res
 
   sendSuccess(res, {
     message: "Job history loaded.",
+    data: result,
+  });
+});
+
+export const getScheduleDayHandler: RequestHandler = asyncHandler(async (req, res) => {
+  if (!req.auth) {
+    throw new ApiError(401, "Authentication is required.");
+  }
+
+  const query = scheduleDayQuerySchema.parse(req.query);
+  const result = await getScheduleDay(req.auth, {
+    ...query,
+  });
+
+  sendSuccess(res, {
+    message: "Schedule loaded.",
+    data: result,
+  });
+});
+
+export const checkScheduleConflictsHandler: RequestHandler = asyncHandler(async (req, res) => {
+  if (!req.auth) {
+    throw new ApiError(401, "Authentication is required.");
+  }
+
+  const body = z
+    .object({
+      assigneeUserId: z.uuid(),
+      scheduledStartAt: z.string().trim().datetime({ offset: true }),
+      scheduledEndAt: z.string().trim().datetime({ offset: true }),
+      excludeJobId: z.uuid().optional(),
+    })
+    .strict()
+    .parse(req.body);
+
+  const result = await checkScheduleConflicts(req.auth, body);
+
+  sendSuccess(res, {
+    message: "Schedule conflicts checked.",
     data: result,
   });
 });

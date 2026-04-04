@@ -211,6 +211,8 @@ async function main() {
         createdById: ids.manager,
         assignedToId: ids.staff,
         scheduledAt: new Date("2026-03-20T02:00:00.000Z"),
+        scheduledStartAt: new Date("2026-03-20T02:00:00.000Z"),
+        scheduledEndAt: new Date("2026-03-20T03:00:00.000Z"),
       },
       {
         id: ids.jobs[2],
@@ -222,6 +224,8 @@ async function main() {
         createdById: ids.owner,
         assignedToId: ids.staff,
         scheduledAt: new Date("2026-03-19T22:00:00.000Z"),
+        scheduledStartAt: new Date("2026-03-19T22:00:00.000Z"),
+        scheduledEndAt: new Date("2026-03-19T23:00:00.000Z"),
       },
       {
         id: ids.jobs[3],
@@ -233,6 +237,8 @@ async function main() {
         createdById: ids.owner,
         assignedToId: ids.staff,
         scheduledAt: new Date("2026-03-17T23:00:00.000Z"),
+        scheduledStartAt: new Date("2026-03-17T23:00:00.000Z"),
+        scheduledEndAt: new Date("2026-03-18T00:00:00.000Z"),
       },
       {
         id: ids.jobs[4],
@@ -253,6 +259,8 @@ async function main() {
         createdById: ids.manager,
         assignedToId: ids.staff,
         scheduledAt: new Date("2026-03-15T23:00:00.000Z"),
+        scheduledStartAt: new Date("2026-03-15T23:00:00.000Z"),
+        scheduledEndAt: new Date("2026-03-16T00:00:00.000Z"),
       },
     ],
   });

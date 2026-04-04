@@ -1,14 +1,20 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { MembershipRole } from "@prisma/client";
 import type { AuthContext } from "../../types/auth";
-import * as jobService from "../job/job.service";
-import * as customerService from "../customer/customer.service";
-import * as membershipService from "../membership/membership.service";
 import * as auditService from "../audit/audit.service";
+import * as customerService from "../customer/customer.service";
+import * as jobService from "../job/job.service";
+import * as membershipService from "../membership/membership.service";
+import { storeDispatchProposal } from "./agent.service";
+
+type ToolContext = {
+  conversationId?: string;
+};
 
 type ToolExecutor = (
   auth: AuthContext,
   input: Record<string, unknown>,
+  context?: ToolContext,
 ) => Promise<unknown>;
 
 type AgentTool = {
@@ -20,20 +26,12 @@ const managerOnlyReadTools = new Set([
   "list_jobs",
   "list_memberships",
   "list_activity_feed",
+  "check_schedule_conflicts",
+  "save_dispatch_proposal",
 ]);
 
-function requireManagerRole(auth: AuthContext): string | null {
-  if (auth.role === MembershipRole.STAFF) {
-    return "Permission denied: only OWNER or MANAGER can perform this action.";
-  }
-  return null;
-}
-
 function canAccessTool(auth: AuthContext, toolName: string): boolean {
-  if (
-    auth.role === MembershipRole.STAFF &&
-    managerOnlyReadTools.has(toolName)
-  ) {
+  if (auth.role === MembershipRole.STAFF && managerOnlyReadTools.has(toolName)) {
     return false;
   }
 
@@ -55,22 +53,20 @@ const toolMap = new Map<string, AgentTool>();
 toolMap.set("list_jobs", {
   definition: {
     name: "list_jobs",
-    description:
-      "Search and list jobs/work orders. Use this to find jobs by keyword, status, customer, or date range.",
+    description: "Search and list jobs/work orders by keyword, status, customer, or schedule range.",
     input_schema: {
       type: "object" as const,
       properties: {
-        q: { type: "string", description: "Search keyword for job title, description, or customer name" },
+        q: { type: "string" },
         status: {
           type: "string",
           enum: ["NEW", "SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED"],
-          description: "Filter by job status",
         },
-        customerId: { type: "string", description: "Filter by customer ID (UUID)" },
-        scheduledFrom: { type: "string", description: "Filter jobs scheduled after this ISO-8601 datetime" },
-        scheduledTo: { type: "string", description: "Filter jobs scheduled before this ISO-8601 datetime" },
-        page: { type: "number", description: "Page number (default 1)" },
-        pageSize: { type: "number", description: "Items per page (default 10, max 50)" },
+        customerId: { type: "string" },
+        scheduledFrom: { type: "string" },
+        scheduledTo: { type: "string" },
+        page: { type: "number" },
+        pageSize: { type: "number" },
       },
       required: [],
     },
@@ -79,7 +75,7 @@ toolMap.set("list_jobs", {
     safeExecute(() =>
       jobService.listJobs(auth, {
         q: input.q as string | undefined,
-        status: input.status as any,
+        status: input.status as never,
         customerId: input.customerId as string | undefined,
         scheduledFrom: input.scheduledFrom as string | undefined,
         scheduledTo: input.scheduledTo as string | undefined,
@@ -90,44 +86,14 @@ toolMap.set("list_jobs", {
     ),
 });
 
-toolMap.set("create_job", {
-  definition: {
-    name: "create_job",
-    description:
-      "Create a new job/work order. Requires a customer ID and title. Always search for the customer first to get their ID.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        customerId: { type: "string", description: "Customer ID (UUID). Search customers first to get this." },
-        title: { type: "string", description: "Job title describing the work to be done" },
-        description: { type: "string", description: "Detailed description of the job" },
-        scheduledAt: { type: "string", description: "Scheduled date/time in ISO-8601 format with timezone offset" },
-      },
-      required: ["customerId", "title"],
-    },
-  },
-  execute: (auth, input) => {
-    const denied = requireManagerRole(auth);
-    if (denied) return Promise.resolve({ error: true, message: denied });
-    return safeExecute(() =>
-      jobService.createJob(auth, {
-        customerId: input.customerId as string,
-        title: input.title as string,
-        description: input.description as string | undefined,
-        scheduledAt: input.scheduledAt as string | undefined,
-      }),
-    );
-  },
-});
-
 toolMap.set("get_job_detail", {
   definition: {
     name: "get_job_detail",
-    description: "Get detailed information about a specific job including customer info, assignee, and status.",
+    description: "Get the detail for one job.",
     input_schema: {
       type: "object" as const,
       properties: {
-        jobId: { type: "string", description: "Job ID (UUID)" },
+        jobId: { type: "string" },
       },
       required: ["jobId"],
     },
@@ -136,69 +102,16 @@ toolMap.set("get_job_detail", {
     safeExecute(() => jobService.getJobDetail(auth, input.jobId as string)),
 });
 
-toolMap.set("assign_job", {
-  definition: {
-    name: "assign_job",
-    description:
-      "Assign a job to a staff member. Requires the job ID and the membership ID of the staff member. Search memberships first to find the right person.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        jobId: { type: "string", description: "Job ID (UUID)" },
-        membershipId: { type: "string", description: "Membership ID (UUID) of the staff member to assign. Search memberships first to get this." },
-      },
-      required: ["jobId", "membershipId"],
-    },
-  },
-  execute: (auth, input) => {
-    const denied = requireManagerRole(auth);
-    if (denied) return Promise.resolve({ error: true, message: denied });
-    return safeExecute(() =>
-      jobService.assignJob(auth, input.jobId as string, {
-        membershipId: input.membershipId as string,
-      }),
-    );
-  },
-});
-
-toolMap.set("transition_job_status", {
-  definition: {
-    name: "transition_job_status",
-    description:
-      "Change the status of a job. Valid transitions: NEW->SCHEDULED, NEW->CANCELLED, SCHEDULED->IN_PROGRESS, SCHEDULED->CANCELLED, IN_PROGRESS->COMPLETED, IN_PROGRESS->CANCELLED. A reason is required when cancelling.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        jobId: { type: "string", description: "Job ID (UUID)" },
-        toStatus: {
-          type: "string",
-          enum: ["SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED"],
-          description: "Target status",
-        },
-        reason: { type: "string", description: "Reason for the transition (required for CANCELLED)" },
-      },
-      required: ["jobId", "toStatus"],
-    },
-  },
-  execute: (auth, input) =>
-    safeExecute(() =>
-      jobService.transitionJobStatusForActor(auth, input.jobId as string, {
-        toStatus: input.toStatus as any,
-        reason: input.reason as string | undefined,
-      }),
-    ),
-});
-
 toolMap.set("list_customers", {
   definition: {
     name: "list_customers",
-    description: "Search and list customers by name, phone, or email.",
+    description: "Search customers by name, phone, or email.",
     input_schema: {
       type: "object" as const,
       properties: {
-        q: { type: "string", description: "Search keyword for customer name, phone, or email" },
-        page: { type: "number", description: "Page number (default 1)" },
-        pageSize: { type: "number", description: "Items per page (default 10, max 50)" },
+        q: { type: "string" },
+        page: { type: "number" },
+        pageSize: { type: "number" },
       },
       required: [],
     },
@@ -214,45 +127,14 @@ toolMap.set("list_customers", {
     ),
 });
 
-toolMap.set("create_customer", {
-  definition: {
-    name: "create_customer",
-    description: "Create a new customer record.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        name: { type: "string", description: "Customer name" },
-        phone: { type: "string", description: "Phone number" },
-        email: { type: "string", description: "Email address" },
-        address: { type: "string", description: "Address" },
-        notes: { type: "string", description: "Additional notes" },
-      },
-      required: ["name"],
-    },
-  },
-  execute: (auth, input) => {
-    const denied = requireManagerRole(auth);
-    if (denied) return Promise.resolve({ error: true, message: denied });
-    return safeExecute(() =>
-      customerService.createCustomer(auth, {
-        name: input.name as string,
-        phone: input.phone as string | undefined,
-        email: input.email as string | undefined,
-        address: input.address as string | undefined,
-        notes: input.notes as string | undefined,
-      }),
-    );
-  },
-});
-
 toolMap.set("get_customer_detail", {
   definition: {
     name: "get_customer_detail",
-    description: "Get detailed information about a specific customer, including their recent jobs.",
+    description: "Get customer detail including recent jobs.",
     input_schema: {
       type: "object" as const,
       properties: {
-        customerId: { type: "string", description: "Customer ID (UUID)" },
+        customerId: { type: "string" },
       },
       required: ["customerId"],
     },
@@ -266,24 +148,21 @@ toolMap.set("get_customer_detail", {
 toolMap.set("list_memberships", {
   definition: {
     name: "list_memberships",
-    description:
-      "Search and list team members/staff. Use this to find staff members for job assignment.",
+    description: "Search active team members to find a dispatch assignee.",
     input_schema: {
       type: "object" as const,
       properties: {
-        q: { type: "string", description: "Search keyword for member name or email" },
+        q: { type: "string" },
         role: {
           type: "string",
           enum: ["OWNER", "MANAGER", "STAFF"],
-          description: "Filter by role",
         },
         status: {
           type: "string",
           enum: ["ACTIVE", "INVITED", "DISABLED"],
-          description: "Filter by status (default shows all)",
         },
-        page: { type: "number", description: "Page number (default 1)" },
-        pageSize: { type: "number", description: "Items per page (default 10, max 50)" },
+        page: { type: "number" },
+        pageSize: { type: "number" },
       },
       required: [],
     },
@@ -292,8 +171,8 @@ toolMap.set("list_memberships", {
     safeExecute(() =>
       membershipService.listMemberships(auth, {
         q: input.q as string | undefined,
-        role: input.role as any,
-        status: input.status as any,
+        role: input.role as never,
+        status: input.status as never,
         page: (input.page as number) ?? 1,
         pageSize: (input.pageSize as number) ?? 10,
       }),
@@ -303,12 +182,12 @@ toolMap.set("list_memberships", {
 toolMap.set("list_activity_feed", {
   definition: {
     name: "list_activity_feed",
-    description: "Get the recent activity feed/audit log for this workspace.",
+    description: "Get recent workspace activity.",
     input_schema: {
       type: "object" as const,
       properties: {
-        page: { type: "number", description: "Page number (default 1)" },
-        pageSize: { type: "number", description: "Items per page (default 10, max 50)" },
+        page: { type: "number" },
+        pageSize: { type: "number" },
       },
       required: [],
     },
@@ -322,6 +201,194 @@ toolMap.set("list_activity_feed", {
     ),
 });
 
+toolMap.set("check_schedule_conflicts", {
+  definition: {
+    name: "check_schedule_conflicts",
+    description: "Check whether a staff member already has overlapping jobs in a proposed time window.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        assigneeUserId: { type: "string" },
+        scheduledStartAt: { type: "string" },
+        scheduledEndAt: { type: "string" },
+        excludeJobId: { type: "string" },
+      },
+      required: ["assigneeUserId", "scheduledStartAt", "scheduledEndAt"],
+    },
+  },
+  execute: (auth, input) =>
+    safeExecute(() =>
+      jobService.checkScheduleConflicts(auth, {
+        assigneeUserId: input.assigneeUserId as string,
+        scheduledStartAt: input.scheduledStartAt as string,
+        scheduledEndAt: input.scheduledEndAt as string,
+        excludeJobId: input.excludeJobId as string | undefined,
+      }),
+    ),
+});
+
+toolMap.set("save_dispatch_proposal", {
+  definition: {
+    name: "save_dispatch_proposal",
+    description: "Save a structured dispatch plan for manager confirmation. Use this after gathering enough context.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        intent: { type: "string" },
+        customer: {
+          type: "object",
+          properties: {
+            status: {
+              type: "string",
+              enum: ["matched", "new", "missing", "ambiguous"],
+            },
+            query: { type: "string" },
+            matchedCustomerId: { type: "string" },
+            name: { type: "string" },
+            phone: { type: "string" },
+            email: { type: "string" },
+            address: { type: "string" },
+            notes: { type: "string" },
+            matches: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "string" },
+                  name: { type: "string" },
+                },
+                required: ["id", "name"],
+              },
+            },
+          },
+          required: ["status"],
+        },
+        jobDraft: {
+          type: "object",
+          properties: {
+            title: { type: "string" },
+            description: { type: "string" },
+          },
+          required: ["title"],
+        },
+        scheduleDraft: {
+          type: "object",
+          properties: {
+            scheduledStartAt: { type: "string" },
+            scheduledEndAt: { type: "string" },
+            timezone: { type: "string" },
+          },
+          required: ["timezone"],
+        },
+        assigneeDraft: {
+          type: "object",
+          properties: {
+            status: {
+              type: "string",
+              enum: ["matched", "missing", "ambiguous"],
+            },
+            membershipId: { type: "string" },
+            userId: { type: "string" },
+            displayName: { type: "string" },
+            matches: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  membershipId: { type: "string" },
+                  userId: { type: "string" },
+                  displayName: { type: "string" },
+                },
+                required: ["membershipId", "userId", "displayName"],
+              },
+            },
+          },
+          required: ["status"],
+        },
+        warnings: {
+          type: "array",
+          items: { type: "string" },
+        },
+        confidence: { type: "number" },
+      },
+      required: ["intent", "customer", "jobDraft", "scheduleDraft", "warnings", "confidence"],
+    },
+  },
+  execute: async (auth, input, context) => {
+    if (!context?.conversationId) {
+      return {
+        error: true,
+        message: "Conversation context is missing.",
+      };
+    }
+
+    const conversationId = context.conversationId;
+
+    return safeExecute(async () => {
+      const proposal = storeDispatchProposal(auth, conversationId, {
+        intent: String(input.intent ?? "dispatch_plan"),
+        customer: {
+          status: input.customer && typeof input.customer === "object"
+            ? (input.customer as { status: "matched" | "new" | "missing" | "ambiguous" }).status
+            : "missing",
+          ...(input.customer && typeof input.customer === "object"
+            ? {
+                query: (input.customer as { query?: string }).query,
+                matchedCustomerId: (input.customer as { matchedCustomerId?: string }).matchedCustomerId,
+                name: (input.customer as { name?: string }).name,
+                phone: (input.customer as { phone?: string }).phone,
+                email: (input.customer as { email?: string }).email,
+                address: (input.customer as { address?: string }).address,
+                notes: (input.customer as { notes?: string }).notes,
+                matches: (input.customer as { matches?: Array<{ id: string; name: string }> }).matches,
+              }
+            : {}),
+        },
+        jobDraft: {
+          title: String((input.jobDraft as { title?: string } | undefined)?.title ?? ""),
+          description: (input.jobDraft as { description?: string } | undefined)?.description ?? null,
+        },
+        scheduleDraft: {
+          scheduledStartAt:
+            (input.scheduleDraft as { scheduledStartAt?: string } | undefined)?.scheduledStartAt ?? null,
+          scheduledEndAt:
+            (input.scheduleDraft as { scheduledEndAt?: string } | undefined)?.scheduledEndAt ?? null,
+          timezone: String((input.scheduleDraft as { timezone?: string } | undefined)?.timezone ?? "UTC"),
+        },
+        assigneeDraft:
+          input.assigneeDraft && typeof input.assigneeDraft === "object"
+            ? {
+                status: (input.assigneeDraft as { status: "matched" | "missing" | "ambiguous" }).status,
+                membershipId: (input.assigneeDraft as { membershipId?: string }).membershipId,
+                userId: (input.assigneeDraft as { userId?: string }).userId,
+                displayName: (input.assigneeDraft as { displayName?: string }).displayName,
+                matches: (input.assigneeDraft as {
+                  matches?: Array<{
+                    membershipId: string;
+                    userId: string;
+                    displayName: string;
+                  }>;
+                }).matches,
+              }
+            : undefined,
+        warnings: Array.isArray(input.warnings)
+          ? input.warnings.map((warning) => String(warning))
+          : [],
+        confidence:
+          typeof input.confidence === "number"
+            ? input.confidence
+            : Number(input.confidence ?? 0.5),
+      });
+
+      return {
+        saved: true,
+        proposalId: proposal.id,
+        proposal,
+      };
+    });
+  },
+});
+
 export function getToolDefinitions(auth: AuthContext): Anthropic.Tool[] {
   return Array.from(toolMap.entries())
     .filter(([toolName]) => canAccessTool(auth, toolName))
@@ -332,6 +399,7 @@ export async function executeTool(
   auth: AuthContext,
   toolName: string,
   input: Record<string, unknown>,
+  context?: ToolContext,
 ): Promise<unknown> {
   if (!canAccessTool(auth, toolName)) {
     return {
@@ -344,5 +412,6 @@ export async function executeTool(
   if (!tool) {
     return { error: true, message: `Unknown tool: ${toolName}` };
   }
-  return tool.execute(auth, input);
+
+  return tool.execute(auth, input, context);
 }

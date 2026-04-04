@@ -5,6 +5,7 @@ import { hashPassword } from "../src/modules/auth/auth-password";
 import {
   assignJob,
   createJob,
+  getScheduleDay,
   getJobDetail,
   listJobs,
   listMyJobs,
@@ -98,7 +99,8 @@ describeIfDb("job service integration", () => {
       customerId: customerA.id,
       title: "Leaking tap",
       description: "Kitchen tap leaking.",
-      scheduledAt: "2026-03-30T02:00:00.000Z",
+      scheduledStartAt: "2026-03-30T02:00:00.000Z",
+      scheduledEndAt: "2026-03-30T03:00:00.000Z",
     });
 
     await prisma.job.create({
@@ -193,7 +195,8 @@ describeIfDb("job service integration", () => {
       customerId: customerB.id,
       title: "Aircon service visit",
       description: "",
-      scheduledAt: "2026-04-01T03:00:00.000Z",
+      scheduledStartAt: "2026-04-01T03:00:00.000Z",
+      scheduledEndAt: "2026-04-01T04:00:00.000Z",
     });
 
     expect(updated.title).toBe("Aircon service visit");
@@ -262,7 +265,8 @@ describeIfDb("job service integration", () => {
       customerId: primaryCustomer.id,
       title: "Primary Job",
       description: "",
-      scheduledAt: "",
+      scheduledStartAt: "",
+      scheduledEndAt: "",
     });
 
     await expect(
@@ -276,7 +280,8 @@ describeIfDb("job service integration", () => {
         customerId: secondaryCustomer.id,
         title: "Wrong Customer",
         description: "",
-        scheduledAt: "",
+        scheduledStartAt: "",
+        scheduledEndAt: "",
       }),
     ).rejects.toMatchObject({
       statusCode: 404,
@@ -352,5 +357,97 @@ describeIfDb("job service integration", () => {
     ).rejects.toMatchObject({
       statusCode: 404,
     });
+  });
+
+  it("limits staff schedule day queries to their own assigned jobs", async () => {
+    const manager = await seedTenantUser({
+      email: "manager@schedule-day.test",
+      displayName: "Manager",
+      role: MembershipRole.MANAGER,
+      tenantName: "Schedule Day Tenant",
+      tenantSlug: "schedule-day-tenant",
+    });
+
+    const passwordHash = await hashPassword("password123");
+    const [staffA, staffB] = await Promise.all([
+      prisma.user.create({
+        data: {
+          email: "staff-a@schedule-day.test",
+          passwordHash,
+          displayName: "Staff A",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "staff-b@schedule-day.test",
+          passwordHash,
+          displayName: "Staff B",
+        },
+      }),
+    ]);
+
+    await prisma.membership.createMany({
+      data: [
+        {
+          userId: staffA.id,
+          tenantId: manager.tenant.id,
+          role: MembershipRole.STAFF,
+          status: MembershipStatus.ACTIVE,
+        },
+        {
+          userId: staffB.id,
+          tenantId: manager.tenant.id,
+          role: MembershipRole.STAFF,
+          status: MembershipStatus.ACTIVE,
+        },
+      ],
+    });
+
+    const customer = await seedCustomer(manager.auth, "Schedule Customer");
+    await prisma.job.createMany({
+      data: [
+        {
+          tenantId: manager.tenant.id,
+          customerId: customer.id,
+          title: "Staff A job",
+          status: JobStatus.SCHEDULED,
+          createdById: manager.user.id,
+          assignedToId: staffA.id,
+          scheduledStartAt: new Date("2026-04-04T00:00:00.000Z"),
+          scheduledEndAt: new Date("2026-04-04T01:00:00.000Z"),
+          scheduledAt: new Date("2026-04-04T00:00:00.000Z"),
+        },
+        {
+          tenantId: manager.tenant.id,
+          customerId: customer.id,
+          title: "Staff B job",
+          status: JobStatus.SCHEDULED,
+          createdById: manager.user.id,
+          assignedToId: staffB.id,
+          scheduledStartAt: new Date("2026-04-04T02:00:00.000Z"),
+          scheduledEndAt: new Date("2026-04-04T03:00:00.000Z"),
+          scheduledAt: new Date("2026-04-04T02:00:00.000Z"),
+        },
+      ],
+    });
+
+    const result = await getScheduleDay(
+      {
+        userId: staffA.id,
+        sessionId: `${staffA.id}-session`,
+        tenantId: manager.tenant.id,
+        role: MembershipRole.STAFF,
+      },
+      {
+        date: "2026-04-04",
+        assigneeId: staffB.id,
+        timezoneOffsetMinutes: 0,
+      },
+    );
+
+    expect(result.lanes).toHaveLength(1);
+    expect(result.lanes[0]?.userId).toBe(staffA.id);
+    expect(result.lanes[0]?.jobs).toHaveLength(1);
+    expect(result.lanes[0]?.jobs[0]?.title).toBe("Staff A job");
   });
 });

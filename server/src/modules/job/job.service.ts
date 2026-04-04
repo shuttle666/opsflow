@@ -1,4 +1,10 @@
-import { AuditAction, JobStatus, MembershipRole, MembershipStatus, type Prisma } from "@prisma/client";
+import {
+  AuditAction,
+  JobStatus,
+  MembershipRole,
+  MembershipStatus,
+  type Prisma,
+} from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import type { AuthContext, RequestMetadata } from "../../types/auth";
 import { ApiError } from "../../utils/api-error";
@@ -6,6 +12,7 @@ import type {
   AssignJobInput,
   CreateJobInput,
   JobListQueryInput,
+  ScheduleDayQueryInput,
   TransitionJobStatusInput,
   UpdateJobInput,
 } from "./job-schemas";
@@ -19,11 +26,15 @@ type JobCustomerSummary = {
   email?: string | null;
 };
 
-type JobListItem = {
+type JobTiming = {
+  scheduledStartAt: Date | null;
+  scheduledEndAt: Date | null;
+};
+
+type JobListItem = JobTiming & {
   id: string;
   title: string;
   status: JobStatus;
-  scheduledAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   customer: {
@@ -33,12 +44,11 @@ type JobListItem = {
   assignedToName?: string;
 };
 
-type JobDetail = {
+type JobDetail = JobTiming & {
   id: string;
   title: string;
   description: string | null;
   status: JobStatus;
-  scheduledAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   customer: JobCustomerSummary;
@@ -88,6 +98,63 @@ export type JobStatusTransitionResult = {
   allowedTransitions: JobStatus[];
 };
 
+export type ScheduleDayJobItem = JobTiming & {
+  id: string;
+  title: string;
+  status: JobStatus;
+  customer: {
+    id: string;
+    name: string;
+  };
+  assignedTo?: {
+    id: string;
+    displayName: string;
+    email: string;
+  };
+  hasConflict: boolean;
+};
+
+export type ScheduleLane = {
+  key: string;
+  label: string;
+  membershipId?: string;
+  userId?: string;
+  jobs: ScheduleDayJobItem[];
+  hasConflict: boolean;
+};
+
+export type ScheduleDayResult = {
+  date: string;
+  rangeStart: Date;
+  rangeEnd: Date;
+  lanes: ScheduleLane[];
+  totalJobs: number;
+  conflictCount: number;
+};
+
+export type ScheduleConflictItem = {
+  id: string;
+  title: string;
+  status: JobStatus;
+  scheduledStartAt: Date;
+  scheduledEndAt: Date;
+  customer: {
+    id: string;
+    name: string;
+  };
+};
+
+export type ScheduleConflictCheckResult = {
+  hasConflict: boolean;
+  conflicts: ScheduleConflictItem[];
+};
+
+const activeSchedulingStatuses = [
+  JobStatus.NEW,
+  JobStatus.SCHEDULED,
+  JobStatus.IN_PROGRESS,
+] satisfies JobStatus[];
+
 function normalizeOptionalString(value?: string) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
@@ -98,10 +165,272 @@ function normalizeOptionalDateTime(value?: string) {
   return trimmed ? new Date(trimmed) : null;
 }
 
+function normalizeScheduledRange(input: {
+  scheduledStartAt?: string;
+  scheduledEndAt?: string;
+}): {
+  scheduledAt: Date | null;
+  scheduledStartAt: Date | null;
+  scheduledEndAt: Date | null;
+} {
+  const scheduledStartAt = normalizeOptionalDateTime(input.scheduledStartAt);
+  const scheduledEndAt = normalizeOptionalDateTime(input.scheduledEndAt);
+
+  if ((scheduledStartAt && !scheduledEndAt) || (!scheduledStartAt && scheduledEndAt)) {
+    throw new ApiError(400, "Both start and end time are required when scheduling a job.");
+  }
+
+  if (scheduledStartAt && scheduledEndAt && scheduledEndAt <= scheduledStartAt) {
+    throw new ApiError(400, "End time must be after the start time.");
+  }
+
+  return {
+    scheduledAt: scheduledStartAt,
+    scheduledStartAt,
+    scheduledEndAt,
+  };
+}
+
 function getAllowedTransitions(from: JobStatus) {
-  return (
-    Object.values(JobStatus).filter((candidate) => canTransition(from, candidate))
-  );
+  return Object.values(JobStatus).filter((candidate) => canTransition(from, candidate));
+}
+
+function buildOverlapRangeWhere(input: {
+  scheduledFrom?: string;
+  scheduledTo?: string;
+}): Prisma.JobWhereInput | undefined {
+  const from = input.scheduledFrom ? new Date(input.scheduledFrom) : null;
+  const to = input.scheduledTo ? new Date(input.scheduledTo) : null;
+
+  if (!from && !to) {
+    return undefined;
+  }
+
+  return {
+    scheduledStartAt: {
+      ...(to ? { lt: to } : {}),
+    },
+    scheduledEndAt: {
+      ...(from ? { gt: from } : {}),
+    },
+  } satisfies Prisma.JobWhereInput;
+}
+
+function getScheduleWindow(date: string, timezoneOffsetMinutes = 0) {
+  const [year, month, day] = date.split("-").map((value) => Number(value));
+  const startUtcMs = Date.UTC(year, month - 1, day, 0, 0, 0) + timezoneOffsetMinutes * 60_000;
+  const endUtcMs = startUtcMs + 24 * 60 * 60 * 1000;
+
+  return {
+    start: new Date(startUtcMs),
+    end: new Date(endUtcMs),
+  };
+}
+
+function buildJobDetailWhere(auth: AuthContext, jobId: string): Prisma.JobWhereInput {
+  return {
+    id: jobId,
+    tenantId: auth.tenantId,
+    ...(auth.role === MembershipRole.STAFF ? { assignedToId: auth.userId } : {}),
+  };
+}
+
+function buildJobOrderBy(sort: JobListQueryInput["sort"]) {
+  switch (sort) {
+    case "createdAt_asc":
+      return { createdAt: "asc" } satisfies Prisma.JobOrderByWithRelationInput;
+    case "scheduledStartAt_asc":
+      return { scheduledStartAt: "asc" } satisfies Prisma.JobOrderByWithRelationInput;
+    case "scheduledStartAt_desc":
+      return { scheduledStartAt: "desc" } satisfies Prisma.JobOrderByWithRelationInput;
+    case "createdAt_desc":
+    default:
+      return { createdAt: "desc" } satisfies Prisma.JobOrderByWithRelationInput;
+  }
+}
+
+function buildJobWhere(auth: AuthContext, query: JobListQueryInput) {
+  const normalizedQuery = query.q?.trim();
+  const overlapWhere = buildOverlapRangeWhere(query);
+
+  return {
+    tenantId: auth.tenantId,
+    ...(query.status ? { status: query.status } : {}),
+    ...(query.customerId ? { customerId: query.customerId } : {}),
+    ...(overlapWhere ?? {}),
+    ...(normalizedQuery
+      ? {
+          OR: [
+            {
+              title: {
+                contains: normalizedQuery,
+                mode: "insensitive" as const,
+              },
+            },
+            {
+              description: {
+                contains: normalizedQuery,
+                mode: "insensitive" as const,
+              },
+            },
+            {
+              customer: {
+                name: {
+                  contains: normalizedQuery,
+                  mode: "insensitive" as const,
+                },
+              },
+            },
+          ],
+        }
+      : {}),
+  } satisfies Prisma.JobWhereInput;
+}
+
+function mapJobListItem(job: {
+  id: string;
+  title: string;
+  status: JobStatus;
+  scheduledStartAt: Date | null;
+  scheduledEndAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  customer: {
+    id: string;
+    name: string;
+  };
+  assignedTo: {
+    displayName: string;
+  } | null;
+}): JobListItem {
+  return {
+    id: job.id,
+    title: job.title,
+    status: job.status,
+    scheduledStartAt: job.scheduledStartAt,
+    scheduledEndAt: job.scheduledEndAt,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    customer: job.customer,
+    ...(job.assignedTo?.displayName
+      ? { assignedToName: job.assignedTo.displayName }
+      : {}),
+  };
+}
+
+function mapJobDetail(job: {
+  id: string;
+  title: string;
+  description: string | null;
+  status: JobStatus;
+  scheduledStartAt: Date | null;
+  scheduledEndAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  customer: JobCustomerSummary;
+  createdBy: {
+    id: string;
+    displayName: string;
+    email: string;
+  };
+  assignedTo: {
+    id: string;
+    displayName: string;
+    email: string;
+  } | null;
+}): JobDetail {
+  return {
+    id: job.id,
+    title: job.title,
+    description: job.description,
+    status: job.status,
+    scheduledStartAt: job.scheduledStartAt,
+    scheduledEndAt: job.scheduledEndAt,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    customer: job.customer,
+    createdBy: job.createdBy,
+    ...(job.assignedTo ? { assignedTo: job.assignedTo } : {}),
+  };
+}
+
+function intervalsOverlap(
+  firstStart: Date,
+  firstEnd: Date,
+  secondStart: Date,
+  secondEnd: Date,
+) {
+  return firstStart < secondEnd && firstEnd > secondStart;
+}
+
+function applyConflictFlags(
+  jobs: Array<
+    Omit<ScheduleDayJobItem, "hasConflict"> & {
+      assignedTo?: {
+        id: string;
+        displayName: string;
+        email: string;
+      };
+    }
+  >,
+) {
+  const conflictIds = new Set<string>();
+  const jobsByAssignee = new Map<string, typeof jobs>();
+
+  for (const job of jobs) {
+    if (!job.assignedTo?.id || !job.scheduledStartAt || !job.scheduledEndAt) {
+      continue;
+    }
+
+    const current = jobsByAssignee.get(job.assignedTo.id) ?? [];
+    current.push(job);
+    jobsByAssignee.set(job.assignedTo.id, current);
+  }
+
+  for (const assigneeJobs of jobsByAssignee.values()) {
+    assigneeJobs.sort(
+      (left, right) =>
+        left.scheduledStartAt!.getTime() - right.scheduledStartAt!.getTime(),
+    );
+
+    for (let index = 0; index < assigneeJobs.length; index += 1) {
+      const current = assigneeJobs[index];
+      if (!current?.scheduledStartAt || !current.scheduledEndAt) {
+        continue;
+      }
+
+      for (let nextIndex = index + 1; nextIndex < assigneeJobs.length; nextIndex += 1) {
+        const next = assigneeJobs[nextIndex];
+        if (!next?.scheduledStartAt || !next.scheduledEndAt) {
+          continue;
+        }
+
+        if (next.scheduledStartAt >= current.scheduledEndAt) {
+          break;
+        }
+
+        if (
+          intervalsOverlap(
+            current.scheduledStartAt,
+            current.scheduledEndAt,
+            next.scheduledStartAt,
+            next.scheduledEndAt,
+          )
+        ) {
+          conflictIds.add(current.id);
+          conflictIds.add(next.id);
+        }
+      }
+    }
+  }
+
+  return {
+    jobs: jobs.map((job) => ({
+      ...job,
+      hasConflict: conflictIds.has(job.id),
+    })),
+    conflictCount: conflictIds.size,
+  };
 }
 
 async function getTenantCustomerOrThrow(auth: AuthContext, customerId: string) {
@@ -142,10 +471,7 @@ async function getJobOrThrow(auth: AuthContext, jobId: string) {
   return job;
 }
 
-async function getAssignableMembershipOrThrow(
-  auth: AuthContext,
-  membershipId: string,
-) {
+async function getAssignableMembershipOrThrow(auth: AuthContext, membershipId: string) {
   const membership = await prisma.membership.findFirst({
     where: {
       id: membershipId,
@@ -170,140 +496,14 @@ async function getAssignableMembershipOrThrow(
     throw new ApiError(404, "Membership not found.");
   }
 
-  if (membership.status !== MembershipStatus.ACTIVE || membership.role !== MembershipRole.STAFF) {
+  if (
+    membership.status !== MembershipStatus.ACTIVE ||
+    membership.role !== MembershipRole.STAFF
+  ) {
     throw new ApiError(409, "Jobs can only be assigned to active staff members.");
   }
 
   return membership;
-}
-
-function buildJobDetailWhere(auth: AuthContext, jobId: string): Prisma.JobWhereInput {
-  return {
-    id: jobId,
-    tenantId: auth.tenantId,
-    ...(auth.role === MembershipRole.STAFF ? { assignedToId: auth.userId } : {}),
-  };
-}
-
-function mapJobListItem(job: {
-  id: string;
-  title: string;
-  status: JobStatus;
-  scheduledAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-  customer: {
-    id: string;
-    name: string;
-  };
-  assignedTo: {
-    displayName: string;
-  } | null;
-}): JobListItem {
-  return {
-    id: job.id,
-    title: job.title,
-    status: job.status,
-    scheduledAt: job.scheduledAt,
-    createdAt: job.createdAt,
-    updatedAt: job.updatedAt,
-    customer: job.customer,
-    ...(job.assignedTo?.displayName
-      ? { assignedToName: job.assignedTo.displayName }
-      : {}),
-  };
-}
-
-function mapJobDetail(job: {
-  id: string;
-  title: string;
-  description: string | null;
-  status: JobStatus;
-  scheduledAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-  customer: JobCustomerSummary;
-  createdBy: {
-    id: string;
-    displayName: string;
-    email: string;
-  };
-  assignedTo: {
-    id: string;
-    displayName: string;
-    email: string;
-  } | null;
-}): JobDetail {
-  return {
-    id: job.id,
-    title: job.title,
-    description: job.description,
-    status: job.status,
-    scheduledAt: job.scheduledAt,
-    createdAt: job.createdAt,
-    updatedAt: job.updatedAt,
-    customer: job.customer,
-    createdBy: job.createdBy,
-    ...(job.assignedTo ? { assignedTo: job.assignedTo } : {}),
-  };
-}
-
-function buildJobWhere(auth: AuthContext, query: JobListQueryInput) {
-  const normalizedQuery = query.q?.trim();
-
-  return {
-    tenantId: auth.tenantId,
-    ...(query.status ? { status: query.status } : {}),
-    ...(query.customerId ? { customerId: query.customerId } : {}),
-    ...(query.scheduledFrom || query.scheduledTo
-      ? {
-          scheduledAt: {
-            ...(query.scheduledFrom ? { gte: new Date(query.scheduledFrom) } : {}),
-            ...(query.scheduledTo ? { lte: new Date(query.scheduledTo) } : {}),
-          },
-        }
-      : {}),
-    ...(normalizedQuery
-      ? {
-          OR: [
-            {
-              title: {
-                contains: normalizedQuery,
-                mode: "insensitive" as const,
-              },
-            },
-            {
-              description: {
-                contains: normalizedQuery,
-                mode: "insensitive" as const,
-              },
-            },
-            {
-              customer: {
-                name: {
-                  contains: normalizedQuery,
-                  mode: "insensitive" as const,
-                },
-              },
-            },
-          ],
-        }
-      : {}),
-  } satisfies Prisma.JobWhereInput;
-}
-
-function buildJobOrderBy(sort: JobListQueryInput["sort"]) {
-  switch (sort) {
-    case "createdAt_asc":
-      return { createdAt: "asc" } satisfies Prisma.JobOrderByWithRelationInput;
-    case "scheduledAt_asc":
-      return { scheduledAt: "asc" } satisfies Prisma.JobOrderByWithRelationInput;
-    case "scheduledAt_desc":
-      return { scheduledAt: "desc" } satisfies Prisma.JobOrderByWithRelationInput;
-    case "createdAt_desc":
-    default:
-      return { createdAt: "desc" } satisfies Prisma.JobOrderByWithRelationInput;
-  }
 }
 
 export async function listJobs(
@@ -325,7 +525,8 @@ export async function listJobs(
         id: true,
         title: true,
         status: true,
-        scheduledAt: true,
+        scheduledStartAt: true,
+        scheduledEndAt: true,
         createdAt: true,
         updatedAt: true,
         customer: {
@@ -359,6 +560,7 @@ export async function createJob(
   input: CreateJobInput,
 ): Promise<JobListItem> {
   const customer = await getTenantCustomerOrThrow(auth, input.customerId);
+  const scheduling = normalizeScheduledRange(input);
 
   const job = await prisma.job.create({
     data: {
@@ -366,7 +568,7 @@ export async function createJob(
       customerId: customer.id,
       title: input.title.trim(),
       description: normalizeOptionalString(input.description),
-      scheduledAt: normalizeOptionalDateTime(input.scheduledAt),
+      ...scheduling,
       createdById: auth.userId,
       status: JobStatus.NEW,
     },
@@ -374,7 +576,8 @@ export async function createJob(
       id: true,
       title: true,
       status: true,
-      scheduledAt: true,
+      scheduledStartAt: true,
+      scheduledEndAt: true,
       createdAt: true,
       updatedAt: true,
       customer: {
@@ -405,7 +608,8 @@ export async function getJobDetail(
       title: true,
       description: true,
       status: true,
-      scheduledAt: true,
+      scheduledStartAt: true,
+      scheduledEndAt: true,
       createdAt: true,
       updatedAt: true,
       customer: {
@@ -447,6 +651,7 @@ export async function updateJob(
 ): Promise<JobListItem> {
   await getJobOrThrow(auth, jobId);
   const customer = await getTenantCustomerOrThrow(auth, input.customerId);
+  const scheduling = normalizeScheduledRange(input);
 
   const job = await prisma.job.update({
     where: {
@@ -456,13 +661,14 @@ export async function updateJob(
       customerId: customer.id,
       title: input.title.trim(),
       description: normalizeOptionalString(input.description),
-      scheduledAt: normalizeOptionalDateTime(input.scheduledAt),
+      ...scheduling,
     },
     select: {
       id: true,
       title: true,
       status: true,
-      scheduledAt: true,
+      scheduledStartAt: true,
+      scheduledEndAt: true,
       createdAt: true,
       updatedAt: true,
       customer: {
@@ -504,7 +710,8 @@ export async function listMyJobs(
         id: true,
         title: true,
         status: true,
-        scheduledAt: true,
+        scheduledStartAt: true,
+        scheduledEndAt: true,
         createdAt: true,
         updatedAt: true,
         customer: {
@@ -530,6 +737,199 @@ export async function listMyJobs(
       total,
       totalPages: Math.max(1, Math.ceil(total / query.pageSize)),
     },
+  };
+}
+
+export async function getScheduleDay(
+  auth: AuthContext,
+  query: ScheduleDayQueryInput & { timezoneOffsetMinutes?: number },
+): Promise<ScheduleDayResult> {
+  const effectiveAssigneeId =
+    auth.role === MembershipRole.STAFF ? auth.userId : query.assigneeId;
+  const { start, end } = getScheduleWindow(
+    query.date,
+    query.timezoneOffsetMinutes ?? 0,
+  );
+
+  const [memberships, jobs] = await prisma.$transaction([
+    prisma.membership.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        role: MembershipRole.STAFF,
+        status: MembershipStatus.ACTIVE,
+        ...(effectiveAssigneeId ? { userId: effectiveAssigneeId } : {}),
+      },
+      orderBy: {
+        user: {
+          displayName: "asc",
+        },
+      },
+      select: {
+        id: true,
+        userId: true,
+        user: {
+          select: {
+            id: true,
+            displayName: true,
+            email: true,
+          },
+        },
+      },
+    }),
+    prisma.job.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        scheduledStartAt: {
+          lt: end,
+        },
+        scheduledEndAt: {
+          gt: start,
+        },
+        ...(effectiveAssigneeId ? { assignedToId: effectiveAssigneeId } : {}),
+      },
+      orderBy: [
+        { scheduledStartAt: "asc" },
+        { createdAt: "asc" },
+      ],
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        scheduledStartAt: true,
+        scheduledEndAt: true,
+        customer: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        assignedTo: {
+          select: {
+            id: true,
+            displayName: true,
+            email: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  const conflictApplied = applyConflictFlags(
+    jobs.map((job) => ({
+      id: job.id,
+      title: job.title,
+      status: job.status,
+      scheduledStartAt: job.scheduledStartAt,
+      scheduledEndAt: job.scheduledEndAt,
+      customer: job.customer,
+      ...(job.assignedTo ? { assignedTo: job.assignedTo } : {}),
+    })),
+  );
+
+  const jobsByAssignee = new Map<string, ScheduleDayJobItem[]>();
+  const unassignedJobs: ScheduleDayJobItem[] = [];
+
+  for (const job of conflictApplied.jobs) {
+    if (!job.assignedTo?.id) {
+      unassignedJobs.push(job);
+      continue;
+    }
+
+    const current = jobsByAssignee.get(job.assignedTo.id) ?? [];
+    current.push(job);
+    jobsByAssignee.set(job.assignedTo.id, current);
+  }
+
+  const lanes: ScheduleLane[] = memberships.map((membership) => {
+    const laneJobs = jobsByAssignee.get(membership.userId) ?? [];
+    return {
+      key: membership.userId,
+      label: membership.user.displayName,
+      membershipId: membership.id,
+      userId: membership.userId,
+      jobs: laneJobs,
+      hasConflict: laneJobs.some((job) => job.hasConflict),
+    };
+  });
+
+  if (auth.role !== MembershipRole.STAFF) {
+    lanes.push({
+      key: "unassigned",
+      label: "Unassigned",
+      jobs: unassignedJobs,
+      hasConflict: false,
+    });
+  }
+
+  return {
+    date: query.date,
+    rangeStart: start,
+    rangeEnd: end,
+    lanes,
+    totalJobs: conflictApplied.jobs.length,
+    conflictCount: conflictApplied.conflictCount,
+  };
+}
+
+export async function checkScheduleConflicts(
+  auth: AuthContext,
+  input: {
+    assigneeUserId: string;
+    scheduledStartAt: string;
+    scheduledEndAt: string;
+    excludeJobId?: string;
+  },
+): Promise<ScheduleConflictCheckResult> {
+  const scheduledStartAt = new Date(input.scheduledStartAt);
+  const scheduledEndAt = new Date(input.scheduledEndAt);
+
+  if (Number.isNaN(scheduledStartAt.getTime()) || Number.isNaN(scheduledEndAt.getTime())) {
+    throw new ApiError(400, "Invalid schedule range.");
+  }
+
+  const conflicts = await prisma.job.findMany({
+    where: {
+      tenantId: auth.tenantId,
+      assignedToId: input.assigneeUserId,
+      status: {
+        in: activeSchedulingStatuses,
+      },
+      ...(input.excludeJobId ? { id: { not: input.excludeJobId } } : {}),
+      scheduledStartAt: {
+        lt: scheduledEndAt,
+      },
+      scheduledEndAt: {
+        gt: scheduledStartAt,
+      },
+    },
+    orderBy: {
+      scheduledStartAt: "asc",
+    },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      scheduledStartAt: true,
+      scheduledEndAt: true,
+      customer: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  });
+
+  return {
+    hasConflict: conflicts.length > 0,
+    conflicts: conflicts.map((job) => ({
+      id: job.id,
+      title: job.title,
+      status: job.status,
+      scheduledStartAt: job.scheduledStartAt!,
+      scheduledEndAt: job.scheduledEndAt!,
+      customer: job.customer,
+    })),
   };
 }
 

@@ -12,18 +12,13 @@ import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
 import { LoadingPanel } from "@/components/ui/loading-panel";
 import { secondaryButtonClassName } from "@/components/ui/styles";
 import { getCustomerDetailRequest, listCustomersRequest } from "@/features/customer/customer-api";
-import { createJobRequest } from "@/features/job/job-api";
+import { createJobRequest, toApiDateTime } from "@/features/job";
 import type { JobFormValues } from "@/features/job/job-schema";
 import { useAuthStore } from "@/store/auth-store";
 import type { CustomerListItem } from "@/types/customer";
 
 function canManageJobs(role: string | undefined) {
   return role === "OWNER" || role === "MANAGER";
-}
-
-function toApiScheduledAt(value?: string) {
-  const trimmed = value?.trim();
-  return trimmed ? new Date(trimmed).toISOString() : "";
 }
 
 function NewJobPageContent() {
@@ -40,7 +35,8 @@ function NewJobPageContent() {
     customerId: selectedCustomerId,
     title: "",
     description: "",
-    scheduledAt: "",
+    scheduledStartAt: "",
+    scheduledEndAt: "",
   });
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -141,12 +137,13 @@ function NewJobPageContent() {
                   try {
                     const created = await withAccessTokenRetry((accessToken) =>
                       createJobRequest(accessToken, {
-                        customerId: values.customerId,
-                        title: values.title,
-                        description: values.description,
-                        scheduledAt: toApiScheduledAt(values.scheduledAt),
-                      }),
-                    );
+                      customerId: values.customerId,
+                      title: values.title,
+                      description: values.description,
+                      scheduledStartAt: toApiDateTime(values.scheduledStartAt),
+                      scheduledEndAt: toApiDateTime(values.scheduledEndAt),
+                    }),
+                  );
                     router.push(`/jobs/${created.id}`);
                   } catch (error) {
                     setSubmitError(

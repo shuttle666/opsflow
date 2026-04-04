@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/icons";
 import { AppShell } from "@/components/ui/app-shell";
 import { StatCard } from "@/components/ui/info-cards";
-import { listJobsRequest } from "@/features/job/job-api";
+import { formatTimeRange, listJobsRequest } from "@/features/job";
 import { useAuthStore } from "@/store/auth-store";
 
 function initialsFor(name: string) {
@@ -54,7 +54,7 @@ export default function DashboardPage() {
             scheduledTo: to,
             page: 1,
             pageSize: 10,
-            sort: "scheduledAt_asc",
+            sort: "scheduledStartAt_asc",
           }),
         );
 
@@ -66,9 +66,7 @@ export default function DashboardPage() {
               customerInitials: initialsFor(job.customer.name),
               jobType: job.title,
               status: job.status,
-              time: job.scheduledAt
-                ? new Date(job.scheduledAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                : "-",
+              time: formatTimeRange(job.scheduledStartAt, job.scheduledEndAt),
             })),
           );
           setJobCount(result.pagination.total);

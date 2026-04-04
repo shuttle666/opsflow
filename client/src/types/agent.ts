@@ -1,5 +1,48 @@
 export type ChatMessageRole = "user" | "assistant";
 
+export type DispatchProposal = {
+  id: string;
+  conversationId: string;
+  intent: string;
+  customer: {
+    status: "matched" | "new" | "missing" | "ambiguous";
+    query?: string;
+    matchedCustomerId?: string;
+    name?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+    notes?: string;
+    matches?: Array<{
+      id: string;
+      name: string;
+    }>;
+  };
+  jobDraft: {
+    title: string;
+    description?: string | null;
+  };
+  scheduleDraft: {
+    scheduledStartAt?: string | null;
+    scheduledEndAt?: string | null;
+    timezone: string;
+  };
+  assigneeDraft?: {
+    status: "matched" | "missing" | "ambiguous";
+    membershipId?: string;
+    userId?: string;
+    displayName?: string;
+    matches?: Array<{
+      membershipId: string;
+      userId: string;
+      displayName: string;
+    }>;
+  };
+  warnings: string[];
+  confidence: number;
+  createdAt: string;
+};
+
 export type ChatToolCall = {
   name: string;
   input: unknown;
@@ -11,6 +54,7 @@ export type ChatMessage = {
   role: ChatMessageRole;
   content: string;
   toolCalls?: ChatToolCall[];
+  proposal?: DispatchProposal;
   createdAt: string;
 };
 
@@ -28,9 +72,22 @@ export type ConversationDetail = {
   updatedAt: string;
 };
 
+export type ConfirmProposalResult = {
+  proposalId: string;
+  entityType: "customer" | "job";
+  createdCustomerId?: string;
+  createdCustomerName?: string;
+  usedExistingCustomer?: boolean;
+  createdJobId?: string;
+  createdJobTitle?: string;
+  assignedToName?: string;
+  transitionedTo?: string;
+};
+
 export type SSEEvent =
   | { type: "text_delta"; text: string }
   | { type: "tool_use"; tool: string; input: unknown }
   | { type: "tool_result"; tool: string; result: unknown }
+  | { type: "proposal"; proposal: DispatchProposal }
   | { type: "error"; message: string }
   | { type: "done" };

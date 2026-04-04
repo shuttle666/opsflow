@@ -152,6 +152,8 @@ model Job {
   assignedToId  String?            @map("assigned_to_id") @db.Uuid
   createdById   String             @map("created_by_id") @db.Uuid
   scheduledAt   DateTime?          @map("scheduled_at")
+  scheduledStartAt DateTime?       @map("scheduled_start_at")
+  scheduledEndAt   DateTime?       @map("scheduled_end_at")
   createdAt     DateTime           @default(now()) @map("created_at")
   updatedAt     DateTime           @updatedAt @map("updated_at")
   tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
@@ -165,6 +167,8 @@ model Job {
   @@index([tenantId])
   @@index([tenantId, status])
   @@index([tenantId, customerId])
+  @@index([tenantId, scheduledStartAt])
+  @@index([tenantId, assignedToId, scheduledStartAt])
   @@map("jobs")
 }
 

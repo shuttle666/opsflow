@@ -98,7 +98,8 @@ describe("new job page", () => {
       id: "job-1",
       title: "Leaking kitchen tap",
       status: "NEW",
-      scheduledAt: null,
+      scheduledStartAt: null,
+      scheduledEndAt: null,
       createdAt: "2026-03-20T00:00:00.000Z",
       updatedAt: "2026-03-20T00:00:00.000Z",
       customer: {
@@ -118,7 +119,8 @@ describe("new job page", () => {
       screen.getByPlaceholderText("Describe the issue or requested work"),
       "Tap leaking overnight.",
     );
-    await user.type(screen.getByLabelText("Scheduled time"), "2026-03-30T12:30");
+    await user.type(screen.getByLabelText("Start time"), "2026-03-30T12:30");
+    expect(screen.getByLabelText("End time")).toHaveValue("2026-03-30T13:30");
     await user.click(screen.getByRole("button", { name: "Create job" }));
 
     await waitFor(() => {
@@ -128,6 +130,8 @@ describe("new job page", () => {
           customerId: "customer-1",
           title: "Leaking kitchen tap",
           description: "Tap leaking overnight.",
+          scheduledStartAt: expect.any(String),
+          scheduledEndAt: expect.any(String),
         }),
       );
       expect(pushMock).toHaveBeenCalledWith("/jobs/job-1");

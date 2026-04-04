@@ -10,33 +10,13 @@ import { FormSurface } from "@/components/ui/form-surface";
 import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
 import { LoadingPanel } from "@/components/ui/loading-panel";
 import { getCustomerDetailRequest, listCustomersRequest } from "@/features/customer/customer-api";
-import { getJobDetailRequest, updateJobRequest } from "@/features/job/job-api";
+import { getJobDetailRequest, toApiDateTime, toDateTimeLocal, updateJobRequest } from "@/features/job";
 import type { JobFormValues } from "@/features/job/job-schema";
 import { useAuthStore } from "@/store/auth-store";
 import type { CustomerListItem } from "@/types/customer";
 
 function canManageJobs(role: string | undefined) {
   return role === "OWNER" || role === "MANAGER";
-}
-
-function toDateTimeLocal(value: string | null) {
-  if (!value) {
-    return "";
-  }
-
-  const date = new Date(value);
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  const hours = `${date.getHours()}`.padStart(2, "0");
-  const minutes = `${date.getMinutes()}`.padStart(2, "0");
-
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
-
-function toApiScheduledAt(value?: string) {
-  const trimmed = value?.trim();
-  return trimmed ? new Date(trimmed).toISOString() : "";
 }
 
 export default function EditJobPage() {
@@ -102,7 +82,8 @@ export default function EditJobPage() {
             customerId: job.customer.id,
             title: job.title,
             description: job.description ?? "",
-            scheduledAt: toDateTimeLocal(job.scheduledAt),
+            scheduledStartAt: toDateTimeLocal(job.scheduledStartAt),
+            scheduledEndAt: toDateTimeLocal(job.scheduledEndAt),
           });
         }
       } catch (error) {
@@ -156,7 +137,8 @@ export default function EditJobPage() {
                       customerId: values.customerId,
                       title: values.title,
                       description: values.description,
-                      scheduledAt: toApiScheduledAt(values.scheduledAt),
+                      scheduledStartAt: toApiDateTime(values.scheduledStartAt),
+                      scheduledEndAt: toApiDateTime(values.scheduledEndAt),
                     }),
                   );
                   router.push(`/jobs/${jobId}`);

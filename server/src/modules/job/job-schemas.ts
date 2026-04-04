@@ -12,9 +12,31 @@ export const createJobSchema = z
     customerId: z.uuid(),
     title: z.string().trim().min(1, "Job title is required."),
     description: optionalStringSchema,
-    scheduledAt: optionalDateTimeSchema,
+    scheduledStartAt: optionalDateTimeSchema,
+    scheduledEndAt: optionalDateTimeSchema,
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    const start = value.scheduledStartAt?.trim();
+    const end = value.scheduledEndAt?.trim();
+
+    if ((start && !end) || (!start && end)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [start ? "scheduledEndAt" : "scheduledStartAt"],
+        message: "Both start and end time are required when scheduling a job.",
+      });
+      return;
+    }
+
+    if (start && end && new Date(end) <= new Date(start)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["scheduledEndAt"],
+        message: "End time must be after the start time.",
+      });
+    }
+  });
 
 export const updateJobSchema = createJobSchema.strict();
 
@@ -57,11 +79,19 @@ export const jobListQuerySchema = z.object({
     .enum([
       "createdAt_desc",
       "createdAt_asc",
-      "scheduledAt_asc",
-      "scheduledAt_desc",
+      "scheduledStartAt_asc",
+      "scheduledStartAt_desc",
     ])
     .default("createdAt_desc"),
 });
+
+export const scheduleDayQuerySchema = z
+  .object({
+    date: z.string().trim().date(),
+    assigneeId: z.uuid().optional(),
+    timezoneOffsetMinutes: z.coerce.number().int().min(-840).max(840).optional(),
+  })
+  .strict();
 
 export type CreateJobInput = z.infer<typeof createJobSchema>;
 export type UpdateJobInput = z.infer<typeof updateJobSchema>;
@@ -69,3 +99,4 @@ export type JobIdParamInput = z.infer<typeof jobIdParamSchema>;
 export type AssignJobInput = z.infer<typeof assignJobSchema>;
 export type TransitionJobStatusInput = z.infer<typeof transitionJobStatusSchema>;
 export type JobListQueryInput = z.infer<typeof jobListQuerySchema>;
+export type ScheduleDayQueryInput = z.infer<typeof scheduleDayQuerySchema>;

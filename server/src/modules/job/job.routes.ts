@@ -6,7 +6,9 @@ import { requireTenantAccess } from "../../middleware/require-tenant-access";
 import { evidenceRouter } from "../evidence/evidence.routes";
 import {
   assignJobHandler,
+  checkScheduleConflictsHandler,
   createJobHandler,
+  getScheduleDayHandler,
   getJobDetailHandler,
   getJobHistoryHandler,
   listJobsHandler,
@@ -24,6 +26,16 @@ jobRouter.get(
   "/",
   requireRole(MembershipRole.OWNER, MembershipRole.MANAGER),
   listJobsHandler,
+);
+jobRouter.get(
+  "/schedule/day",
+  requireRole(MembershipRole.OWNER, MembershipRole.MANAGER, MembershipRole.STAFF),
+  getScheduleDayHandler,
+);
+jobRouter.post(
+  "/schedule/conflicts",
+  requireRole(MembershipRole.OWNER, MembershipRole.MANAGER),
+  checkScheduleConflictsHandler,
 );
 jobRouter.get("/my", listMyJobsHandler);
 jobRouter.post(

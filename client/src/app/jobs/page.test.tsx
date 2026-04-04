@@ -88,7 +88,8 @@ describe("jobs page", () => {
           id: "job-1",
           title: "Leaking kitchen tap",
           status: "NEW",
-          scheduledAt: null,
+          scheduledStartAt: null,
+          scheduledEndAt: null,
           createdAt: "2026-03-20T00:00:00.000Z",
           updatedAt: "2026-03-20T00:00:00.000Z",
           customer: {

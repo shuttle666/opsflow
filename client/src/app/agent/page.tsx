@@ -6,7 +6,7 @@ import { AgentChat } from "./agent-chat";
 
 export default function AgentPage() {
   return (
-    <AppShell title="AI Dispatch" description="Natural language operations assistant">
+    <AppShell title="Dispatch Planner" description="Natural-language planning with manager confirmation">
       <AuthGuard>
         <AgentChat />
       </AuthGuard>

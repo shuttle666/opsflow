@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
   Briefcase,
+  Calendar,
   Home,
   LogOut,
   Search,
@@ -62,8 +63,8 @@ function getWorkspaceNavigation(role: string | undefined) {
     return [
       { href: "/dashboard", label: "Dashboard", icon: Home },
       { href: "/customers", label: "Customers", icon: Users },
+      { href: "/schedule", label: "My Schedule", icon: Calendar },
       { href: "/jobs/my", label: "My Jobs", icon: Briefcase },
-      { href: "/agent", label: "AI Dispatch", icon: Sparkles },
       { href: "/invitations/accept", label: "Invitations", icon: UserPlus },
     ] satisfies WorkspaceNavItem[];
   }
@@ -72,8 +73,9 @@ function getWorkspaceNavigation(role: string | undefined) {
     { href: "/dashboard", label: "Dashboard", icon: Home },
     { href: "/customers", label: "Customers", icon: Users },
     { href: "/jobs", label: "Jobs", icon: Briefcase },
+    { href: "/schedule", label: "Schedule", icon: Calendar },
     { href: "/team", label: "Team", icon: UserPlus },
-    { href: "/agent", label: "AI Dispatch", icon: Sparkles },
+    { href: "/agent", label: "Dispatch Planner", icon: Sparkles },
   ] satisfies WorkspaceNavItem[];
 }
 

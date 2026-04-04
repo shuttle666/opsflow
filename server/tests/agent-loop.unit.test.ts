@@ -91,9 +91,14 @@ describe("runAgentLoop", () => {
       [{ role: "user", content: "帮我找一下王先生" }],
       buildAuth(),
       {
+        conversationId: "conversation-1",
+        timezone: "Australia/Adelaide",
+      },
+      {
         onTextDelta,
         onToolUse: vi.fn(),
         onToolResult: vi.fn(),
+        onProposal: vi.fn(),
       },
     );
 

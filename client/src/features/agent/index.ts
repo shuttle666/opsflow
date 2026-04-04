@@ -1,4 +1,5 @@
 export {
+  confirmProposalRequest,
   consumeMessageStream,
   createConversationRequest,
   listConversationsRequest,

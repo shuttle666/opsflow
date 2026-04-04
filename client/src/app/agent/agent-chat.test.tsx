@@ -75,8 +75,13 @@ describe("AgentChat", () => {
     const user = userEvent.setup();
     render(<AgentChat />);
 
-    await user.type(screen.getByPlaceholderText("Type a message..."), "hello");
-    await user.click(screen.getByRole("button", { name: "Send message" }));
+    expect(screen.getByRole("button", { name: "History" })).toHaveAttribute("aria-expanded", "false");
+
+    await user.type(
+      screen.getByPlaceholderText("Describe the customer, work, preferred time, and assignee..."),
+      "hello",
+    );
+    await user.click(screen.getByRole("button", { name: "Send" }));
 
     await waitFor(() => {
       expect(openMessageStreamRequest).toHaveBeenCalledTimes(2);

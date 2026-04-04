@@ -13,12 +13,9 @@ import { LoadingPanel } from "@/components/ui/loading-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { primaryButtonClassName, secondaryButtonClassName } from "@/components/ui/styles";
 import { getCustomerDetailRequest } from "@/features/customer/customer-api";
+import { formatScheduleRange } from "@/features/job";
 import { useAuthStore } from "@/store/auth-store";
 import type { CustomerDetail } from "@/types/customer";
-
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString();
-}
 
 function canManageCustomers(role: string | undefined) {
   return role === "OWNER" || role === "MANAGER";
@@ -130,7 +127,9 @@ export default function CustomerDetailPage() {
                             <StatusBadge kind="job" value={job.status} />
                           </div>
                           <div className="mt-2 flex flex-wrap gap-x-4 text-slate-500">
-                            <p>Scheduled: {job.scheduledAt ? formatDateTime(job.scheduledAt) : "-"}</p>
+                            <p>
+                              Scheduled: {formatScheduleRange(job.scheduledStartAt, job.scheduledEndAt)}
+                            </p>
                             <p>Assigned to: {job.assignedToName ?? "-"}</p>
                           </div>
                         </div>

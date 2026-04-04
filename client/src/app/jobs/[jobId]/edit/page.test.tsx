@@ -89,7 +89,8 @@ describe("edit job page", () => {
       title: "Leaking kitchen tap",
       description: "Tap leaking overnight.",
       status: "NEW",
-      scheduledAt: "2026-03-30T02:00:00.000Z",
+      scheduledStartAt: "2026-03-30T02:00:00.000Z",
+      scheduledEndAt: "2026-03-30T03:00:00.000Z",
       createdAt: "2026-03-20T00:00:00.000Z",
       updatedAt: "2026-03-20T00:00:00.000Z",
       customer: {
@@ -106,7 +107,8 @@ describe("edit job page", () => {
       id: "job-1",
       title: "Leaking kitchen tap updated",
       status: "NEW",
-      scheduledAt: "2026-03-30T03:30:00.000Z",
+      scheduledStartAt: "2026-03-30T03:30:00.000Z",
+      scheduledEndAt: "2026-03-30T04:30:00.000Z",
       createdAt: "2026-03-20T00:00:00.000Z",
       updatedAt: "2026-03-20T01:00:00.000Z",
       customer: {

@@ -68,7 +68,8 @@ describe("my jobs page", () => {
           id: "job-1",
           title: "Assigned visit",
           status: "SCHEDULED",
-          scheduledAt: "2026-03-30T02:00:00.000Z",
+          scheduledStartAt: "2026-03-30T02:00:00.000Z",
+          scheduledEndAt: "2026-03-30T03:00:00.000Z",
           createdAt: "2026-03-20T00:00:00.000Z",
           updatedAt: "2026-03-20T00:00:00.000Z",
           customer: {

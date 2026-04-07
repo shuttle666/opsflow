@@ -1,27 +1,4 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: opsflow-postgres-prod
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
-    networks:
-      - opsflow
-
   server:
     build:
       context: ./server
@@ -32,7 +9,7 @@ services:
       NODE_ENV: production
       PORT: 4000
       CLIENT_URL: ${CLIENT_URL}
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_URL: ${DATABASE_URL}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       JWT_ACCESS_EXPIRES_IN_MINUTES: ${JWT_ACCESS_EXPIRES_IN_MINUTES}
       JWT_REFRESH_EXPIRES_IN_DAYS: ${JWT_REFRESH_EXPIRES_IN_DAYS}
@@ -40,13 +17,10 @@ services:
       BCRYPT_SALT_ROUNDS: ${BCRYPT_SALT_ROUNDS}
       INVITATION_EXPIRES_IN_DAYS: ${INVITATION_EXPIRES_IN_DAYS}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-    depends_on:
-      postgres:
-        condition: service_healthy
     expose:
       - "4000"
     volumes:
-      - server_uploads:/app/uploads
+      - ${SERVER_UPLOADS_DIR}:/app/uploads
     healthcheck:
       test:
         [
@@ -125,8 +99,6 @@ services:
       - opsflow
 
 volumes:
-  postgres_data:
-  server_uploads:
   letsencrypt:
   certbot_webroot:
 

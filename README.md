@@ -139,18 +139,18 @@ docker compose -f docker-compose.dev.yml down -v
 
 ## Production Deployment On A Single EC2
 
-This repository now includes a production-oriented Docker Compose setup for a single EC2 host:
+This repository now includes a production-oriented Docker Compose setup for a single EC2 host with an external PostgreSQL database such as Amazon RDS:
 
 - `client/Dockerfile` - Multi-stage production image for the Next.js app.
 - `server/Dockerfile` - Multi-stage production image for the Express + Prisma API.
-- `docker-compose.prod.yml` - Runs `postgres`, `server`, `client`, `nginx`, and an on-demand `certbot` service.
+- `docker-compose.prod.yml` - Runs `server`, `client`, `nginx`, and an on-demand `certbot` service against an external PostgreSQL database.
 - `deploy/nginx/` - Bootstrap + HTTPS nginx configuration for `app` and `api` subdomains.
 - `.env.production.example` - Template for required production environment variables.
 
 ### Production Services
 
-- `postgres` stays private inside the Docker network and persists data via a named volume.
-- `server` connects to PostgreSQL through the internal hostname `postgres`.
+- `server` connects to an external PostgreSQL database through `DATABASE_URL`.
+- `server` stores uploaded evidence under the host path configured by `SERVER_UPLOADS_DIR`.
 - `client` is built with `NEXT_PUBLIC_API_URL` pointing at the public API domain.
 - `nginx` is the public entrypoint on ports `80` and `443`.
 - `certbot` is kept for manual certificate issuance and renewal commands.
@@ -158,20 +158,22 @@ This repository now includes a production-oriented Docker Compose setup for a si
 ### First-Time EC2 Setup
 
 1. Provision an EC2 instance, install Docker Engine + Docker Compose plugin, and open ports `22`, `80`, and `443`.
-2. Point your DNS records at the EC2 public IP:
+2. Provision an external PostgreSQL database such as Amazon RDS, and allow inbound access from the EC2 instance on port `5432`.
+3. Point your DNS records at the EC2 public IP:
    - `app.your-domain.com`
    - `api.your-domain.com`
-3. Copy `.env.production.example` to `.env.production` and replace every placeholder value.
+4. Copy `.env.production.example` to `.env.production` and replace every placeholder value.
+5. Create the uploads directory defined by `SERVER_UPLOADS_DIR` (for example `sudo mkdir -p /srv/opsflow/uploads`).
 
 ### Start The Production Stack
 
 ```bash
-docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build postgres server client nginx
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build server client nginx
 ```
 
 ### Run Database Migrations
 
-Run this after the containers are up and any time a new migration is deployed:
+Run this after the containers are up and any time a new migration is deployed. Make sure `DATABASE_URL` points at the target RDS instance before running it:
 
 ```bash
 docker compose --env-file .env.production -f docker-compose.prod.yml run --rm server pnpm prisma:migrate:deploy
@@ -203,4 +205,3 @@ docker compose --env-file .env.production -f docker-compose.prod.yml exec nginx 
 - Frontend: `https://app.your-domain.com`
 - API health: `https://api.your-domain.com/api/health`
 - Container logs: `docker compose --env-file .env.production -f docker-compose.prod.yml logs -f`
-

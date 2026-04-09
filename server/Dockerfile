@@ -31,6 +31,7 @@ FROM node:22-bookworm-slim AS runner
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 ENV NODE_ENV=production
+ENV HOME="/home/opsflow"
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends openssl ca-certificates \
@@ -41,15 +42,15 @@ RUN apt-get update \
 WORKDIR /app
 
 RUN groupadd --system --gid 1001 nodejs \
-  && useradd --system --uid 1001 --gid 1001 opsflow
+  && useradd --system --uid 1001 --gid 1001 --create-home --home-dir "$HOME" opsflow
 
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/tsconfig.json /app/prisma.config.ts ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 
-RUN mkdir -p /app/uploads/evidence \
-  && chown -R opsflow:nodejs /app
+RUN mkdir -p /app/uploads/evidence "$HOME/.cache/node/corepack" \
+  && chown -R opsflow:nodejs /app "$HOME"
 
 USER opsflow
 

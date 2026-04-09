@@ -176,7 +176,7 @@ docker compose --env-file .env.production -f docker-compose.prod.yml up -d --bui
 Run this after the containers are up and any time a new migration is deployed. Make sure `DATABASE_URL` points at the target RDS instance before running it:
 
 ```bash
-docker compose --env-file .env.production -f docker-compose.prod.yml run --rm server pnpm prisma:migrate:deploy
+docker compose --env-file .env.production -f docker-compose.prod.yml run --rm server ./node_modules/.bin/prisma migrate deploy
 ```
 
 ### Issue The Initial HTTPS Certificate

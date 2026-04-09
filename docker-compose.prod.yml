@@ -21,6 +21,7 @@ services:
       - "4000"
     volumes:
       - ${SERVER_UPLOADS_DIR}:/app/uploads
+      - ${SERVER_CERTS_DIR}:/app/certs:ro
     healthcheck:
       test:
         [

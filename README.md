@@ -164,6 +164,25 @@ This repository now includes a production-oriented Docker Compose setup for a si
    - `api.your-domain.com`
 4. Copy `.env.production.example` to `.env.production` and replace every placeholder value.
 5. Create the uploads directory defined by `SERVER_UPLOADS_DIR` (for example `sudo mkdir -p /srv/opsflow/uploads`).
+6. Create the certificates directory defined by `SERVER_CERTS_DIR` (for example `sudo mkdir -p /srv/opsflow/certs`).
+
+### Amazon RDS TLS Verification
+
+If you want the API to verify the RDS server certificate instead of bypassing TLS validation, download the AWS RDS CA bundle for the Region that hosts your database and mount it into the `server` container:
+
+```bash
+sudo mkdir -p /srv/opsflow/certs
+curl -fsSL https://truststore.pki.rds.amazonaws.com/ap-southeast-2/ap-southeast-2-bundle.pem -o /srv/opsflow/certs/ap-southeast-2-bundle.pem
+chmod 644 /srv/opsflow/certs/ap-southeast-2-bundle.pem
+```
+
+Then point `DATABASE_URL` at the mounted certificate path:
+
+```env
+DATABASE_URL=postgresql://opsflow:replace-with-a-strong-password@your-rds-endpoint:5432/opsflow?schema=public&sslmode=require&sslrootcert=/app/certs/ap-southeast-2-bundle.pem&sslaccept=strict
+```
+
+The production compose file mounts `SERVER_CERTS_DIR` to `/app/certs` as a read-only volume, so the same connection string works for both Prisma migrations and the running API container.
 
 ### Start The Production Stack
 

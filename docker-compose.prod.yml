@@ -22,6 +22,7 @@ services:
     volumes:
       - ${SERVER_UPLOADS_DIR}:/app/uploads
       - ${SERVER_CERTS_DIR}:/app/certs:ro
+      - ${SERVER_CERTS_DIR}:/app/prisma/certs:ro
     healthcheck:
       test:
         [

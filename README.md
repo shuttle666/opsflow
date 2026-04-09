@@ -179,10 +179,10 @@ chmod 644 /srv/opsflow/certs/ap-southeast-2-bundle.pem
 Then point `DATABASE_URL` at the mounted certificate path:
 
 ```env
-DATABASE_URL=postgresql://opsflow:replace-with-a-strong-password@your-rds-endpoint:5432/opsflow?schema=public&sslmode=require&sslrootcert=/app/certs/ap-southeast-2-bundle.pem&sslaccept=strict
+DATABASE_URL=postgresql://opsflow:replace-with-a-strong-password@your-rds-endpoint:5432/opsflow?schema=public&sslmode=require&sslrootcert=certs/ap-southeast-2-bundle.pem&sslaccept=strict
 ```
 
-The production compose file mounts `SERVER_CERTS_DIR` to `/app/certs` as a read-only volume, so the same connection string works for both Prisma migrations and the running API container.
+The production compose file mounts `SERVER_CERTS_DIR` to both `/app/certs` and `/app/prisma/certs` as read-only volumes. This keeps the certificate path valid for Prisma migrations and for the running API container.
 
 ### Start The Production Stack
 

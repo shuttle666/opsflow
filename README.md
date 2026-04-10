@@ -69,6 +69,18 @@ cp .env.example .env
 docker compose -f docker-compose.dev.yml up --build
 ```
 
+### Start In Detached Mode
+
+```bash
+docker compose -f docker-compose.dev.yml up --build -d
+```
+
+### Stop The Development Environment
+
+```bash
+docker compose -f docker-compose.dev.yml down
+```
+
 ### Useful Commands
 
 ```bash

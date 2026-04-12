@@ -32,7 +32,7 @@ jobs:
       }}
     env:
       DEPLOY_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
-      EC2_HOST: ${{ secrets.EC2_HOST }}
+      EC2_HOST: ${{ secrets.EC2 }}
       EC2_PORT: ${{ secrets.EC2_PORT }}
       EC2_USER: ${{ secrets.EC2_USER }}
       EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
@@ -45,7 +45,7 @@ jobs:
         run: |
           set -euo pipefail
           : "${DEPLOY_SHA:?DEPLOY_SHA is required}"
-          : "${EC2_HOST:?EC2_HOST secret is required}"
+          : "${EC2_HOST:?EC2 secret is required}"
           : "${EC2_USER:?EC2_USER secret is required}"
           : "${EC2_SSH_KEY:?EC2_SSH_KEY secret is required}"
           : "${DEPLOY_PATH:?DEPLOY_PATH secret is required}"

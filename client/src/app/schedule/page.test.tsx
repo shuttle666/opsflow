@@ -229,6 +229,40 @@ describe("schedule page", () => {
     expect(new Date(nextInput!.rangeStart).getTime()).toBe(new Date(firstInput!.rangeStart).getTime());
   });
 
+  it("restores a daily timeline view with day navigation", async () => {
+    const user = userEvent.setup();
+    render(<SchedulePage />);
+
+    await screen.findByText("Week view");
+    await user.click(screen.getByRole("button", { name: /^day$/i }));
+
+    expect(await screen.findByText("Day view")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Previous day" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next day" })).toBeInTheDocument();
+    expect(screen.getByText("Time")).toBeInTheDocument();
+    expect(screen.getAllByText("Assigned visit").length).toBeGreaterThan(0);
+
+    await waitFor(() => {
+      expect(getScheduleRangeRequest).toHaveBeenCalledTimes(2);
+    });
+    const dayInput = vi.mocked(getScheduleRangeRequest).mock.calls[1]?.[1];
+    const dayDuration =
+      new Date(dayInput!.rangeEnd).getTime() - new Date(dayInput!.rangeStart).getTime();
+    expect(dayDuration).toBeGreaterThan(23 * 60 * 60 * 1000);
+    expect(dayDuration).toBeLessThan(25 * 60 * 60 * 1000);
+
+    await user.click(screen.getByRole("button", { name: "Previous day" }));
+
+    await waitFor(() => {
+      expect(getScheduleRangeRequest).toHaveBeenCalledTimes(3);
+    });
+    const previousDayInput = vi.mocked(getScheduleRangeRequest).mock.calls[2]?.[1];
+    const previousDelta =
+      new Date(dayInput!.rangeStart).getTime() - new Date(previousDayInput!.rangeStart).getTime();
+    expect(previousDelta).toBeGreaterThan(23 * 60 * 60 * 1000);
+    expect(previousDelta).toBeLessThan(25 * 60 * 60 * 1000);
+  });
+
   it("switches to a month grid with selected day details", async () => {
     const user = userEvent.setup();
     render(<SchedulePage />);
@@ -267,10 +301,11 @@ describe("schedule page", () => {
 
     expect(await screen.findByText("Schedule")).toBeInTheDocument();
     expect(screen.getByText("Team schedule for dispatch planning and conflict review.")).toBeInTheDocument();
-    expect(screen.getByText("Assignee")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Assignee filter" })).toBeInTheDocument();
     expect(screen.getByText("Plan with AI")).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText("Assignee"), "user-1");
+    await user.click(screen.getByRole("button", { name: "Assignee filter" }));
+    await user.click(screen.getByRole("button", { name: "Sam Staff" }));
 
     await waitFor(() => {
       expect(getScheduleRangeRequest).toHaveBeenLastCalledWith(

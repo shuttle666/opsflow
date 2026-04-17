@@ -22,15 +22,15 @@ type StatCardProps = {
 function statToneClassName(tone: NonNullable<StatCardProps["tone"]>) {
   switch (tone) {
     case "success":
-      return "bg-emerald-50 text-emerald-600";
+      return "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/80";
     case "warning":
-      return "bg-amber-50 text-amber-600";
+      return "bg-amber-100 text-amber-700 ring-1 ring-amber-200/80";
     case "indigo":
-      return "bg-indigo-50 text-indigo-600";
+      return "bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200/80";
     case "neutral":
-      return "bg-slate-100 text-slate-500";
+      return "bg-slate-200 text-slate-600 ring-1 ring-slate-300/80";
     default:
-      return "bg-sky-50 text-sky-600";
+      return "bg-sky-100 text-sky-700 ring-1 ring-sky-200/80";
   }
 }
 

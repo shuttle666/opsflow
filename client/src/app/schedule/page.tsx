@@ -1,20 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { AppShell } from "@/components/ui/app-shell";
 import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
 import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
+import {
+  ArrowRight,
+  BellRing,
+  Briefcase,
+  Calendar,
+  Layers3,
+  ShieldCheck,
+  Users,
+} from "@/components/ui/icons";
 import { LoadingPanel } from "@/components/ui/loading-panel";
 import { StatCard } from "@/components/ui/info-cards";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
   cn,
-  inputClassName,
   primaryButtonClassName,
-  selectClassName,
+  secondaryButtonClassName,
   surfaceClassName,
+  subtleButtonClassName,
 } from "@/components/ui/styles";
 import { listMembershipsRequest } from "@/features/membership";
 import {
@@ -25,7 +34,7 @@ import { useAuthStore } from "@/store/auth-store";
 import type { MembershipListItem } from "@/types/membership";
 import type { ScheduleDayJobItem, ScheduleLane, ScheduleRangeResult } from "@/types/job";
 
-type ViewMode = "week" | "month";
+type ViewMode = "day" | "week" | "month";
 
 type Period = {
   start: Date;
@@ -39,6 +48,8 @@ type ScheduleJobWithLane = ScheduleDayJobItem & {
 };
 
 const weekDayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const hourHeight = 72;
+const dayHours = Array.from({ length: 24 }, (_, hour) => hour);
 
 function canManageSchedule(role: string | undefined) {
   return role === "OWNER" || role === "MANAGER";
@@ -109,7 +120,25 @@ function formatWeekTitle(start: Date, end: Date) {
   return `${startLabel} - ${endLabel}`;
 }
 
+function formatHourLabel(hour: number) {
+  return new Date(2026, 0, 1, hour, 0, 0).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function getPeriod(anchorDate: Date, viewMode: ViewMode): Period {
+  if (viewMode === "day") {
+    const start = startOfLocalDay(anchorDate);
+    const end = addDays(start, 1);
+    return {
+      start,
+      end,
+      days: [start],
+      title: formatLongDate(start),
+    };
+  }
+
   if (viewMode === "week") {
     const start = startOfMondayWeek(anchorDate);
     const end = addDays(start, 7);
@@ -207,7 +236,173 @@ function jobAssigneeLabel(job: ScheduleJobWithLane) {
 }
 
 function periodWord(viewMode: ViewMode) {
+  if (viewMode === "day") {
+    return "day";
+  }
   return viewMode === "week" ? "week" : "month";
+}
+
+function viewModeLabel(viewMode: ViewMode) {
+  if (viewMode === "day") {
+    return "Day view";
+  }
+  return viewMode === "week" ? "Week view" : "Month view";
+}
+
+function previousLabel(viewMode: ViewMode) {
+  if (viewMode === "day") {
+    return "Previous day";
+  }
+  return viewMode === "week" ? "Previous week" : "Previous month";
+}
+
+function nextLabel(viewMode: ViewMode) {
+  if (viewMode === "day") {
+    return "Next day";
+  }
+  return viewMode === "week" ? "Next week" : "Next month";
+}
+
+function getDayBlockMetrics(job: ScheduleDayJobItem, day: Date) {
+  if (!job.scheduledStartAt || !job.scheduledEndAt) {
+    return { top: 0, height: hourHeight };
+  }
+
+  const dayStart = startOfLocalDay(day);
+  const dayEnd = addDays(dayStart, 1);
+  const start = new Date(job.scheduledStartAt);
+  const end = new Date(job.scheduledEndAt);
+  const visibleStart = new Date(Math.max(start.getTime(), dayStart.getTime()));
+  const visibleEnd = new Date(Math.min(end.getTime(), dayEnd.getTime()));
+  const startMinutes = ((visibleStart.getTime() - dayStart.getTime()) / 60_000);
+  const endMinutes = ((visibleEnd.getTime() - dayStart.getTime()) / 60_000);
+  const clampedStart = Math.max(0, Math.min(startMinutes, 24 * 60));
+  const clampedEnd = Math.max(clampedStart + 30, Math.min(endMinutes, 24 * 60));
+
+  return {
+    top: (clampedStart / 60) * hourHeight,
+    height: Math.max(((clampedEnd - clampedStart) / 60) * hourHeight, 56),
+  };
+}
+
+function DayJobBlock({
+  day,
+  job,
+}: {
+  day: Date;
+  job: ScheduleDayJobItem;
+}) {
+  const metrics = getDayBlockMetrics(job, day);
+
+  return (
+    <Link
+      href={`/jobs/${job.id}`}
+      className={cn(
+        "absolute inset-x-2 rounded-lg border px-3 py-2 text-left shadow-sm transition hover:shadow-md",
+        job.hasConflict
+          ? "border-rose-200 bg-rose-50/90 text-rose-900"
+          : "border-cyan-100 bg-white/90 text-slate-800",
+      )}
+      style={{
+        top: `${metrics.top}px`,
+        minHeight: `${metrics.height}px`,
+      }}
+    >
+      <div className="space-y-1">
+        <div className="flex items-start justify-between gap-2">
+          <p className="line-clamp-2 text-sm font-semibold">{job.title}</p>
+          <StatusBadge kind="job" value={job.status} />
+        </div>
+        <p className="text-xs text-slate-600">{job.customer.name}</p>
+        <p className="text-xs font-medium text-slate-500">
+          {formatTimeRange(job.scheduledStartAt, job.scheduledEndAt)}
+        </p>
+        {job.hasConflict ? (
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-rose-600">
+            Conflict
+          </p>
+        ) : null}
+      </div>
+    </Link>
+  );
+}
+
+function DayView({
+  day,
+  lanes,
+  embedded = false,
+}: {
+  day: Date;
+  lanes: ScheduleLane[];
+  embedded?: boolean;
+}) {
+  return (
+    <section className={embedded ? "overflow-hidden p-0" : `${surfaceClassName} overflow-hidden p-0`}>
+      <div className="overflow-x-auto">
+        <div
+          className="grid min-w-[1080px]"
+          style={{
+            gridTemplateColumns: `88px repeat(${lanes.length}, minmax(240px, 1fr))`,
+          }}
+        >
+          <div className="border-r border-white/40 bg-white/50">
+            <div className="h-16 border-b border-white/40 px-4 py-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Time
+            </div>
+            <div className="relative" style={{ height: `${hourHeight * 24}px` }}>
+              {dayHours.map((hour) => (
+                <div
+                  key={hour}
+                  className="absolute inset-x-0 border-t border-dashed border-slate-200/80 px-4 pt-2 text-xs text-slate-400"
+                  style={{ top: `${hour * hourHeight}px` }}
+                >
+                  {formatHourLabel(hour)}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {lanes.map((lane) => (
+            <div key={lane.key} className="min-w-[240px] border-r border-white/30 last:border-r-0">
+              <div className="flex h-16 items-center justify-between border-b border-white/40 bg-white/40 px-4">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">{lane.label}</p>
+                  <p className="text-xs text-slate-500">
+                    {lane.jobs.length} job{lane.jobs.length === 1 ? "" : "s"}
+                  </p>
+                </div>
+                {lane.hasConflict ? (
+                  <span className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-rose-600">
+                    Conflict
+                  </span>
+                ) : null}
+              </div>
+
+              <div
+                className="relative bg-[linear-gradient(180deg,rgba(255,255,255,0.58)_0%,rgba(248,250,252,0.78)_100%)]"
+                style={{ height: `${hourHeight * 24}px` }}
+              >
+                {dayHours.map((hour) => (
+                  <div
+                    key={`${lane.key}-${hour}`}
+                    className="absolute inset-x-0 border-t border-dashed border-slate-200/70"
+                    style={{ top: `${hour * hourHeight}px` }}
+                  />
+                ))}
+
+                {lane.jobs
+                  .filter((job) => jobOverlapsDay(job, day))
+                  .sort(compareJobsByTime)
+                  .map((job) => (
+                    <DayJobBlock key={job.id} day={day} job={job} />
+                  ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function ScheduleJobCard({
@@ -259,14 +454,16 @@ function ScheduleJobCard({
 function WeekView({
   days,
   jobs,
+  embedded = false,
 }: {
   days: Date[];
   jobs: ScheduleJobWithLane[];
+  embedded?: boolean;
 }) {
   const today = todayLocalDate();
 
   return (
-    <section className={`${surfaceClassName} overflow-hidden p-0`}>
+    <section className={embedded ? "overflow-hidden p-0" : `${surfaceClassName} overflow-hidden p-0`}>
       <div className="overflow-x-auto">
         <div className="grid min-w-[980px] grid-cols-7">
           {days.map((day) => {
@@ -323,19 +520,27 @@ function MonthView({
   jobs,
   selectedDate,
   onSelectDate,
+  embedded = false,
 }: {
   anchorDate: Date;
   days: Date[];
   jobs: ScheduleJobWithLane[];
   selectedDate: Date;
   onSelectDate: (date: Date) => void;
+  embedded?: boolean;
 }) {
   const today = todayLocalDate();
   const selectedJobs = jobsForDay(jobs, selectedDate);
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-      <section className={`${surfaceClassName} overflow-hidden p-0`}>
+    <div className={cn("grid xl:grid-cols-[minmax(0,1fr)_360px]", embedded ? "gap-0" : "gap-6")}>
+      <section
+        className={cn(
+          embedded
+            ? "overflow-hidden p-0 xl:border-r xl:border-white/50"
+            : `${surfaceClassName} overflow-hidden p-0`,
+        )}
+      >
         <div className="grid grid-cols-7 border-b border-white/50 bg-white/45">
           {weekDayLabels.map((label) => (
             <div
@@ -405,7 +610,13 @@ function MonthView({
         </div>
       </section>
 
-      <section className={`${surfaceClassName} p-5`}>
+      <section
+        className={cn(
+          embedded
+            ? "border-t border-white/50 bg-white/32 p-5 xl:border-l-0 xl:border-t-0"
+            : `${surfaceClassName} p-5`,
+        )}
+      >
         <div className="mb-4">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
             Selected day
@@ -432,9 +643,221 @@ function MonthView({
   );
 }
 
+function CalendarToolbar({
+  period,
+  viewMode,
+  onMovePeriod,
+  onToday,
+  onViewModeChange,
+  anchorDate,
+  onDateChange,
+  allowManage,
+  isLoadingMembers,
+  memberships,
+  selectedAssigneeId,
+  onAssigneeChange,
+  datePickerRef,
+}: {
+  period: Period;
+  viewMode: ViewMode;
+  onMovePeriod: (direction: -1 | 1) => void;
+  onToday: () => void;
+  onViewModeChange: (viewMode: ViewMode) => void;
+  anchorDate: Date;
+  onDateChange: (value: string) => void;
+  allowManage: boolean;
+  isLoadingMembers: boolean;
+  memberships: MembershipListItem[];
+  selectedAssigneeId: string;
+  onAssigneeChange: (value: string) => void;
+  datePickerRef: React.RefObject<HTMLInputElement | null>;
+}) {
+  const assigneeMenuRef = useRef<HTMLDivElement>(null);
+  const [isAssigneeMenuOpen, setIsAssigneeMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isAssigneeMenuOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      if (!assigneeMenuRef.current?.contains(event.target as Node)) {
+        setIsAssigneeMenuOpen(false);
+      }
+    }
+
+    window.addEventListener("mousedown", handlePointerDown);
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, [isAssigneeMenuOpen]);
+
+  function openDatePicker() {
+    const input = datePickerRef.current;
+    if (!input) {
+      return;
+    }
+
+    const pickerInput = input as HTMLInputElement & { showPicker?: () => void };
+    if (typeof pickerInput.showPicker === "function") {
+      pickerInput.showPicker();
+      return;
+    }
+
+    input.focus();
+    input.click();
+  }
+
+  return (
+    <section className="grid gap-3 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative">
+          <input
+            ref={datePickerRef}
+            type="date"
+            value={toDateInputValue(anchorDate)}
+            onChange={(event) => onDateChange(event.target.value)}
+            className="sr-only"
+            tabIndex={-1}
+            aria-hidden="true"
+          />
+          <button
+            type="button"
+            onClick={openDatePicker}
+            className="group flex min-w-[240px] items-start gap-3 rounded-2xl border border-white/75 bg-white/88 px-4 py-3 text-left shadow-sm transition hover:bg-white"
+          >
+            <span className="mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-cyan-50 text-cyan-600">
+              <Calendar className="h-7 w-7" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                {viewModeLabel(viewMode)}
+              </span>
+              <span className="mt-1 block truncate text-lg font-bold text-slate-900">
+                {period.title}
+              </span>
+            </span>
+          </button>
+        </div>
+
+        {allowManage ? (
+          <div ref={assigneeMenuRef} className="relative">
+            <button
+              type="button"
+              aria-label="Assignee filter"
+              aria-expanded={isAssigneeMenuOpen}
+              onClick={() => setIsAssigneeMenuOpen((open) => !open)}
+              disabled={isLoadingMembers}
+              className={cn(
+                subtleButtonClassName,
+                "h-12 w-12 px-0",
+                selectedAssigneeId && "!border-cyan-300 !bg-cyan-50 !text-cyan-700",
+              )}
+            >
+              <Users className="h-7 w-7" />
+            </button>
+
+            {isAssigneeMenuOpen ? (
+              <div className="absolute left-0 top-[3.25rem] z-20 min-w-[220px] rounded-2xl border border-white/70 bg-white/95 p-2 shadow-[0_18px_38px_-24px_rgba(15,23,42,0.28)] backdrop-blur">
+                <div className="mb-1 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Assignee
+                </div>
+                <div className="space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onAssigneeChange("");
+                      setIsAssigneeMenuOpen(false);
+                    }}
+                    className={cn(
+                      "flex w-full items-center rounded-xl px-3 py-2 text-left text-sm font-medium transition",
+                      !selectedAssigneeId
+                        ? "bg-slate-900 text-white"
+                        : "text-slate-700 hover:bg-slate-50",
+                    )}
+                  >
+                    All staff
+                  </button>
+                  {memberships.map((membership) => (
+                    <button
+                      key={membership.userId}
+                      type="button"
+                      onClick={() => {
+                        onAssigneeChange(membership.userId);
+                        setIsAssigneeMenuOpen(false);
+                      }}
+                      className={cn(
+                        "flex w-full items-center rounded-xl px-3 py-2 text-left text-sm font-medium transition",
+                        selectedAssigneeId === membership.userId
+                          ? "bg-slate-900 text-white"
+                          : "text-slate-700 hover:bg-slate-50",
+                      )}
+                    >
+                      {membership.displayName}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="flex justify-center">
+        <div className="flex flex-wrap items-center gap-2">
+          {(["day", "week", "month"] as ViewMode[]).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              aria-pressed={viewMode === mode}
+              onClick={() => onViewModeChange(mode)}
+              className={cn(
+                subtleButtonClassName,
+                "capitalize",
+                viewMode === mode && "!border-slate-900 !bg-slate-900 !text-white hover:!bg-slate-800",
+              )}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex justify-start lg:justify-end">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            aria-label={previousLabel(viewMode)}
+            onClick={() => onMovePeriod(-1)}
+            className={cn(subtleButtonClassName, "h-12 w-12 px-0")}
+          >
+            <ArrowRight className="h-7 w-7 rotate-180" />
+          </button>
+          <button
+            type="button"
+            onClick={onToday}
+            className={secondaryButtonClassName}
+          >
+            Today
+          </button>
+          <button
+            type="button"
+            aria-label={nextLabel(viewMode)}
+            onClick={() => onMovePeriod(1)}
+            className={cn(subtleButtonClassName, "h-12 w-12 px-0")}
+          >
+            <ArrowRight className="h-7 w-7" />
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function SchedulePage() {
   const currentTenant = useAuthStore((state) => state.currentTenant);
   const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
+  const datePickerRef = useRef<HTMLInputElement>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [anchorDate, setAnchorDate] = useState(todayLocalDate);
   const [selectedDate, setSelectedDate] = useState(todayLocalDate);
@@ -543,7 +966,12 @@ export default function SchedulePage() {
 
   function handleMovePeriod(direction: -1 | 1) {
     setAnchorDate((current) => {
-      const next = viewMode === "week" ? addDays(current, direction * 7) : addMonths(current, direction);
+      const next =
+        viewMode === "day"
+          ? addDays(current, direction)
+          : viewMode === "week"
+            ? addDays(current, direction * 7)
+            : addMonths(current, direction);
       setSelectedDate(next);
       return next;
     });
@@ -591,17 +1019,25 @@ export default function SchedulePage() {
             description="Your current role cannot access the schedule view."
           />
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-5">
             <section className="grid gap-4 md:grid-cols-3">
               <StatCard
                 label="Scheduled jobs"
                 value={String(schedule?.totalJobs ?? 0)}
+                icon={<Briefcase className="h-[18px] w-[18px]" />}
                 meta={isStaffView ? `Assigned to you this ${currentPeriodWord}` : `Visible this ${currentPeriodWord}`}
               />
               <StatCard
                 label={isStaffView ? "Your conflicts" : "Conflict count"}
                 value={String(schedule?.conflictCount ?? 0)}
                 tone={schedule?.conflictCount ? "warning" : "success"}
+                icon={
+                  schedule?.conflictCount ? (
+                    <BellRing className="h-[18px] w-[18px]" />
+                  ) : (
+                    <ShieldCheck className="h-[18px] w-[18px]" />
+                  )
+                }
                 meta={
                   schedule?.conflictCount
                     ? isStaffView
@@ -614,132 +1050,66 @@ export default function SchedulePage() {
                 label="Visible lanes"
                 value={String(visibleLanes.length)}
                 tone="indigo"
+                icon={<Layers3 className="h-[18px] w-[18px]" />}
                 meta={isStaffView ? "Your personal schedule lane" : "Staff + unassigned"}
               />
             </section>
 
-            <section className={`${surfaceClassName} p-5`}>
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                    {viewMode === "week" ? "Week view" : "Month view"}
-                  </p>
-                  <h2 className="mt-1 text-2xl font-bold text-slate-900">{period.title}</h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {viewMode === "week" ? "Monday to Sunday" : `${period.days.length} visible days`}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleMovePeriod(-1)}
-                    className="h-10 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-                  >
-                    {viewMode === "week" ? "Previous week" : "Previous month"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleToday}
-                    className="h-10 rounded-lg border border-cyan-200 bg-cyan-50 px-4 text-sm font-semibold text-cyan-700 shadow-sm transition hover:bg-cyan-100"
-                  >
-                    Today
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleMovePeriod(1)}
-                    className="h-10 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-                  >
-                    {viewMode === "week" ? "Next week" : "Next month"}
-                  </button>
-                  <div className="flex h-10 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-                    {(["week", "month"] as ViewMode[]).map((mode) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        aria-pressed={viewMode === mode}
-                        onClick={() => handleViewModeChange(mode)}
-                        className={cn(
-                          "px-4 text-sm font-semibold capitalize transition",
-                          viewMode === mode ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50",
-                        )}
-                      >
-                        {mode}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+            <section className={`${surfaceClassName} overflow-hidden p-0`}>
+              <div className="border-b border-white/60 bg-white/38">
+                <CalendarToolbar
+                  period={period}
+                  viewMode={viewMode}
+                  onMovePeriod={handleMovePeriod}
+                  onToday={handleToday}
+                  onViewModeChange={handleViewModeChange}
+                  anchorDate={anchorDate}
+                  onDateChange={handleDateChange}
+                  allowManage={allowManage}
+                  isLoadingMembers={isLoadingMembers}
+                  memberships={memberships}
+                  selectedAssigneeId={selectedAssigneeId}
+                  onAssigneeChange={setSelectedAssigneeId}
+                  datePickerRef={datePickerRef}
+                />
               </div>
 
-              <div
-                className={cn(
-                  "mt-5 grid gap-4",
-                  allowManage ? "lg:grid-cols-[220px_220px_minmax(0,1fr)]" : "lg:grid-cols-[220px_minmax(0,1fr)]",
-                )}
-              >
-                <label className="space-y-2">
-                  <span className="text-sm font-medium text-slate-700">Jump to date</span>
-                  <input
-                    type="date"
-                    value={toDateInputValue(anchorDate)}
-                    onChange={(event) => handleDateChange(event.target.value)}
-                    className={inputClassName}
+              {error ? (
+                <div className="px-5 pt-4">
+                  <InlineErrorBanner message={error} />
+                </div>
+              ) : null}
+
+              {isLoadingSchedule ? (
+                <div className="p-5">
+                  <LoadingPanel label="Loading schedule..." />
+                </div>
+              ) : !schedule || visibleLanes.length === 0 ? (
+                <div className="p-5">
+                  <EmptyStatePanel
+                    title="No schedule lanes available"
+                    description={
+                      allowManage
+                        ? "Add active staff members or remove the current assignee filter."
+                        : `No scheduled jobs are assigned to you for this ${currentPeriodWord}.`
+                    }
                   />
-                </label>
-
-                {allowManage ? (
-                  <label className="space-y-2">
-                    <span className="text-sm font-medium text-slate-700">Assignee</span>
-                    <select
-                      value={selectedAssigneeId}
-                      onChange={(event) => setSelectedAssigneeId(event.target.value)}
-                      disabled={isLoadingMembers}
-                      className={selectClassName}
-                    >
-                      <option value="">All staff</option>
-                      {memberships.map((membership) => (
-                        <option key={membership.userId} value={membership.userId}>
-                          {membership.displayName}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : null}
-
-                <div className="flex items-end">
-                  <p className="text-sm text-slate-500">
-                    {allowManage
-                      ? `Review team load, spot overlaps, and plan the selected ${currentPeriodWord}.`
-                      : `Review your assigned work for the selected ${currentPeriodWord}.`}
-                  </p>
                 </div>
-              </div>
-
-              {error ? <div className="mt-4"><InlineErrorBanner message={error} /></div> : null}
+              ) : viewMode === "day" ? (
+                <DayView day={period.start} lanes={visibleLanes} embedded />
+              ) : viewMode === "week" ? (
+                <WeekView days={period.days} jobs={visibleJobs} embedded />
+              ) : (
+                <MonthView
+                  anchorDate={anchorDate}
+                  days={period.days}
+                  jobs={visibleJobs}
+                  selectedDate={selectedDate}
+                  onSelectDate={setSelectedDate}
+                  embedded
+                />
+              )}
             </section>
-
-            {isLoadingSchedule ? (
-              <LoadingPanel label="Loading schedule..." />
-            ) : !schedule || visibleLanes.length === 0 ? (
-              <EmptyStatePanel
-                title="No schedule lanes available"
-                description={
-                  allowManage
-                    ? "Add active staff members or remove the current assignee filter."
-                    : `No scheduled jobs are assigned to you for this ${currentPeriodWord}.`
-                }
-              />
-            ) : viewMode === "week" ? (
-              <WeekView days={period.days} jobs={visibleJobs} />
-            ) : (
-              <MonthView
-                anchorDate={anchorDate}
-                days={period.days}
-                jobs={visibleJobs}
-                selectedDate={selectedDate}
-                onSelectDate={setSelectedDate}
-              />
-            )}
           </div>
         )}
       </AuthGuard>

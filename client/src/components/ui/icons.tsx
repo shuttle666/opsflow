@@ -148,6 +148,16 @@ export function CheckCircle2(props: IconProps) {
   );
 }
 
+export function CircleX(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m15 9-6 6" />
+      <path d="m9 9 6 6" />
+    </IconBase>
+  );
+}
+
 export function FileClock(props: IconProps) {
   return (
     <IconBase {...props}>

@@ -12,13 +12,23 @@ describe("job status state machine", () => {
     expect(canTransition(JobStatus.SCHEDULED, JobStatus.IN_PROGRESS)).toBe(
       true,
     );
-    expect(canTransition(JobStatus.IN_PROGRESS, JobStatus.COMPLETED)).toBe(
+    expect(canTransition(JobStatus.IN_PROGRESS, JobStatus.PENDING_REVIEW)).toBe(
+      true,
+    );
+    expect(canTransition(JobStatus.PENDING_REVIEW, JobStatus.COMPLETED)).toBe(
+      true,
+    );
+    expect(canTransition(JobStatus.PENDING_REVIEW, JobStatus.IN_PROGRESS)).toBe(
+      true,
+    );
+    expect(canTransition(JobStatus.PENDING_REVIEW, JobStatus.CANCELLED)).toBe(
       true,
     );
   });
 
   it("rejects invalid transition edges", () => {
     expect(canTransition(JobStatus.NEW, JobStatus.COMPLETED)).toBe(false);
+    expect(canTransition(JobStatus.IN_PROGRESS, JobStatus.COMPLETED)).toBe(false);
     expect(canTransition(JobStatus.COMPLETED, JobStatus.NEW)).toBe(false);
   });
 
@@ -28,4 +38,3 @@ describe("job status state machine", () => {
     ).toThrowError(JobDomainError);
   });
 });
-

@@ -1,4 +1,14 @@
-export type JobStatus = "NEW" | "SCHEDULED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+export type JobStatus =
+  | "NEW"
+  | "SCHEDULED"
+  | "IN_PROGRESS"
+  | "PENDING_REVIEW"
+  | "COMPLETED"
+  | "CANCELLED";
+
+export type JobCompletionReviewStatus = "PENDING" | "APPROVED" | "RETURNED";
+
+export type JobCompletionAiStatus = "PENDING" | "APPROVED" | "NEEDS_REVIEW" | "FAILED";
 
 export type JobEvidenceKind =
   | "SITE_PHOTO"
@@ -96,6 +106,44 @@ export type JobStatusTransitionResult = {
   allowedTransitions: JobStatus[];
 };
 
+export type JobCompletionReviewItem = {
+  id: string;
+  jobId: string;
+  completionNote: string;
+  status: JobCompletionReviewStatus;
+  submittedAt: string;
+  submittedBy: {
+    id: string;
+    displayName: string;
+    email: string;
+  };
+  reviewedAt: string | null;
+  reviewedBy?: {
+    id: string;
+    displayName: string;
+    email: string;
+  };
+  reviewNote: string | null;
+  aiStatus: JobCompletionAiStatus | null;
+  aiSummary: string | null;
+  aiFindings: unknown | null;
+};
+
+export type JobCompletionReviewMutationResult = {
+  job: JobDetail;
+  review: JobCompletionReviewItem;
+  historyEntry: JobHistoryItem;
+  allowedTransitions: JobStatus[];
+};
+
+export type SubmitJobCompletionReviewRequest = {
+  completionNote: string;
+};
+
+export type ReturnJobCompletionReviewRequest = {
+  reviewNote: string;
+};
+
 export type JobEvidenceItem = {
   id: string;
   kind: JobEvidenceKind;
@@ -157,6 +205,14 @@ export type ScheduleLane = {
 
 export type ScheduleDayResult = {
   date: string;
+  rangeStart: string;
+  rangeEnd: string;
+  lanes: ScheduleLane[];
+  totalJobs: number;
+  conflictCount: number;
+};
+
+export type ScheduleRangeResult = {
   rangeStart: string;
   rangeEnd: string;
   lanes: ScheduleLane[];

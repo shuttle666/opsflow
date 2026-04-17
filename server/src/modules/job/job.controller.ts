@@ -7,17 +7,28 @@ import { asyncHandler } from "../../utils/async-handler";
 import {
   assignJobSchema,
   createJobSchema,
+  jobCompletionReviewIdParamSchema,
   jobIdParamSchema,
   jobListQuerySchema,
+  returnJobCompletionReviewSchema,
   scheduleDayQuerySchema,
+  scheduleRangeQuerySchema,
+  submitJobCompletionReviewSchema,
   transitionJobStatusSchema,
   updateJobSchema,
 } from "./job-schemas";
+import {
+  approveJobCompletionReview,
+  getLatestJobCompletionReview,
+  returnJobCompletionReview,
+  submitJobCompletionReview,
+} from "./job-completion-review.service";
 import {
   assignJob,
   checkScheduleConflicts,
   createJob,
   getScheduleDay,
+  getScheduleRange,
   getJobDetail,
   getJobHistory,
   listJobs,
@@ -104,6 +115,81 @@ export const getJobHistoryHandler: RequestHandler = asyncHandler(async (req, res
   });
 });
 
+export const getLatestJobCompletionReviewHandler: RequestHandler = asyncHandler(async (req, res) => {
+  if (!req.auth) {
+    throw new ApiError(401, "Authentication is required.");
+  }
+
+  const { jobId } = jobIdParamSchema.parse(req.params);
+  const result = await getLatestJobCompletionReview(req.auth, jobId);
+
+  sendSuccess(res, {
+    message: "Completion review loaded.",
+    data: result,
+  });
+});
+
+export const submitJobCompletionReviewHandler: RequestHandler = asyncHandler(async (req, res) => {
+  if (!req.auth) {
+    throw new ApiError(401, "Authentication is required.");
+  }
+
+  const { jobId } = jobIdParamSchema.parse(req.params);
+  const input = submitJobCompletionReviewSchema.parse(req.body);
+  const result = await submitJobCompletionReview(
+    req.auth,
+    jobId,
+    input,
+    getRequestMetadata(req),
+  );
+
+  sendSuccess(res, {
+    statusCode: 201,
+    message: "Completion submitted for review.",
+    data: result,
+  });
+});
+
+export const approveJobCompletionReviewHandler: RequestHandler = asyncHandler(async (req, res) => {
+  if (!req.auth) {
+    throw new ApiError(401, "Authentication is required.");
+  }
+
+  const { jobId, reviewId } = jobCompletionReviewIdParamSchema.parse(req.params);
+  const result = await approveJobCompletionReview(
+    req.auth,
+    jobId,
+    reviewId,
+    getRequestMetadata(req),
+  );
+
+  sendSuccess(res, {
+    message: "Completion approved.",
+    data: result,
+  });
+});
+
+export const returnJobCompletionReviewHandler: RequestHandler = asyncHandler(async (req, res) => {
+  if (!req.auth) {
+    throw new ApiError(401, "Authentication is required.");
+  }
+
+  const { jobId, reviewId } = jobCompletionReviewIdParamSchema.parse(req.params);
+  const input = returnJobCompletionReviewSchema.parse(req.body);
+  const result = await returnJobCompletionReview(
+    req.auth,
+    jobId,
+    reviewId,
+    input,
+    getRequestMetadata(req),
+  );
+
+  sendSuccess(res, {
+    message: "Completion returned for rework.",
+    data: result,
+  });
+});
+
 export const getScheduleDayHandler: RequestHandler = asyncHandler(async (req, res) => {
   if (!req.auth) {
     throw new ApiError(401, "Authentication is required.");
@@ -113,6 +199,20 @@ export const getScheduleDayHandler: RequestHandler = asyncHandler(async (req, re
   const result = await getScheduleDay(req.auth, {
     ...query,
   });
+
+  sendSuccess(res, {
+    message: "Schedule loaded.",
+    data: result,
+  });
+});
+
+export const getScheduleRangeHandler: RequestHandler = asyncHandler(async (req, res) => {
+  if (!req.auth) {
+    throw new ApiError(401, "Authentication is required.");
+  }
+
+  const query = scheduleRangeQuerySchema.parse(req.query);
+  const result = await getScheduleRange(req.auth, query);
 
   sendSuccess(res, {
     message: "Schedule loaded.",

@@ -44,9 +44,25 @@ export const jobIdParamSchema = z.object({
   jobId: z.uuid(),
 });
 
+export const jobCompletionReviewIdParamSchema = jobIdParamSchema.extend({
+  reviewId: z.uuid(),
+});
+
 export const assignJobSchema = z
   .object({
     membershipId: z.uuid(),
+  })
+  .strict();
+
+export const submitJobCompletionReviewSchema = z
+  .object({
+    completionNote: z.string().trim().min(1, "Completion note is required.").max(5000),
+  })
+  .strict();
+
+export const returnJobCompletionReviewSchema = z
+  .object({
+    reviewNote: z.string().trim().min(1, "Return note is required.").max(5000),
   })
   .strict();
 
@@ -93,10 +109,34 @@ export const scheduleDayQuerySchema = z
   })
   .strict();
 
+export const scheduleRangeQuerySchema = z
+  .object({
+    rangeStart: z.string().trim().datetime({ offset: true }),
+    rangeEnd: z.string().trim().datetime({ offset: true }),
+    assigneeId: z.uuid().optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const rangeStart = new Date(value.rangeStart);
+    const rangeEnd = new Date(value.rangeEnd);
+
+    if (rangeEnd <= rangeStart) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["rangeEnd"],
+        message: "Range end must be after range start.",
+      });
+    }
+  });
+
 export type CreateJobInput = z.infer<typeof createJobSchema>;
 export type UpdateJobInput = z.infer<typeof updateJobSchema>;
 export type JobIdParamInput = z.infer<typeof jobIdParamSchema>;
+export type JobCompletionReviewIdParamInput = z.infer<typeof jobCompletionReviewIdParamSchema>;
 export type AssignJobInput = z.infer<typeof assignJobSchema>;
+export type SubmitJobCompletionReviewInput = z.infer<typeof submitJobCompletionReviewSchema>;
+export type ReturnJobCompletionReviewInput = z.infer<typeof returnJobCompletionReviewSchema>;
 export type TransitionJobStatusInput = z.infer<typeof transitionJobStatusSchema>;
 export type JobListQueryInput = z.infer<typeof jobListQuerySchema>;
 export type ScheduleDayQueryInput = z.infer<typeof scheduleDayQuerySchema>;
+export type ScheduleRangeQueryInput = z.infer<typeof scheduleRangeQuerySchema>;

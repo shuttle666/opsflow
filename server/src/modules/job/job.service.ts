@@ -13,10 +13,11 @@ import type {
   CreateJobInput,
   JobListQueryInput,
   ScheduleDayQueryInput,
+  ScheduleRangeQueryInput,
   TransitionJobStatusInput,
   UpdateJobInput,
 } from "./job-schemas";
-import { canTransition } from "./job-status-machine";
+import { getAllowedTransitions } from "./job-status-machine";
 import { transitionJobStatus } from "./job-status.service";
 
 type JobCustomerSummary = {
@@ -44,7 +45,7 @@ type JobListItem = JobTiming & {
   assignedToName?: string;
 };
 
-type JobDetail = JobTiming & {
+export type JobDetail = JobTiming & {
   id: string;
   title: string;
   description: string | null;
@@ -123,13 +124,16 @@ export type ScheduleLane = {
   hasConflict: boolean;
 };
 
-export type ScheduleDayResult = {
-  date: string;
+export type ScheduleRangeResult = {
   rangeStart: Date;
   rangeEnd: Date;
   lanes: ScheduleLane[];
   totalJobs: number;
   conflictCount: number;
+};
+
+export type ScheduleDayResult = ScheduleRangeResult & {
+  date: string;
 };
 
 export type ScheduleConflictItem = {
@@ -153,7 +157,11 @@ const activeSchedulingStatuses = [
   JobStatus.NEW,
   JobStatus.SCHEDULED,
   JobStatus.IN_PROGRESS,
+  JobStatus.PENDING_REVIEW,
 ] satisfies JobStatus[];
+
+// A 42-local-day calendar grid can be slightly longer in UTC across DST.
+const maxScheduleRangeMs = 42 * 24 * 60 * 60 * 1000 + 14 * 60 * 60 * 1000;
 
 function normalizeOptionalString(value?: string) {
   const trimmed = value?.trim();
@@ -189,10 +197,6 @@ function normalizeScheduledRange(input: {
     scheduledStartAt,
     scheduledEndAt,
   };
-}
-
-function getAllowedTransitions(from: JobStatus) {
-  return Object.values(JobStatus).filter((candidate) => canTransition(from, candidate));
 }
 
 function buildOverlapRangeWhere(input: {
@@ -744,12 +748,49 @@ export async function getScheduleDay(
   auth: AuthContext,
   query: ScheduleDayQueryInput & { timezoneOffsetMinutes?: number },
 ): Promise<ScheduleDayResult> {
-  const effectiveAssigneeId =
-    auth.role === MembershipRole.STAFF ? auth.userId : query.assigneeId;
   const { start, end } = getScheduleWindow(
     query.date,
     query.timezoneOffsetMinutes ?? 0,
   );
+
+  const range = await loadScheduleRange(auth, {
+    rangeStart: start,
+    rangeEnd: end,
+    assigneeId: query.assigneeId,
+  });
+
+  return {
+    date: query.date,
+    ...range,
+  };
+}
+
+function assertValidScheduleRange(rangeStart: Date, rangeEnd: Date) {
+  if (Number.isNaN(rangeStart.getTime()) || Number.isNaN(rangeEnd.getTime())) {
+    throw new ApiError(400, "Invalid schedule range.");
+  }
+
+  if (rangeEnd <= rangeStart) {
+    throw new ApiError(400, "Range end must be after range start.");
+  }
+
+  if (rangeEnd.getTime() - rangeStart.getTime() > maxScheduleRangeMs) {
+    throw new ApiError(400, "Schedule range cannot exceed 42 days.");
+  }
+}
+
+async function loadScheduleRange(
+  auth: AuthContext,
+  input: {
+    rangeStart: Date;
+    rangeEnd: Date;
+    assigneeId?: string;
+  },
+): Promise<ScheduleRangeResult> {
+  assertValidScheduleRange(input.rangeStart, input.rangeEnd);
+
+  const effectiveAssigneeId =
+    auth.role === MembershipRole.STAFF ? auth.userId : input.assigneeId;
 
   const [memberships, jobs] = await prisma.$transaction([
     prisma.membership.findMany({
@@ -780,10 +821,10 @@ export async function getScheduleDay(
       where: {
         tenantId: auth.tenantId,
         scheduledStartAt: {
-          lt: end,
+          lt: input.rangeEnd,
         },
         scheduledEndAt: {
-          gt: start,
+          gt: input.rangeStart,
         },
         ...(effectiveAssigneeId ? { assignedToId: effectiveAssigneeId } : {}),
       },
@@ -862,13 +903,23 @@ export async function getScheduleDay(
   }
 
   return {
-    date: query.date,
-    rangeStart: start,
-    rangeEnd: end,
+    rangeStart: input.rangeStart,
+    rangeEnd: input.rangeEnd,
     lanes,
     totalJobs: conflictApplied.jobs.length,
     conflictCount: conflictApplied.conflictCount,
   };
+}
+
+export async function getScheduleRange(
+  auth: AuthContext,
+  query: ScheduleRangeQueryInput,
+): Promise<ScheduleRangeResult> {
+  return loadScheduleRange(auth, {
+    rangeStart: new Date(query.rangeStart),
+    rangeEnd: new Date(query.rangeEnd),
+    assigneeId: query.assigneeId,
+  });
 }
 
 export async function checkScheduleConflicts(

@@ -3,6 +3,8 @@ import type { PaginationMeta } from "@/types/customer";
 import type {
   AssignJobRequest,
   CreateJobInput,
+  JobCompletionReviewItem,
+  JobCompletionReviewMutationResult,
   JobDetail,
   JobEvidenceItem,
   JobHistoryResult,
@@ -10,8 +12,11 @@ import type {
   JobListQuery,
   ScheduleConflictCheckResult,
   ScheduleDayResult,
+  ScheduleRangeResult,
   JobStatusTransitionRequest,
   JobStatusTransitionResult,
+  ReturnJobCompletionReviewRequest,
+  SubmitJobCompletionReviewRequest,
   UploadJobEvidenceInput,
   UpdateJobInput,
 } from "@/types/job";
@@ -205,6 +210,69 @@ export async function transitionJobStatusRequest(
   return requireData(response, "Job status transition response is missing payload.");
 }
 
+export async function getLatestJobCompletionReviewRequest(
+  accessToken: string,
+  jobId: string,
+) {
+  const response = await apiClient.get<ApiSuccessResponse<JobCompletionReviewItem | null>>(
+    `/jobs/${jobId}/completion-review`,
+    {
+      headers: authHeader(accessToken),
+    },
+  );
+
+  return requireData(response, "Completion review response is missing payload.");
+}
+
+export async function submitJobCompletionReviewRequest(
+  accessToken: string,
+  jobId: string,
+  input: SubmitJobCompletionReviewRequest,
+) {
+  const response = await apiClient.post<ApiSuccessResponse<JobCompletionReviewMutationResult>>(
+    `/jobs/${jobId}/completion-review`,
+    input,
+    {
+      headers: authHeader(accessToken),
+    },
+  );
+
+  return requireData(response, "Submit completion review response is missing payload.");
+}
+
+export async function approveJobCompletionReviewRequest(
+  accessToken: string,
+  jobId: string,
+  reviewId: string,
+) {
+  const response = await apiClient.post<ApiSuccessResponse<JobCompletionReviewMutationResult>>(
+    `/jobs/${jobId}/completion-review/${reviewId}/approve`,
+    undefined,
+    {
+      headers: authHeader(accessToken),
+    },
+  );
+
+  return requireData(response, "Approve completion review response is missing payload.");
+}
+
+export async function returnJobCompletionReviewRequest(
+  accessToken: string,
+  jobId: string,
+  reviewId: string,
+  input: ReturnJobCompletionReviewRequest,
+) {
+  const response = await apiClient.post<ApiSuccessResponse<JobCompletionReviewMutationResult>>(
+    `/jobs/${jobId}/completion-review/${reviewId}/return`,
+    input,
+    {
+      headers: authHeader(accessToken),
+    },
+  );
+
+  return requireData(response, "Return completion review response is missing payload.");
+}
+
 export async function listJobEvidenceRequest(accessToken: string, jobId: string) {
   const response = await apiClient.get<ApiSuccessResponse<JobEvidenceItem[]>>(
     `/jobs/${jobId}/evidence`,
@@ -287,6 +355,31 @@ export async function getScheduleDayRequest(
   );
 
   return requireData(response, "Schedule day response is missing payload.");
+}
+
+export async function getScheduleRangeRequest(
+  accessToken: string,
+  input: {
+    rangeStart: string;
+    rangeEnd: string;
+    assigneeId?: string;
+  },
+) {
+  const params = new URLSearchParams();
+  params.set("rangeStart", input.rangeStart);
+  params.set("rangeEnd", input.rangeEnd);
+  if (input.assigneeId) {
+    params.set("assigneeId", input.assigneeId);
+  }
+
+  const response = await apiClient.get<ApiSuccessResponse<ScheduleRangeResult>>(
+    `/jobs/schedule/range?${params.toString()}`,
+    {
+      headers: authHeader(accessToken),
+    },
+  );
+
+  return requireData(response, "Schedule range response is missing payload.");
 }
 
 export async function checkScheduleConflictsRequest(

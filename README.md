@@ -44,6 +44,7 @@ The final action still requires user confirmation, so AI stays inside a controll
 - State and Validation: Zustand, TanStack Query, React Hook Form, Zod
 - AI: Anthropic SDK, SSE streaming responses
 - Infrastructure: AWS EC2, Amazon RDS, Docker Compose, Nginx, Certbot
+- CI/CD: GitHub Actions, SSH-based production deployment, health checks, rollback support
 
 ## Deployment
 

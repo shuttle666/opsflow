@@ -1,8 +1,9 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import SchedulePage from "@/app/schedule/page";
-import { getScheduleDayRequest } from "@/features/job";
+import { getScheduleRangeRequest } from "@/features/job";
 import { listMembershipsRequest } from "@/features/membership";
 import { useAuthStore } from "@/store/auth-store";
 
@@ -51,7 +52,7 @@ vi.mock("@/features/job", async () => {
   const actual = await vi.importActual<typeof import("@/features/job")>("@/features/job");
   return {
     ...actual,
-    getScheduleDayRequest: vi.fn(),
+    getScheduleRangeRequest: vi.fn(),
   };
 });
 
@@ -59,46 +60,92 @@ vi.mock("@/features/membership", () => ({
   listMembershipsRequest: vi.fn(),
 }));
 
-const scheduleResult = {
-  date: "2026-04-04",
-  rangeStart: "2026-04-03T13:30:00.000Z",
-  rangeEnd: "2026-04-04T13:30:00.000Z",
-  totalJobs: 1,
-  conflictCount: 0,
-  lanes: [
-    {
-      key: "user-1",
-      label: "Sam Staff",
-      membershipId: "membership-1",
-      userId: "user-1",
-      hasConflict: false,
-      jobs: [
-        {
-          id: "job-1",
-          title: "Assigned visit",
-          status: "SCHEDULED" as const,
-          scheduledStartAt: "2026-04-04T00:30:00.000Z",
-          scheduledEndAt: "2026-04-04T01:30:00.000Z",
-          hasConflict: false,
-          customer: {
-            id: "customer-1",
-            name: "Noah Thompson",
+const dayMs = 24 * 60 * 60 * 1000;
+
+function dateTodayAt(hour: number) {
+  const date = new Date();
+  date.setHours(hour, 0, 0, 0);
+  return date.toISOString();
+}
+
+function createScheduleResult() {
+  return {
+    rangeStart: dateTodayAt(0),
+    rangeEnd: dateTodayAt(23),
+    totalJobs: 2,
+    conflictCount: 1,
+    lanes: [
+      {
+        key: "user-1",
+        label: "Sam Staff",
+        membershipId: "membership-1",
+        userId: "user-1",
+        hasConflict: true,
+        jobs: [
+          {
+            id: "job-1",
+            title: "Assigned visit",
+            status: "SCHEDULED" as const,
+            scheduledStartAt: dateTodayAt(9),
+            scheduledEndAt: dateTodayAt(10),
+            hasConflict: false,
+            customer: {
+              id: "customer-1",
+              name: "Noah Thompson",
+            },
+            assignedTo: {
+              id: "user-1",
+              displayName: "Sam Staff",
+              email: "sam@acme.example",
+            },
           },
-          assignedTo: {
-            id: "user-1",
-            displayName: "Sam Staff",
-            email: "sam@acme.example",
+          {
+            id: "job-2",
+            title: "Conflict visit",
+            status: "SCHEDULED" as const,
+            scheduledStartAt: dateTodayAt(9),
+            scheduledEndAt: dateTodayAt(11),
+            hasConflict: true,
+            customer: {
+              id: "customer-2",
+              name: "Olivia Davis",
+            },
+            assignedTo: {
+              id: "user-1",
+              displayName: "Sam Staff",
+              email: "sam@acme.example",
+            },
           },
-        },
-      ],
-    },
-  ],
-};
+        ],
+      },
+      {
+        key: "unassigned",
+        label: "Unassigned",
+        hasConflict: false,
+        jobs: [],
+      },
+    ],
+  };
+}
 
 describe("schedule page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(getScheduleDayRequest).mockResolvedValue(scheduleResult);
+    vi.mocked(getScheduleRangeRequest).mockResolvedValue(createScheduleResult());
+    vi.mocked(listMembershipsRequest).mockResolvedValue({
+      items: [
+        {
+          id: "membership-1",
+          userId: "user-1",
+          displayName: "Sam Staff",
+          email: "sam@acme.example",
+          role: "STAFF",
+          status: "ACTIVE",
+          createdAt: "2026-03-20T00:00:00.000Z",
+        },
+      ],
+      pagination: { page: 1, pageSize: 50, total: 1, totalPages: 1 },
+    });
     useAuthStore.setState({
       status: "authenticated",
       user: {
@@ -120,43 +167,93 @@ describe("schedule page", () => {
     });
   });
 
-  it("shows a read-only personal schedule for staff", async () => {
+  it("defaults to a read-only personal week schedule for staff", async () => {
     render(<SchedulePage />);
 
     expect(await screen.findByText("My Schedule")).toBeInTheDocument();
-    expect(screen.getByText("Read-only view of your assigned jobs for the selected day.")).toBeInTheDocument();
-    expect(screen.getByText("Assigned visit")).toBeInTheDocument();
+    expect(screen.getByText("Your assigned jobs across the selected period.")).toBeInTheDocument();
+    expect(screen.getByText("Week view")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Previous week" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Today" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next week" })).toBeInTheDocument();
+    expect(screen.getAllByText("Assigned visit").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Conflict").length).toBeGreaterThan(0);
     expect(screen.queryByText("Assignee")).not.toBeInTheDocument();
     expect(screen.queryByText("Plan with AI")).not.toBeInTheDocument();
     expect(listMembershipsRequest).not.toHaveBeenCalled();
 
     await waitFor(() => {
-      expect(getScheduleDayRequest).toHaveBeenCalledWith(
+      expect(getScheduleRangeRequest).toHaveBeenCalledWith(
         "access-token",
         expect.objectContaining({
-          date: expect.any(String),
-          timezoneOffsetMinutes: expect.any(Number),
+          rangeStart: expect.any(String),
+          rangeEnd: expect.any(String),
         }),
       );
     });
+
+    const requestInput = vi.mocked(getScheduleRangeRequest).mock.calls[0]?.[1];
+    expect(requestInput?.assigneeId).toBeUndefined();
+    const weekDuration =
+      new Date(requestInput!.rangeEnd).getTime() - new Date(requestInput!.rangeStart).getTime();
+    expect(weekDuration).toBeGreaterThan(6 * dayMs);
+    expect(weekDuration).toBeLessThan(8 * dayMs);
   });
 
-  it("shows team controls for managers", async () => {
-    vi.mocked(listMembershipsRequest).mockResolvedValue({
-      items: [
-        {
-          id: "membership-1",
-          userId: "user-1",
-          displayName: "Sam Staff",
-          email: "sam@acme.example",
-          role: "STAFF",
-          status: "ACTIVE",
-          createdAt: "2026-03-20T00:00:00.000Z",
-        },
-      ],
-      pagination: { page: 1, pageSize: 50, total: 1, totalPages: 1 },
+  it("moves by one week with previous and next buttons", async () => {
+    const user = userEvent.setup();
+    render(<SchedulePage />);
+
+    await waitFor(() => {
+      expect(getScheduleRangeRequest).toHaveBeenCalledTimes(1);
     });
 
+    const firstInput = vi.mocked(getScheduleRangeRequest).mock.calls[0]?.[1];
+    await user.click(screen.getByRole("button", { name: "Previous week" }));
+
+    await waitFor(() => {
+      expect(getScheduleRangeRequest).toHaveBeenCalledTimes(2);
+    });
+    const previousInput = vi.mocked(getScheduleRangeRequest).mock.calls[1]?.[1];
+    const previousDelta =
+      new Date(firstInput!.rangeStart).getTime() - new Date(previousInput!.rangeStart).getTime();
+    expect(previousDelta).toBeGreaterThan(6 * dayMs);
+    expect(previousDelta).toBeLessThan(8 * dayMs);
+
+    await user.click(screen.getByRole("button", { name: "Next week" }));
+
+    await waitFor(() => {
+      expect(getScheduleRangeRequest).toHaveBeenCalledTimes(3);
+    });
+    const nextInput = vi.mocked(getScheduleRangeRequest).mock.calls[2]?.[1];
+    expect(new Date(nextInput!.rangeStart).getTime()).toBe(new Date(firstInput!.rangeStart).getTime());
+  });
+
+  it("switches to a month grid with selected day details", async () => {
+    const user = userEvent.setup();
+    render(<SchedulePage />);
+
+    await screen.findByText("Week view");
+    await user.click(screen.getByRole("button", { name: /^month$/i }));
+
+    expect(await screen.findByText("Month view")).toBeInTheDocument();
+    expect(screen.getByText("Selected day")).toBeInTheDocument();
+    expect(screen.getAllByText("Assigned visit").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Conflict visit").length).toBeGreaterThan(0);
+
+    await waitFor(() => {
+      expect(getScheduleRangeRequest).toHaveBeenCalledTimes(2);
+    });
+    const monthInput = vi.mocked(getScheduleRangeRequest).mock.calls[1]?.[1];
+    const monthDays =
+      (new Date(monthInput!.rangeEnd).getTime() - new Date(monthInput!.rangeStart).getTime()) /
+      dayMs;
+    expect(monthDays).toBeGreaterThanOrEqual(28);
+    expect(monthDays).toBeLessThanOrEqual(42);
+  });
+
+  it("shows team controls for managers and sends assignee filters", async () => {
+    const user = userEvent.setup();
     useAuthStore.setState({
       currentTenant: {
         tenantId: "tenant-1",
@@ -169,8 +266,19 @@ describe("schedule page", () => {
     render(<SchedulePage />);
 
     expect(await screen.findByText("Schedule")).toBeInTheDocument();
-    expect(screen.getByText("Team day view for dispatch planning and conflict review.")).toBeInTheDocument();
+    expect(screen.getByText("Team schedule for dispatch planning and conflict review.")).toBeInTheDocument();
     expect(screen.getByText("Assignee")).toBeInTheDocument();
     expect(screen.getByText("Plan with AI")).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Assignee"), "user-1");
+
+    await waitFor(() => {
+      expect(getScheduleRangeRequest).toHaveBeenLastCalledWith(
+        "access-token",
+        expect.objectContaining({
+          assigneeId: "user-1",
+        }),
+      );
+    });
   });
 });

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { JobEvidencePanel } from "@/components/job/job-evidence-panel";
 import { JobAssignmentCard } from "@/components/job/job-assignment-card";
+import { JobCompletionReviewCard } from "@/components/job/job-completion-review-card";
 import { WorkflowTimelineCard } from "@/components/job/workflow-timeline-card";
 import { AppShell } from "@/components/ui/app-shell";
 import { DetailLayout } from "@/components/ui/detail-layout";
@@ -17,9 +18,13 @@ import { secondaryButtonClassName } from "@/components/ui/styles";
 import {
   deleteJobEvidenceRequest,
   downloadJobEvidenceRequest,
+  approveJobCompletionReviewRequest,
+  getLatestJobCompletionReviewRequest,
   getJobDetailRequest,
   getJobHistoryRequest,
   listJobEvidenceRequest,
+  returnJobCompletionReviewRequest,
+  submitJobCompletionReviewRequest,
   transitionJobStatusRequest,
   uploadJobEvidenceRequest,
 } from "@/features/job/job-api";
@@ -27,6 +32,8 @@ import { formatDateTime, formatScheduleRange } from "@/features/job";
 import { useAuthStore } from "@/store/auth-store";
 import type {
   JobDetail,
+  JobCompletionReviewItem,
+  JobCompletionReviewMutationResult,
   JobEvidenceItem,
   JobHistoryItem,
   JobHistoryResult,
@@ -50,6 +57,8 @@ function formatStatusLabel(status: JobStatus) {
   switch (status) {
     case "IN_PROGRESS":
       return "In progress";
+    case "PENDING_REVIEW":
+      return "Pending review";
     default:
       return status.charAt(0) + status.slice(1).toLowerCase();
   }
@@ -69,60 +78,127 @@ function formatHistoryDescription(entry?: JobHistoryItem, job?: JobDetail) {
 }
 
 function getTimelineItems(job: JobDetail, history: JobHistoryItem[]): TimelineItemView[] {
-  const allStatuses = [
+  const normalStatuses = [
     { status: "NEW", label: "New" },
     { status: "SCHEDULED", label: "Scheduled" },
     { status: "IN_PROGRESS", label: "In progress" },
+    { status: "PENDING_REVIEW", label: "Pending review" },
     { status: "COMPLETED", label: "Completed" },
-    { status: "CANCELLED", label: "Cancelled" },
-  ] as const satisfies Array<{ status: JobStatus; label: string }>;
+  ] as const satisfies Array<{ status: Exclude<JobStatus, "CANCELLED">; label: string }>;
+  const cancelledStatus = { status: "CANCELLED", label: "Cancelled" } as const satisfies {
+    status: JobStatus;
+    label: string;
+  };
 
-  const currentIndex = allStatuses.findIndex((item) => item.status === job.status);
   const historyByStatus = new Map(history.map((item) => [item.toStatus, item]));
+  const cancellationHistory = historyByStatus.get("CANCELLED");
 
-  return allStatuses.map((item, index) => ({
-    id: item.status,
-    label: item.label,
-    status: item.status,
-    timestamp:
-      item.status === "NEW"
-        ? formatDateTime(job.createdAt)
-        : formatDateTime(historyByStatus.get(item.status)?.changedAt ?? null),
-    description:
-      item.status === "NEW"
-        ? formatHistoryDescription(undefined, job)
-        : formatHistoryDescription(historyByStatus.get(item.status)),
-    state:
-      index < currentIndex
-        ? "completed"
-        : index === currentIndex
-          ? "current"
+  function buildTimelineItem(
+    item: { status: JobStatus; label: string },
+    state: TimelineItemView["state"],
+    timestampOverride?: string | null,
+  ): TimelineItemView {
+    const historyEntry = historyByStatus.get(item.status);
+
+    return {
+      id: item.status,
+      label: item.label,
+      status: item.status,
+      timestamp:
+        item.status === "NEW"
+          ? formatDateTime(job.createdAt)
+          : formatDateTime(timestampOverride ?? historyEntry?.changedAt ?? null),
+      description:
+        item.status === "NEW"
+          ? formatHistoryDescription(undefined, job)
+          : formatHistoryDescription(historyEntry),
+      state,
+    };
+  }
+
+  if (job.status === "CANCELLED") {
+    const completedNormalStatuses = new Set<JobStatus>(["NEW"]);
+
+    history.forEach((entry) => {
+      if (entry.fromStatus !== "CANCELLED") {
+        completedNormalStatuses.add(entry.fromStatus);
+      }
+
+      if (entry.toStatus !== "CANCELLED") {
+        completedNormalStatuses.add(entry.toStatus);
+      }
+    });
+
+    return [
+      ...normalStatuses
+        .filter((item) => completedNormalStatuses.has(item.status))
+        .map((item) => buildTimelineItem(item, "completed")),
+      buildTimelineItem(
+        cancelledStatus,
+        "current",
+        cancellationHistory?.changedAt ?? job.updatedAt,
+      ),
+    ];
+  }
+
+  return normalStatuses.map((item) =>
+    buildTimelineItem(
+      item,
+      item.status === job.status
+        ? "current"
+        : item.status === "NEW" || historyByStatus.has(item.status)
+          ? "completed"
           : "upcoming",
-  }));
+    ),
+  );
 }
 
 function getTransitionAction(status: JobStatus): TransitionActionView {
   switch (status) {
     case "SCHEDULED":
-      return { id: "schedule", label: "Move to scheduled", toStatus: "SCHEDULED" };
+      return {
+        id: "schedule",
+        label: "Mark scheduled",
+        description: "Use after the visit window and staff assignment are ready.",
+        toStatus: "SCHEDULED",
+      };
     case "IN_PROGRESS":
-      return { id: "start", label: "Start work", toStatus: "IN_PROGRESS" };
+      return {
+        id: "start",
+        label: "Start work",
+        description: "Use when the assigned staff member has begun the visit.",
+        toStatus: "IN_PROGRESS",
+      };
     case "COMPLETED":
       return {
         id: "complete",
         label: "Complete job",
+        description: "Use only after completion review is approved.",
         toStatus: "COMPLETED",
         requiresNote: true,
+      };
+    case "PENDING_REVIEW":
+      return {
+        id: "send-review",
+        label: "Send to review",
+        description: "Use after completion details are ready for review.",
+        toStatus: "PENDING_REVIEW",
       };
     case "CANCELLED":
       return {
         id: "cancel",
         label: "Cancel job",
+        description: "Use when this visit will no longer go ahead. A reason is required.",
         toStatus: "CANCELLED",
         requiresReason: true,
       };
     case "NEW":
-      return { id: "new", label: "Mark as new", toStatus: "NEW" };
+      return {
+        id: "new",
+        label: "Reopen as new",
+        description: "Move the job back to intake if it needs to be prepared again.",
+        toStatus: "NEW",
+      };
   }
 }
 
@@ -138,12 +214,16 @@ export default function JobDetailPage() {
   const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
   const [job, setJob] = useState<JobDetail | null>(null);
   const [workflow, setWorkflow] = useState<JobHistoryResult | null>(null);
+  const [completionReview, setCompletionReview] = useState<JobCompletionReviewItem | null>(null);
   const [evidence, setEvidence] = useState<JobEvidenceItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
   const [workflowSuccess, setWorkflowSuccess] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [completionReviewError, setCompletionReviewError] = useState<string | null>(null);
+  const [completionReviewSuccess, setCompletionReviewSuccess] = useState<string | null>(null);
+  const [isSubmittingCompletionReview, setIsSubmittingCompletionReview] = useState(false);
   const [evidenceError, setEvidenceError] = useState<string | null>(null);
   const [isUploadingEvidence, setIsUploadingEvidence] = useState(false);
   const [isEvidenceLoading, setIsEvidenceLoading] = useState(true);
@@ -164,18 +244,24 @@ export default function JobDetailPage() {
       setError(null);
 
       try {
-        const [loadedJob, loadedHistory, loadedEvidence] = await Promise.all([
+        const [loadedJob, loadedHistory, loadedEvidence, loadedCompletionReview] = await Promise.all([
           withAccessTokenRetry((accessToken) => getJobDetailRequest(accessToken, jobId)),
           withAccessTokenRetry((accessToken) => getJobHistoryRequest(accessToken, jobId)),
           withAccessTokenRetry((accessToken) => listJobEvidenceRequest(accessToken, jobId)),
+          withAccessTokenRetry((accessToken) =>
+            getLatestJobCompletionReviewRequest(accessToken, jobId),
+          ),
         ]);
 
         if (!cancelled) {
           setJob(loadedJob);
           setWorkflow(loadedHistory);
           setEvidence(loadedEvidence);
+          setCompletionReview(loadedCompletionReview);
           setWorkflowError(null);
           setWorkflowSuccess(null);
+          setCompletionReviewError(null);
+          setCompletionReviewSuccess(null);
           setEvidenceError(null);
         }
       } catch (loadError) {
@@ -205,6 +291,15 @@ export default function JobDetailPage() {
 
   const transitionActions =
     canTransition && workflow ? getTransitionActions(workflow.allowedTransitions) : [];
+
+  function applyCompletionReviewMutation(result: JobCompletionReviewMutationResult) {
+    setJob(result.job);
+    setCompletionReview(result.review);
+    setWorkflow((current) => ({
+      history: [...(current?.history ?? []), result.historyEntry],
+      allowedTransitions: result.allowedTransitions,
+    }));
+  }
 
   async function handleTransition(action: TransitionActionView, reason?: string) {
     if (!job) {
@@ -264,6 +359,90 @@ export default function JobDetailPage() {
       throw uploadError;
     } finally {
       setIsUploadingEvidence(false);
+    }
+  }
+
+  async function handleCompletionReviewSubmit(completionNote: string) {
+    if (!job) {
+      return;
+    }
+
+    setIsSubmittingCompletionReview(true);
+    setCompletionReviewError(null);
+    setCompletionReviewSuccess(null);
+
+    try {
+      const result = await withAccessTokenRetry((accessToken) =>
+        submitJobCompletionReviewRequest(accessToken, job.id, { completionNote }),
+      );
+      applyCompletionReviewMutation(result);
+      setCompletionReviewSuccess("Completion submitted for review.");
+    } catch (submitError) {
+      setCompletionReviewError(
+        submitError instanceof Error
+          ? submitError.message
+          : "Failed to submit completion for review.",
+      );
+      throw submitError;
+    } finally {
+      setIsSubmittingCompletionReview(false);
+    }
+  }
+
+  async function handleCompletionReviewApprove(review: JobCompletionReviewItem) {
+    if (!job) {
+      return;
+    }
+
+    setIsSubmittingCompletionReview(true);
+    setCompletionReviewError(null);
+    setCompletionReviewSuccess(null);
+
+    try {
+      const result = await withAccessTokenRetry((accessToken) =>
+        approveJobCompletionReviewRequest(accessToken, job.id, review.id),
+      );
+      applyCompletionReviewMutation(result);
+      setCompletionReviewSuccess("Completion approved.");
+    } catch (approveError) {
+      setCompletionReviewError(
+        approveError instanceof Error
+          ? approveError.message
+          : "Failed to approve completion.",
+      );
+      throw approveError;
+    } finally {
+      setIsSubmittingCompletionReview(false);
+    }
+  }
+
+  async function handleCompletionReviewReturn(
+    review: JobCompletionReviewItem,
+    reviewNote: string,
+  ) {
+    if (!job) {
+      return;
+    }
+
+    setIsSubmittingCompletionReview(true);
+    setCompletionReviewError(null);
+    setCompletionReviewSuccess(null);
+
+    try {
+      const result = await withAccessTokenRetry((accessToken) =>
+        returnJobCompletionReviewRequest(accessToken, job.id, review.id, { reviewNote }),
+      );
+      applyCompletionReviewMutation(result);
+      setCompletionReviewSuccess("Completion returned for rework.");
+    } catch (returnError) {
+      setCompletionReviewError(
+        returnError instanceof Error
+          ? returnError.message
+          : "Failed to return completion for rework.",
+      );
+      throw returnError;
+    } finally {
+      setIsSubmittingCompletionReview(false);
     }
   }
 
@@ -371,16 +550,37 @@ export default function JobDetailPage() {
                 <WorkflowTimelineCard
                   items={workflow ? getTimelineItems(job, workflow.history) : []}
                   actions={transitionActions}
+                  currentStatus={job.status}
                   currentStatusLabel={formatStatusLabel(job.status)}
+                  currentRole={currentTenant?.role}
+                  currentUserName={user?.displayName}
+                  assigneeName={job.assignedTo?.displayName ?? null}
+                  isAssignedToCurrentUser={job.assignedTo?.id === user?.id}
+                  canEditJob={canEdit}
+                  canTransition={canTransition}
+                  canShowManualControls={canEdit}
                   isSubmitting={isTransitioning}
                   error={workflowError}
                   success={workflowSuccess}
                   readOnlyMessage={
                     !canTransition && workflow?.allowedTransitions?.length
-                      ? "Your current role can review this workflow but cannot advance this job."
+                      ? "Your current role can review this lifecycle, but manual status edits are reserved for owners and managers."
                       : null
                   }
                   onTransition={handleTransition}
+                />
+
+                <JobCompletionReviewCard
+                  job={job}
+                  review={completionReview}
+                  canSubmit={canTransition}
+                  canReview={canEdit}
+                  isSubmitting={isSubmittingCompletionReview}
+                  error={completionReviewError}
+                  success={completionReviewSuccess}
+                  onSubmit={handleCompletionReviewSubmit}
+                  onApprove={handleCompletionReviewApprove}
+                  onReturn={handleCompletionReviewReturn}
                 />
               </>
             }

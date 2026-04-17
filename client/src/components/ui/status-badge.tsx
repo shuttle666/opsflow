@@ -35,6 +35,8 @@ function jobTone(status: JobStatus): BadgeTone {
       return "indigo";
     case "IN_PROGRESS":
       return "warning";
+    case "PENDING_REVIEW":
+      return "brand";
     case "COMPLETED":
       return "success";
     case "CANCELLED":

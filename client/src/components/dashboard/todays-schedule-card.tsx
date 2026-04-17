@@ -17,6 +17,7 @@ export type ScheduleItem = {
 const statusBadgeClassName: Record<string, string> = {
   SCHEDULED: "bg-cyan-50 text-cyan-700 border-cyan-100",
   IN_PROGRESS: "bg-amber-50 text-amber-600 border-amber-100",
+  PENDING_REVIEW: "bg-sky-50 text-sky-700 border-sky-100",
   COMPLETED: "bg-emerald-50 text-emerald-600 border-emerald-100",
   NEW: "bg-sky-50 text-sky-600 border-sky-100",
   CANCELLED: "bg-slate-100 text-slate-500 border-slate-200",

@@ -25,6 +25,7 @@ const jobStatuses: Array<{ value: JobStatus; label: string }> = [
   { value: "NEW", label: "NEW" },
   { value: "SCHEDULED", label: "SCHEDULED" },
   { value: "IN_PROGRESS", label: "IN_PROGRESS" },
+  { value: "PENDING_REVIEW", label: "PENDING_REVIEW" },
   { value: "COMPLETED", label: "COMPLETED" },
   { value: "CANCELLED", label: "CANCELLED" },
 ];

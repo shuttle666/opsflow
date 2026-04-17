@@ -50,6 +50,8 @@ async function main() {
     prisma.auditLog.deleteMany(),
     prisma.tenantInvitation.deleteMany(),
     prisma.authSession.deleteMany(),
+    prisma.jobEvidence.deleteMany(),
+    prisma.jobCompletionReview.deleteMany(),
     prisma.jobStatusHistory.deleteMany(),
     prisma.job.deleteMany(),
     prisma.customer.deleteMany(),

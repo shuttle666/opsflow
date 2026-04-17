@@ -1,4 +1,5 @@
 export * from "./job.controller";
+export * from "./job-completion-review.service";
 export * from "./job-errors";
 export * from "./job.routes";
 export * from "./job-schemas";

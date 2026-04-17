@@ -120,6 +120,36 @@ function mapAuditToFeedItem(log: {
         ...(log.targetType ? { targetType: log.targetType } : {}),
         ...(log.targetId ? { targetId: log.targetId } : {}),
       };
+    case AuditAction.JOB_COMPLETION_SUBMITTED:
+      return {
+        id: log.id,
+        title: "Completion submitted",
+        description: `${actor} submitted ${(metadata.jobTitle as string | undefined) ?? "a job"} for review.`,
+        timestamp: log.createdAt,
+        tone: "brand",
+        ...(log.targetType ? { targetType: log.targetType } : {}),
+        ...(log.targetId ? { targetId: log.targetId } : {}),
+      };
+    case AuditAction.JOB_COMPLETION_APPROVED:
+      return {
+        id: log.id,
+        title: "Completion approved",
+        description: `${actor} approved completion for ${(metadata.jobTitle as string | undefined) ?? "a job"}.`,
+        timestamp: log.createdAt,
+        tone: "success",
+        ...(log.targetType ? { targetType: log.targetType } : {}),
+        ...(log.targetId ? { targetId: log.targetId } : {}),
+      };
+    case AuditAction.JOB_COMPLETION_RETURNED:
+      return {
+        id: log.id,
+        title: "Completion returned",
+        description: `${actor} returned ${(metadata.jobTitle as string | undefined) ?? "a job"} for rework.`,
+        timestamp: log.createdAt,
+        tone: "warning",
+        ...(log.targetType ? { targetType: log.targetType } : {}),
+        ...(log.targetId ? { targetId: log.targetId } : {}),
+      };
     case AuditAction.MEMBERSHIP_UPDATED:
       return {
         id: log.id,

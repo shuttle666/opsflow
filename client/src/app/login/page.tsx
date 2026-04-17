@@ -54,6 +54,7 @@ function LoginPageContent() {
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -78,9 +79,9 @@ function LoginPageContent() {
 
   return (
     <PublicShell>
-      <div className="flex min-h-[calc(100vh-7rem)] items-center justify-center py-6">
-        <div className="w-full max-w-[26rem]">
-          <section className={`${strongSurfaceClassName} p-8 sm:p-10`}>
+      <div className="py-6">
+        <div className="mx-auto flex min-h-[calc(100vh-12rem)] w-full max-w-[26rem] items-center">
+          <section className={`${strongSurfaceClassName} w-full p-8 sm:p-10`}>
             <div className="flex items-center justify-center gap-3">
               <BrandMark className="h-11 w-11 drop-shadow-[0_16px_28px_-18px_rgba(8,145,178,0.8)]" />
               <span className="text-[2rem] font-semibold tracking-tight text-slate-950">
@@ -149,17 +150,22 @@ function LoginPageContent() {
               </p>
             </form>
           </section>
+        </div>
 
-          <details className={`${surfaceClassName} mt-4 px-5 py-4 text-sm text-slate-600`}>
-            <summary className="cursor-pointer list-none font-semibold text-slate-700">
-              Local dev accounts
-            </summary>
-            <ul className="mt-4 space-y-3">
-              {seededAccounts.map((account) => (
-                <li
-                  key={account.email}
-                  className="rounded-[1rem] border border-white/80 bg-white/80 px-4 py-3"
-                >
+        <details
+          open
+          className={`${surfaceClassName} mx-auto mt-4 w-full max-w-[26rem] px-5 py-4 text-sm text-slate-600`}
+        >
+          <summary className="cursor-pointer list-none font-semibold text-slate-700">
+            Test accounts
+          </summary>
+          <ul className="mt-4 space-y-3">
+            {seededAccounts.map((account) => (
+              <li
+                key={account.email}
+                className="flex items-center justify-between gap-4 rounded-[1rem] border border-white/80 bg-white/80 px-4 py-3"
+              >
+                <div>
                   <p className="font-semibold text-slate-950">{account.label}</p>
                   <p className="mt-1">
                     Email: <span className="font-mono text-[13px]">{account.email}</span>
@@ -168,11 +174,28 @@ function LoginPageContent() {
                     Password:{" "}
                     <span className="font-mono text-[13px]">{account.password}</span>
                   </p>
-                </li>
-              ))}
-            </ul>
-          </details>
-        </div>
+                </div>
+                <button
+                  type="button"
+                  className="inline-flex h-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-cyan-200 hover:text-cyan-700"
+                  onClick={() => {
+                    setSubmitError(null);
+                    setValue("email", account.email, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    });
+                    setValue("password", account.password, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    });
+                  }}
+                >
+                  Fill in
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
       </div>
     </PublicShell>
   );

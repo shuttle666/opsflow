@@ -12,6 +12,7 @@ export type TimelineItemView = {
 export type TransitionActionView = {
   id: string;
   label: string;
+  description?: string;
   toStatus: JobStatus;
   requiresReason?: boolean;
   requiresNote?: boolean;

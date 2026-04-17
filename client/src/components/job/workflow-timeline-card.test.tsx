@@ -4,6 +4,62 @@ import { describe, expect, it, vi } from "vitest";
 import { WorkflowTimelineCard } from "@/components/job/workflow-timeline-card";
 
 describe("WorkflowTimelineCard", () => {
+  it("renders lifecycle status icons in timeline markers", () => {
+    const { container } = render(
+      <WorkflowTimelineCard
+        items={[
+          {
+            id: "NEW",
+            label: "New",
+            status: "NEW",
+            timestamp: "2026-03-20 10:00",
+            state: "completed",
+          },
+          {
+            id: "SCHEDULED",
+            label: "Scheduled",
+            status: "SCHEDULED",
+            timestamp: "2026-03-20 11:00",
+            state: "completed",
+          },
+          {
+            id: "IN_PROGRESS",
+            label: "In progress",
+            status: "IN_PROGRESS",
+            timestamp: "2026-03-20 12:00",
+            state: "completed",
+          },
+          {
+            id: "PENDING_REVIEW",
+            label: "Pending review",
+            status: "PENDING_REVIEW",
+            timestamp: "2026-03-20 13:00",
+            state: "current",
+          },
+          {
+            id: "COMPLETED",
+            label: "Completed",
+            status: "COMPLETED",
+            timestamp: null,
+            state: "upcoming",
+          },
+          {
+            id: "CANCELLED",
+            label: "Cancelled",
+            status: "CANCELLED",
+            timestamp: null,
+            state: "upcoming",
+          },
+        ]}
+        actions={[]}
+        currentStatus="PENDING_REVIEW"
+        currentStatusLabel="Pending review"
+      />,
+    );
+
+    expect(container.querySelectorAll("svg[aria-hidden='true']")).toHaveLength(6);
+  });
+
   it("requires a cancellation reason before submitting the transition", async () => {
     const onTransition = vi.fn();
     const user = userEvent.setup();
@@ -28,11 +84,20 @@ describe("WorkflowTimelineCard", () => {
             requiresReason: true,
           },
         ]}
+        currentStatus="NEW"
         currentStatusLabel="New"
+        currentRole="OWNER"
+        canEditJob
+        canTransition
+        canShowManualControls
         onTransition={onTransition}
       />,
     );
 
+    expect(screen.getByRole("button", { name: "Edit status" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancel job" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Edit status" }));
     await user.click(screen.getByRole("button", { name: "Cancel job" }));
 
     const confirmButton = screen.getByRole("button", {
@@ -54,5 +119,37 @@ describe("WorkflowTimelineCard", () => {
       }),
       "Customer cancelled the visit.",
     );
+  });
+
+  it("does not render manual status controls for staff", () => {
+    render(
+      <WorkflowTimelineCard
+        items={[
+          {
+            id: "SCHEDULED",
+            label: "Scheduled",
+            status: "SCHEDULED",
+            timestamp: "2026-03-20 11:00",
+            state: "current",
+          },
+        ]}
+        actions={[
+          {
+            id: "start",
+            label: "Start work",
+            toStatus: "IN_PROGRESS",
+          },
+        ]}
+        currentStatus="SCHEDULED"
+        currentStatusLabel="Scheduled"
+        currentRole="STAFF"
+        isAssignedToCurrentUser
+        canTransition
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Edit status" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Start work" })).not.toBeInTheDocument();
+    expect(screen.getByText("Job lifecycle")).toBeInTheDocument();
   });
 });

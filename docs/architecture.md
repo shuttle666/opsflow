@@ -108,6 +108,7 @@ Future extensions:
 
 - Authentication and authorization
 - File upload system
+- GitHub Actions CI/CD for automated validation and EC2 production deployment
 - Background jobs
 - Notifications
 - API rate limiting

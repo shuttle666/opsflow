@@ -60,7 +60,14 @@ toolMap.set("list_jobs", {
         q: { type: "string" },
         status: {
           type: "string",
-          enum: ["NEW", "SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED"],
+          enum: [
+            "NEW",
+            "SCHEDULED",
+            "IN_PROGRESS",
+            "PENDING_REVIEW",
+            "COMPLETED",
+            "CANCELLED",
+          ],
         },
         customerId: { type: "string" },
         scheduledFrom: { type: "string" },

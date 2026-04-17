@@ -307,6 +307,155 @@ describeIfDb("job api integration", () => {
     expect(managerMembership.role).toBe(MembershipRole.MANAGER);
   });
 
+  it("loads schedule ranges and enforces staff range visibility", async () => {
+    const owner = await seedTenantUser({
+      email: "owner@schedule-range-api.test",
+      displayName: "Schedule Range Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Schedule Range API Tenant",
+      tenantSlug: "schedule-range-api-tenant",
+    });
+
+    const passwordHash = await hashPassword("password123");
+    const [staffUser, otherStaffUser] = await Promise.all([
+      prisma.user.create({
+        data: {
+          email: "staff@schedule-range-api.test",
+          passwordHash,
+          displayName: "Schedule Staff",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "other-staff@schedule-range-api.test",
+          passwordHash,
+          displayName: "Other Schedule Staff",
+        },
+      }),
+    ]);
+
+    await prisma.membership.createMany({
+      data: [
+        {
+          userId: staffUser.id,
+          tenantId: owner.tenant.id,
+          role: MembershipRole.STAFF,
+          status: MembershipStatus.ACTIVE,
+        },
+        {
+          userId: otherStaffUser.id,
+          tenantId: owner.tenant.id,
+          role: MembershipRole.STAFF,
+          status: MembershipStatus.ACTIVE,
+        },
+      ],
+    });
+
+    const staffSession = await login({
+      email: staffUser.email,
+      password: "password123",
+      tenantId: owner.tenant.id,
+    });
+
+    const customer = await seedCustomer(owner.tenant.id, owner.user.id, "Schedule Range Customer");
+    await prisma.job.createMany({
+      data: [
+        {
+          tenantId: owner.tenant.id,
+          customerId: customer.id,
+          title: "First API overlap",
+          status: JobStatus.SCHEDULED,
+          createdById: owner.user.id,
+          assignedToId: staffUser.id,
+          scheduledStartAt: new Date("2026-04-07T00:00:00.000Z"),
+          scheduledEndAt: new Date("2026-04-07T02:00:00.000Z"),
+          scheduledAt: new Date("2026-04-07T00:00:00.000Z"),
+        },
+        {
+          tenantId: owner.tenant.id,
+          customerId: customer.id,
+          title: "Second API overlap",
+          status: JobStatus.SCHEDULED,
+          createdById: owner.user.id,
+          assignedToId: staffUser.id,
+          scheduledStartAt: new Date("2026-04-07T01:00:00.000Z"),
+          scheduledEndAt: new Date("2026-04-07T03:00:00.000Z"),
+          scheduledAt: new Date("2026-04-07T01:00:00.000Z"),
+        },
+        {
+          tenantId: owner.tenant.id,
+          customerId: customer.id,
+          title: "Other staff API job",
+          status: JobStatus.SCHEDULED,
+          createdById: owner.user.id,
+          assignedToId: otherStaffUser.id,
+          scheduledStartAt: new Date("2026-04-08T00:00:00.000Z"),
+          scheduledEndAt: new Date("2026-04-08T01:00:00.000Z"),
+          scheduledAt: new Date("2026-04-08T00:00:00.000Z"),
+        },
+        {
+          tenantId: owner.tenant.id,
+          customerId: customer.id,
+          title: "Unassigned API range job",
+          status: JobStatus.NEW,
+          createdById: owner.user.id,
+          scheduledStartAt: new Date("2026-04-09T00:00:00.000Z"),
+          scheduledEndAt: new Date("2026-04-09T01:00:00.000Z"),
+          scheduledAt: new Date("2026-04-09T00:00:00.000Z"),
+        },
+      ],
+    });
+
+    const ownerRange = await request(app)
+      .get("/api/jobs/schedule/range")
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .query({
+        rangeStart: "2026-04-06T00:00:00.000Z",
+        rangeEnd: "2026-04-13T00:00:00.000Z",
+      });
+
+    expect(ownerRange.status).toBe(200);
+    expect(ownerRange.body.data.totalJobs).toBe(4);
+    expect(ownerRange.body.data.conflictCount).toBe(2);
+    expect(ownerRange.body.data.lanes).toHaveLength(3);
+    expect(
+      ownerRange.body.data.lanes.find((lane: { key: string }) => lane.key === "unassigned")
+        ?.jobs[0]?.title,
+    ).toBe("Unassigned API range job");
+
+    const staffRange = await request(app)
+      .get("/api/jobs/schedule/range")
+      .set("Authorization", `Bearer ${staffSession.accessToken}`)
+      .query({
+        rangeStart: "2026-04-06T00:00:00.000Z",
+        rangeEnd: "2026-04-13T00:00:00.000Z",
+        assigneeId: otherStaffUser.id,
+      });
+
+    expect(staffRange.status).toBe(200);
+    expect(staffRange.body.data.lanes).toHaveLength(1);
+    expect(staffRange.body.data.lanes[0]?.userId).toBe(staffUser.id);
+    expect(staffRange.body.data.lanes[0]?.jobs).toHaveLength(2);
+
+    const reversedRange = await request(app)
+      .get("/api/jobs/schedule/range")
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .query({
+        rangeStart: "2026-04-13T00:00:00.000Z",
+        rangeEnd: "2026-04-06T00:00:00.000Z",
+      });
+    expect(reversedRange.status).toBe(400);
+
+    const tooWideRange = await request(app)
+      .get("/api/jobs/schedule/range")
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .query({
+        rangeStart: "2026-04-01T00:00:00.000Z",
+        rangeEnd: "2026-05-14T00:00:00.000Z",
+      });
+    expect(tooWideRange.status).toBe(400);
+  });
+
   it("rejects invalid assignment targets, cross-tenant customer usage, and status mutation through patch payload", async () => {
     const primary = await seedTenantUser({
       email: "owner@primary-job-api.test",
@@ -502,40 +651,121 @@ describeIfDb("job api integration", () => {
     expect(historyAfterSchedule.body.data.history).toHaveLength(1);
     expect(historyAfterSchedule.body.data.history[0]?.toStatus).toBe("SCHEDULED");
 
-    const staffInProgress = await request(app)
+    const ownerInProgress = await request(app)
       .post(`/api/jobs/${job.id}/status-transitions`)
-      .set("Authorization", `Bearer ${staffSession.accessToken}`)
+      .set("Authorization", `Bearer ${owner.accessToken}`)
       .send({
         toStatus: JobStatus.IN_PROGRESS,
       });
-    expect(staffInProgress.status).toBe(200);
-    expect(staffInProgress.body.data.job.status).toBe("IN_PROGRESS");
+    expect(ownerInProgress.status).toBe(200);
+    expect(ownerInProgress.body.data.job.status).toBe("IN_PROGRESS");
+    expect(ownerInProgress.body.data.allowedTransitions).toEqual([
+      "PENDING_REVIEW",
+      "CANCELLED",
+    ]);
 
     const hiddenStaffTransition = await request(app)
       .post(`/api/jobs/${job.id}/status-transitions`)
       .set("Authorization", `Bearer ${otherStaffSession.accessToken}`)
       .send({
-        toStatus: JobStatus.COMPLETED,
+        toStatus: JobStatus.PENDING_REVIEW,
         reason: "Should not be allowed",
       });
-    expect(hiddenStaffTransition.status).toBe(404);
+    expect(hiddenStaffTransition.status).toBe(403);
 
-    const completed = await request(app)
-      .post(`/api/jobs/${job.id}/status-transitions`)
+    const otherStaffSubmit = await request(app)
+      .post(`/api/jobs/${job.id}/completion-review`)
+      .set("Authorization", `Bearer ${otherStaffSession.accessToken}`)
+      .send({
+        completionNote: "I should not be able to submit this job.",
+      });
+    expect(otherStaffSubmit.status).toBe(404);
+
+    const submitted = await request(app)
+      .post(`/api/jobs/${job.id}/completion-review`)
       .set("Authorization", `Bearer ${staffSession.accessToken}`)
       .send({
-        toStatus: JobStatus.COMPLETED,
-        reason: "Work completed successfully.",
+        completionNote: "Work completed successfully.",
       });
+    expect(submitted.status).toBe(201);
+    expect(submitted.body.data.job.status).toBe("PENDING_REVIEW");
+    expect(submitted.body.data.review.status).toBe("PENDING");
+    expect(submitted.body.data.allowedTransitions).toEqual([
+      "COMPLETED",
+      "IN_PROGRESS",
+      "CANCELLED",
+    ]);
+
+    const duplicateSubmit = await request(app)
+      .post(`/api/jobs/${job.id}/completion-review`)
+      .set("Authorization", `Bearer ${staffSession.accessToken}`)
+      .send({
+        completionNote: "Submitting again should not be allowed while pending review.",
+      });
+    expect(duplicateSubmit.status).toBe(409);
+
+    const latestReview = await request(app)
+      .get(`/api/jobs/${job.id}/completion-review`)
+      .set("Authorization", `Bearer ${owner.accessToken}`);
+    expect(latestReview.status).toBe(200);
+    expect(latestReview.body.data.completionNote).toBe("Work completed successfully.");
+
+    const returned = await request(app)
+      .post(`/api/jobs/${job.id}/completion-review/${submitted.body.data.review.id}/return`)
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .send({
+        reviewNote: "Please add clearer completion evidence.",
+      });
+    expect(returned.status).toBe(200);
+    expect(returned.body.data.job.status).toBe("IN_PROGRESS");
+    expect(returned.body.data.review.status).toBe("RETURNED");
+    expect(returned.body.data.review.reviewNote).toBe(
+      "Please add clearer completion evidence.",
+    );
+
+    const resubmitted = await request(app)
+      .post(`/api/jobs/${job.id}/completion-review`)
+      .set("Authorization", `Bearer ${staffSession.accessToken}`)
+      .send({
+        completionNote: "Added clearer evidence and completed the repair.",
+      });
+    expect(resubmitted.status).toBe(201);
+    expect(resubmitted.body.data.job.status).toBe("PENDING_REVIEW");
+
+    const completed = await request(app)
+      .post(`/api/jobs/${job.id}/completion-review/${resubmitted.body.data.review.id}/approve`)
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .send({});
     expect(completed.status).toBe(200);
     expect(completed.body.data.job.status).toBe("COMPLETED");
+    expect(completed.body.data.review.status).toBe("APPROVED");
     expect(completed.body.data.allowedTransitions).toEqual([]);
+
+    const cancelReviewJob = await prisma.job.create({
+      data: {
+        tenantId: owner.tenant.id,
+        customerId: customer.id,
+        title: "Pending review cancel job",
+        status: JobStatus.PENDING_REVIEW,
+        createdById: owner.user.id,
+        assignedToId: staffUser.id,
+      },
+    });
+    const cancelPendingReview = await request(app)
+      .post(`/api/jobs/${cancelReviewJob.id}/status-transitions`)
+      .set("Authorization", `Bearer ${owner.accessToken}`)
+      .send({
+        toStatus: JobStatus.CANCELLED,
+        reason: "Customer withdrew after completion was submitted.",
+      });
+    expect(cancelPendingReview.status).toBe(200);
+    expect(cancelPendingReview.body.data.job.status).toBe("CANCELLED");
 
     const historyAfterComplete = await request(app)
       .get(`/api/jobs/${job.id}/history`)
       .set("Authorization", `Bearer ${staffSession.accessToken}`);
     expect(historyAfterComplete.status).toBe(200);
-    expect(historyAfterComplete.body.data.history).toHaveLength(3);
+    expect(historyAfterComplete.body.data.history).toHaveLength(6);
     expect(historyAfterComplete.body.data.allowedTransitions).toEqual([]);
 
     const transitionAuditLogs = await prisma.auditLog.findMany({
@@ -545,6 +775,20 @@ describeIfDb("job api integration", () => {
         action: AuditAction.JOB_STATUS_TRANSITION,
       },
     });
-    expect(transitionAuditLogs).toHaveLength(3);
+    expect(transitionAuditLogs).toHaveLength(6);
+
+    const completionAuditLogs = await prisma.auditLog.findMany({
+      where: {
+        tenantId: owner.tenant.id,
+        action: {
+          in: [
+            AuditAction.JOB_COMPLETION_SUBMITTED,
+            AuditAction.JOB_COMPLETION_RETURNED,
+            AuditAction.JOB_COMPLETION_APPROVED,
+          ],
+        },
+      },
+    });
+    expect(completionAuditLogs).toHaveLength(4);
   });
 });

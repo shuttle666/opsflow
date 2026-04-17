@@ -30,7 +30,7 @@ describe("login page", () => {
     });
   });
 
-  it("renders the centered auth card and keeps dev accounts in a collapsed helper", async () => {
+  it("renders the centered auth card and fills credentials from test accounts", async () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
@@ -40,13 +40,17 @@ describe("login page", () => {
     expect(screen.getByPlaceholderText("name@company.com")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("••••••••")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign In" })).toBeInTheDocument();
-    expect(screen.getByText("Local dev accounts")).toBeInTheDocument();
-
-    await user.click(screen.getByText("Local dev accounts"));
+    expect(screen.getByText("Test accounts")).toBeInTheDocument();
+    expect(screen.getByText("Test accounts").closest("details")).toHaveAttribute("open");
 
     expect(screen.getByText("owner@acme.example")).toBeInTheDocument();
     expect(screen.getByText("owner-password-123")).toBeInTheDocument();
     expect(screen.getByText("manager@acme.example")).toBeInTheDocument();
+
+    await user.click(screen.getAllByRole("button", { name: "Fill in" })[0]);
+
+    expect(screen.getByLabelText("Email")).toHaveValue("owner@acme.example");
+    expect(screen.getByLabelText("Password")).toHaveValue("owner-password-123");
   });
 
   it("submits credentials entered by the user and redirects to dashboard", async () => {

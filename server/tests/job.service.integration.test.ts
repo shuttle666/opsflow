@@ -6,6 +6,7 @@ import {
   assignJob,
   createJob,
   getScheduleDay,
+  getScheduleRange,
   getJobDetail,
   listJobs,
   listMyJobs,
@@ -356,6 +357,243 @@ describeIfDb("job service integration", () => {
       ),
     ).rejects.toMatchObject({
       statusCode: 404,
+    });
+  });
+
+  it("loads schedule ranges with lanes, unassigned work, and conflicts", async () => {
+    const manager = await seedTenantUser({
+      email: "manager@schedule-range.test",
+      displayName: "Manager",
+      role: MembershipRole.MANAGER,
+      tenantName: "Schedule Range Tenant",
+      tenantSlug: "schedule-range-tenant",
+    });
+
+    const passwordHash = await hashPassword("password123");
+    const [staffA, staffB] = await Promise.all([
+      prisma.user.create({
+        data: {
+          email: "staff-a@schedule-range.test",
+          passwordHash,
+          displayName: "Staff A",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "staff-b@schedule-range.test",
+          passwordHash,
+          displayName: "Staff B",
+        },
+      }),
+    ]);
+
+    await prisma.membership.createMany({
+      data: [
+        {
+          userId: staffA.id,
+          tenantId: manager.tenant.id,
+          role: MembershipRole.STAFF,
+          status: MembershipStatus.ACTIVE,
+        },
+        {
+          userId: staffB.id,
+          tenantId: manager.tenant.id,
+          role: MembershipRole.STAFF,
+          status: MembershipStatus.ACTIVE,
+        },
+      ],
+    });
+
+    const customer = await seedCustomer(manager.auth, "Range Customer");
+    await prisma.job.createMany({
+      data: [
+        {
+          tenantId: manager.tenant.id,
+          customerId: customer.id,
+          title: "First overlap",
+          status: JobStatus.SCHEDULED,
+          createdById: manager.user.id,
+          assignedToId: staffA.id,
+          scheduledStartAt: new Date("2026-04-07T00:00:00.000Z"),
+          scheduledEndAt: new Date("2026-04-07T02:00:00.000Z"),
+          scheduledAt: new Date("2026-04-07T00:00:00.000Z"),
+        },
+        {
+          tenantId: manager.tenant.id,
+          customerId: customer.id,
+          title: "Second overlap",
+          status: JobStatus.SCHEDULED,
+          createdById: manager.user.id,
+          assignedToId: staffA.id,
+          scheduledStartAt: new Date("2026-04-07T01:00:00.000Z"),
+          scheduledEndAt: new Date("2026-04-07T03:00:00.000Z"),
+          scheduledAt: new Date("2026-04-07T01:00:00.000Z"),
+        },
+        {
+          tenantId: manager.tenant.id,
+          customerId: customer.id,
+          title: "Spans range start",
+          status: JobStatus.SCHEDULED,
+          createdById: manager.user.id,
+          assignedToId: staffB.id,
+          scheduledStartAt: new Date("2026-04-05T23:00:00.000Z"),
+          scheduledEndAt: new Date("2026-04-06T01:00:00.000Z"),
+          scheduledAt: new Date("2026-04-05T23:00:00.000Z"),
+        },
+        {
+          tenantId: manager.tenant.id,
+          customerId: customer.id,
+          title: "Unassigned range job",
+          status: JobStatus.NEW,
+          createdById: manager.user.id,
+          scheduledStartAt: new Date("2026-04-08T04:00:00.000Z"),
+          scheduledEndAt: new Date("2026-04-08T05:00:00.000Z"),
+          scheduledAt: new Date("2026-04-08T04:00:00.000Z"),
+        },
+        {
+          tenantId: manager.tenant.id,
+          customerId: customer.id,
+          title: "Outside range",
+          status: JobStatus.SCHEDULED,
+          createdById: manager.user.id,
+          assignedToId: staffB.id,
+          scheduledStartAt: new Date("2026-04-15T00:00:00.000Z"),
+          scheduledEndAt: new Date("2026-04-15T01:00:00.000Z"),
+          scheduledAt: new Date("2026-04-15T00:00:00.000Z"),
+        },
+      ],
+    });
+
+    const result = await getScheduleRange(manager.auth, {
+      rangeStart: "2026-04-06T00:00:00.000Z",
+      rangeEnd: "2026-04-13T00:00:00.000Z",
+    });
+
+    expect(result.totalJobs).toBe(4);
+    expect(result.conflictCount).toBe(2);
+    expect(result.lanes).toHaveLength(3);
+    expect(result.lanes.find((lane) => lane.userId === staffA.id)?.jobs).toHaveLength(2);
+    expect(result.lanes.find((lane) => lane.userId === staffB.id)?.jobs[0]?.title).toBe("Spans range start");
+    expect(result.lanes.find((lane) => lane.key === "unassigned")?.jobs[0]?.title).toBe("Unassigned range job");
+  });
+
+  it("limits staff schedule range queries to their own assigned jobs", async () => {
+    const manager = await seedTenantUser({
+      email: "manager@staff-schedule-range.test",
+      displayName: "Manager",
+      role: MembershipRole.MANAGER,
+      tenantName: "Staff Schedule Range Tenant",
+      tenantSlug: "staff-schedule-range-tenant",
+    });
+
+    const passwordHash = await hashPassword("password123");
+    const [staffA, staffB] = await Promise.all([
+      prisma.user.create({
+        data: {
+          email: "staff-a@staff-schedule-range.test",
+          passwordHash,
+          displayName: "Staff A",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "staff-b@staff-schedule-range.test",
+          passwordHash,
+          displayName: "Staff B",
+        },
+      }),
+    ]);
+
+    await prisma.membership.createMany({
+      data: [
+        {
+          userId: staffA.id,
+          tenantId: manager.tenant.id,
+          role: MembershipRole.STAFF,
+          status: MembershipStatus.ACTIVE,
+        },
+        {
+          userId: staffB.id,
+          tenantId: manager.tenant.id,
+          role: MembershipRole.STAFF,
+          status: MembershipStatus.ACTIVE,
+        },
+      ],
+    });
+
+    const customer = await seedCustomer(manager.auth, "Staff Range Customer");
+    await prisma.job.createMany({
+      data: [
+        {
+          tenantId: manager.tenant.id,
+          customerId: customer.id,
+          title: "Staff A range job",
+          status: JobStatus.SCHEDULED,
+          createdById: manager.user.id,
+          assignedToId: staffA.id,
+          scheduledStartAt: new Date("2026-04-09T00:00:00.000Z"),
+          scheduledEndAt: new Date("2026-04-09T01:00:00.000Z"),
+          scheduledAt: new Date("2026-04-09T00:00:00.000Z"),
+        },
+        {
+          tenantId: manager.tenant.id,
+          customerId: customer.id,
+          title: "Staff B range job",
+          status: JobStatus.SCHEDULED,
+          createdById: manager.user.id,
+          assignedToId: staffB.id,
+          scheduledStartAt: new Date("2026-04-09T02:00:00.000Z"),
+          scheduledEndAt: new Date("2026-04-09T03:00:00.000Z"),
+          scheduledAt: new Date("2026-04-09T02:00:00.000Z"),
+        },
+      ],
+    });
+
+    const result = await getScheduleRange(
+      {
+        userId: staffA.id,
+        sessionId: `${staffA.id}-session`,
+        tenantId: manager.tenant.id,
+        role: MembershipRole.STAFF,
+      },
+      {
+        rangeStart: "2026-04-06T00:00:00.000Z",
+        rangeEnd: "2026-04-13T00:00:00.000Z",
+        assigneeId: staffB.id,
+      },
+    );
+
+    expect(result.lanes).toHaveLength(1);
+    expect(result.lanes[0]?.userId).toBe(staffA.id);
+    expect(result.lanes[0]?.jobs).toHaveLength(1);
+    expect(result.lanes[0]?.jobs[0]?.title).toBe("Staff A range job");
+  });
+
+  it("rejects invalid schedule ranges", async () => {
+    const manager = await seedTenantUser({
+      email: "manager@invalid-schedule-range.test",
+      displayName: "Manager",
+      role: MembershipRole.MANAGER,
+      tenantName: "Invalid Schedule Range Tenant",
+      tenantSlug: "invalid-schedule-range-tenant",
+    });
+
+    await expect(
+      getScheduleRange(manager.auth, {
+        rangeStart: "2026-04-13T00:00:00.000Z",
+        rangeEnd: "2026-04-06T00:00:00.000Z",
+      }),
+    ).rejects.toMatchObject({
+      statusCode: 400,
+    });
+
+    await expect(
+      getScheduleRange(manager.auth, {
+        rangeStart: "2026-04-01T00:00:00.000Z",
+        rangeEnd: "2026-05-14T00:00:00.000Z",
+      }),
+    ).rejects.toMatchObject({
+      statusCode: 400,
     });
   });
 

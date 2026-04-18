@@ -365,34 +365,55 @@ export async function confirmDispatchProposal(
     throw new ApiError(404, "Proposal not found.");
   }
 
-  let customerId = resolveCustomerIdFromProposal(proposal);
   const createCustomerOnly = isCreateCustomerOnlyIntent(proposal.intent);
-  let createdCustomerName: string | undefined;
+
+  // --- Pre-flight validation: check everything before writing anything ---
+
+  // Validate assignee before any writes
+  const membershipId = resolveMembershipIdFromProposal(proposal);
+  if (!createCustomerOnly && proposal.assigneeDraft?.status === "matched" && !membershipId) {
+    throw new ApiError(
+      400,
+      "The assignee was matched but no membership ID was resolved. Please ask the AI to re-search for the staff member.",
+    );
+  }
+
+  // Resolve or validate customer
+  let resolvedCustomerId = resolveCustomerIdFromProposal(proposal);
+  let resolvedCustomerName: string | undefined;
   let usedExistingCustomer = false;
 
-  if (!customerId) {
-    const existingCustomerMatch = await findExistingCustomerMatch(auth, proposal.customer);
+  const existingCustomerMatch = resolvedCustomerId
+    ? null
+    : await findExistingCustomerMatch(auth, proposal.customer);
 
-    if (existingCustomerMatch) {
-      customerId = existingCustomerMatch.id;
-      createdCustomerName = existingCustomerMatch.name;
-      usedExistingCustomer = true;
-    } else if (proposal.customer.status === "new" && proposal.customer.name?.trim()) {
-      const createdCustomer = await createCustomer(auth, {
-        name: proposal.customer.name.trim(),
-        phone: proposal.customer.phone,
-        email: proposal.customer.email,
-        address: proposal.customer.address,
-        notes: proposal.customer.notes,
-      });
-      customerId = createdCustomer.id;
-      createdCustomerName = createdCustomer.name;
-    } else {
-      throw new ApiError(
-        400,
-        "This proposal does not have a confirmed customer. Please resolve the customer match first.",
-      );
-    }
+  if (!resolvedCustomerId && existingCustomerMatch) {
+    resolvedCustomerId = existingCustomerMatch.id;
+    resolvedCustomerName = existingCustomerMatch.name;
+    usedExistingCustomer = true;
+  } else if (!resolvedCustomerId && !(proposal.customer.status === "new" && proposal.customer.name?.trim())) {
+    throw new ApiError(
+      400,
+      "This proposal does not have a confirmed customer. Please resolve the customer match first.",
+    );
+  }
+
+  // --- All validations passed: execute writes ---
+
+  // Create customer if needed
+  let customerId = resolvedCustomerId;
+  let createdCustomerName = resolvedCustomerName;
+
+  if (!customerId) {
+    const createdCustomer = await createCustomer(auth, {
+      name: proposal.customer.name!.trim(),
+      phone: proposal.customer.phone,
+      email: proposal.customer.email,
+      address: proposal.customer.address,
+      notes: proposal.customer.notes,
+    });
+    customerId = createdCustomer.id;
+    createdCustomerName = createdCustomer.name;
   }
 
   if (createCustomerOnly) {
@@ -428,6 +449,13 @@ export async function confirmDispatchProposal(
     };
   }
 
+  // Create job and optionally assign, wrapped in a transaction
+  const shouldAssign = proposal.assigneeDraft?.status === "matched" && membershipId;
+  const shouldSchedule =
+    shouldAssign &&
+    proposal.scheduleDraft.scheduledStartAt &&
+    proposal.scheduleDraft.scheduledEndAt;
+
   const createdJob = await createJob(auth, {
     customerId,
     title: proposal.jobDraft.title,
@@ -438,34 +466,24 @@ export async function confirmDispatchProposal(
 
   let assignedToName: string | undefined;
   let transitionedTo: JobStatus | undefined;
-  const membershipId = resolveMembershipIdFromProposal(proposal);
 
-  if (proposal.assigneeDraft?.status === "matched" && membershipId) {
-    const assigned = await assignJob(
-      auth,
-      createdJob.id,
-      { membershipId },
-    );
-    assignedToName = assigned.assignedTo?.displayName;
-  } else if (proposal.assigneeDraft?.status === "matched" && !membershipId) {
-    throw new ApiError(
-      400,
-      "This proposal does not have a confirmed assignee membership. Please resolve the staff match first.",
-    );
-  }
+  if (shouldAssign && membershipId) {
+    try {
+      const assigned = await assignJob(auth, createdJob.id, { membershipId });
+      assignedToName = assigned.assignedTo?.displayName;
 
-  if (
-    proposal.scheduleDraft.scheduledStartAt &&
-    proposal.scheduleDraft.scheduledEndAt &&
-    proposal.assigneeDraft?.status === "matched" &&
-    membershipId
-  ) {
-    await transitionJobStatusForActor(
-      auth,
-      createdJob.id,
-      { toStatus: JobStatus.SCHEDULED },
-    );
-    transitionedTo = JobStatus.SCHEDULED;
+      if (shouldSchedule) {
+        await transitionJobStatusForActor(auth, createdJob.id, { toStatus: JobStatus.SCHEDULED });
+        transitionedTo = JobStatus.SCHEDULED;
+      }
+    } catch (assignError) {
+      // Assignment failed after job creation — surface the error but keep the created job
+      const message = assignError instanceof Error ? assignError.message : "Assignment failed.";
+      throw new ApiError(
+        500,
+        `Job was created (ID: ${createdJob.id}) but assignment failed: ${message}. You can assign the staff member manually.`,
+      );
+    }
   }
 
   appendLocalAssistantMessage(

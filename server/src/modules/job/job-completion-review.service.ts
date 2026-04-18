@@ -8,6 +8,12 @@ import {
 import { prisma } from "../../lib/prisma";
 import type { AuthContext, RequestMetadata } from "../../types/auth";
 import { ApiError } from "../../utils/api-error";
+import {
+  createJobCompletionApprovedNotifications,
+  createJobCompletionReturnedNotifications,
+  createJobCompletionSubmittedNotifications,
+  publishCreatedNotifications,
+} from "../notification/notification.service";
 import { getAllowedTransitions } from "./job-status-machine";
 import { transitionJobStatusInTransaction } from "./job-status.service";
 import { getJobDetail, type JobDetail, type JobHistoryItem } from "./job.service";
@@ -239,11 +245,21 @@ export async function submitJobCompletionReview(
       },
     });
 
+    const notifications = await createJobCompletionSubmittedNotifications(tx, {
+      tenantId: auth.tenantId,
+      actorUserId: auth.userId,
+      jobId: job.id,
+      jobTitle: job.title,
+    });
+
     return {
       review,
       history: transitioned.history,
+      notifications,
     };
   });
+
+  await publishCreatedNotifications(result.notifications);
 
   return buildMutationResult(auth, job.id, result.review, result.history);
 }
@@ -270,6 +286,7 @@ export async function approveJobCompletionReview(
             id: true,
             title: true,
             status: true,
+            assignedToId: true,
           },
         },
       },
@@ -324,11 +341,25 @@ export async function approveJobCompletionReview(
       },
     });
 
+    const notifications = await createJobCompletionApprovedNotifications(tx, {
+      tenantId: auth.tenantId,
+      actorUserId: auth.userId,
+      recipientUserIds: [
+        review.submittedBy.id,
+        ...(review.job.assignedToId ? [review.job.assignedToId] : []),
+      ],
+      jobId: job.id,
+      jobTitle: review.job.title,
+    });
+
     return {
       review: updatedReview,
       history: transitioned.history,
+      notifications,
     };
   });
+
+  await publishCreatedNotifications(result.notifications);
 
   return buildMutationResult(auth, job.id, result.review, result.history);
 }
@@ -357,6 +388,7 @@ export async function returnJobCompletionReview(
             id: true,
             title: true,
             status: true,
+            assignedToId: true,
           },
         },
       },
@@ -413,11 +445,26 @@ export async function returnJobCompletionReview(
       },
     });
 
+    const notifications = await createJobCompletionReturnedNotifications(tx, {
+      tenantId: auth.tenantId,
+      actorUserId: auth.userId,
+      recipientUserIds: [
+        review.submittedBy.id,
+        ...(review.job.assignedToId ? [review.job.assignedToId] : []),
+      ],
+      jobId: job.id,
+      jobTitle: review.job.title,
+      reviewNote,
+    });
+
     return {
       review: updatedReview,
       history: transitioned.history,
+      notifications,
     };
   });
+
+  await publishCreatedNotifications(result.notifications);
 
   return buildMutationResult(auth, job.id, result.review, result.history);
 }

@@ -8,6 +8,12 @@ import {
 import { prisma } from "../../lib/prisma";
 import type { AuthContext, RequestMetadata } from "../../types/auth";
 import { ApiError } from "../../utils/api-error";
+import {
+  createJobAssignedNotification,
+  createJobStatusChangedNotification,
+  createJobUnassignedNotification,
+  publishCreatedNotifications,
+} from "../notification/notification.service";
 import type {
   AssignJobInput,
   CreateJobInput,
@@ -1007,7 +1013,7 @@ export async function assignJob(
     }
   }
 
-  await prisma.$transaction(async (tx) => {
+  const notifications = await prisma.$transaction(async (tx) => {
     const updated = await tx.job.update({
       where: {
         id: jobId,
@@ -1038,7 +1044,17 @@ export async function assignJob(
         },
       },
     });
+
+    return createJobAssignedNotification(tx, {
+      tenantId: auth.tenantId,
+      actorUserId: auth.userId,
+      recipientUserId: membership.userId,
+      jobId: updated.id,
+      jobTitle: updated.title,
+    });
   });
+
+  await publishCreatedNotifications(notifications);
 
   return getJobDetail(auth, jobId);
 }
@@ -1072,8 +1088,9 @@ export async function unassignJob(
   if (!current.assignedToId) {
     return getJobDetail(auth, jobId);
   }
+  const previousAssigneeId = current.assignedToId;
 
-  await prisma.$transaction(async (tx) => {
+  const notifications = await prisma.$transaction(async (tx) => {
     await tx.job.update({
       where: {
         id: existing.id,
@@ -1100,7 +1117,17 @@ export async function unassignJob(
         },
       },
     });
+
+    return createJobUnassignedNotification(tx, {
+      tenantId: auth.tenantId,
+      actorUserId: auth.userId,
+      recipientUserId: previousAssigneeId,
+      jobId: existing.id,
+      jobTitle: current.title,
+    });
   });
+
+  await publishCreatedNotifications(notifications);
 
   return getJobDetail(auth, jobId);
 }
@@ -1169,6 +1196,8 @@ export async function transitionJobStatusForActor(
     select: {
       id: true,
       tenantId: true,
+      title: true,
+      assignedToId: true,
     },
   });
 
@@ -1184,6 +1213,18 @@ export async function transitionJobStatusForActor(
     reason: input.reason,
     metadata,
   });
+  const notifications = await prisma.$transaction((tx) =>
+    createJobStatusChangedNotification(tx, {
+      tenantId: auth.tenantId,
+      actorUserId: auth.userId,
+      recipientUserId: visibleJob.assignedToId,
+      jobId: visibleJob.id,
+      jobTitle: visibleJob.title,
+      fromStatus: transitioned.history.fromStatus,
+      toStatus: transitioned.history.toStatus,
+    }),
+  );
+  await publishCreatedNotifications(notifications);
 
   const job = await getJobDetail(auth, visibleJob.id);
   const changedBy = await prisma.user.findUnique({

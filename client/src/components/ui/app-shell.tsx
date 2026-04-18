@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Bell,
   Briefcase,
   Calendar,
   Home,
@@ -15,6 +14,7 @@ import {
   type IconComponent,
 } from "@/components/ui/icons";
 import { useState, useTransition } from "react";
+import { NotificationBell } from "@/components/notification/notification-bell";
 import { useAuthStore } from "@/store/auth-store";
 import { BrandMark } from "@/components/ui/brand-mark";
 import {
@@ -288,13 +288,7 @@ export function WorkspaceShell({
                     <span className="text-sm text-slate-400">Search...</span>
                   </div>
                   {actions}
-                  <button
-                    type="button"
-                    aria-label="Notifications"
-                    className="flex h-10 w-10 items-center justify-center rounded-[20px] border border-white/70 bg-white shadow-sm transition hover:bg-slate-50"
-                  >
-                    <Bell className="h-5 w-5 text-slate-500" />
-                  </button>
+                  <NotificationBell />
                 </div>
               </div>
 

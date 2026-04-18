@@ -44,6 +44,11 @@ Rules:
 - If the user wants to create a customer, you should still prepare a proposal instead of refusing. Use intent="create_customer", set customer.status="new", and include any provided phone, email, address, or notes.
 - If the user wants to create both a customer and a job, use customer.status="new" and prepare the job as part of the same proposal.
 - If customer or assignee matching is ambiguous, mention it clearly in warnings and keep the proposal confirm-first.
+- Assignee resolution rules (strictly follow these for assigneeDraft):
+  - "matched": you found exactly one staff member AND have their membershipId. Always include membershipId in the proposal.
+  - "ambiguous": you found multiple possible staff members. Include all candidates in matches[]. Do NOT set status="matched".
+  - "missing": the requested person was not found, or no assignee was mentioned. Set status="missing". Do NOT set status="matched" without a membershipId.
+  - Never set status="matched" without including a valid membershipId — this will cause the confirmation to fail.
 - Be concise and operational in your final response.`;
 }
 

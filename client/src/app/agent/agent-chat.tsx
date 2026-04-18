@@ -286,7 +286,7 @@ function EmptyState() {
       </div>
       <div className="mt-1 flex flex-wrap justify-center gap-2">
         {[
-          "下周二下午给王先生安排一次空调检修，优先派李工",
+          "Schedule an AC inspection for Mr. Wang next Tuesday afternoon, preferably with Technician Li",
           "Create a plumbing visit for Jordan tomorrow morning",
           "Check whether Mia already has overlapping work at 2pm",
         ].map((suggestion) => (
@@ -328,7 +328,7 @@ export function AgentChat() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, streamingText, activeToolCalls, pendingProposal, scrollToBottom]);
+  }, [messages, streamingText, activeToolCalls, scrollToBottom]);
 
   const refreshConversations = useCallback(async () => {
     try {
@@ -366,12 +366,14 @@ export function AgentChat() {
   }, [canUse, withAccessTokenRetry]);
 
   const loadConversation = useCallback(
-    async (id: string) => {
+    async (id: string, options?: { preserveConfirmResult?: boolean }) => {
       const detail = await withAccessTokenRetry((token) => getConversationRequest(token, id));
       setConversationId(id);
       setMessages(detail.messages);
       setPendingProposal(latestProposal(detail.messages));
-      setConfirmResult(null);
+      if (!options?.preserveConfirmResult) {
+        setConfirmResult(null);
+      }
       setStreamingText("");
       setActiveToolCalls([]);
     },
@@ -494,8 +496,8 @@ export function AgentChat() {
       const result = await withAccessTokenRetry((accessToken) =>
         confirmProposalRequest(accessToken, conversationId, pendingProposal.id),
       );
+      await loadConversation(conversationId, { preserveConfirmResult: true });
       setConfirmResult(result);
-      await loadConversation(conversationId);
       await refreshConversations();
     } catch (confirmError) {
       setError(
@@ -598,15 +600,6 @@ export function AgentChat() {
                 </div>
               ) : null}
 
-              {pendingProposal ? (
-                <ProposalCard
-                  proposal={pendingProposal}
-                  onConfirm={handleConfirmProposal}
-                  confirming={isConfirming}
-                  result={confirmResult}
-                />
-              ) : null}
-
               {error ? (
                 <div className="rounded-[20px] border border-rose-200 bg-rose-50/80 px-4 py-3 text-sm text-rose-700">
                   {error}
@@ -617,6 +610,48 @@ export function AgentChat() {
             </div>
           )}
         </div>
+
+        {pendingProposal ? (
+          <div className="border-t border-white/30 bg-[linear-gradient(180deg,rgba(248,250,252,0.42)_0%,rgba(255,255,255,0.72)_100%)] px-4 py-4 backdrop-blur-sm sm:px-6 lg:px-8">
+            <div className="mx-auto w-full max-w-5xl">
+              <ProposalCard
+                proposal={pendingProposal}
+                onConfirm={handleConfirmProposal}
+                confirming={isConfirming}
+                result={confirmResult}
+              />
+            </div>
+          </div>
+        ) : null}
+
+        {!pendingProposal && confirmResult ? (
+          <div className="border-t border-white/30 bg-[linear-gradient(180deg,rgba(236,253,245,0.48)_0%,rgba(255,255,255,0.76)_100%)] px-4 py-4 backdrop-blur-sm sm:px-6 lg:px-8">
+            <div className="mx-auto w-full max-w-5xl rounded-[24px] border border-emerald-200 bg-emerald-50/80 px-5 py-4 text-sm text-emerald-900 shadow-[0_14px_34px_-24px_rgba(16,185,129,0.35)]">
+              {confirmResult.entityType === "customer" ? (
+                <>
+                  {confirmResult.usedExistingCustomer ? "Reused" : "Created"}{" "}
+                  <strong>{confirmResult.createdCustomerName ?? "customer"}</strong>.
+                  {" "}
+                  {confirmResult.createdCustomerId ? (
+                    <Link href={`/customers/${confirmResult.createdCustomerId}`} className="font-semibold underline">
+                      Open customer
+                    </Link>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  Created <strong>{confirmResult.createdJobTitle}</strong>.
+                  {" "}
+                  {confirmResult.createdJobId ? (
+                    <Link href={`/jobs/${confirmResult.createdJobId}`} className="font-semibold underline">
+                      Open job
+                    </Link>
+                  ) : null}
+                </>
+              )}
+            </div>
+          </div>
+        ) : null}
 
         <div className="border-t border-white/30 bg-white/20 px-4 py-4 backdrop-blur-sm sm:px-6 lg:px-8">
           <form onSubmit={handleSubmit} className="mx-auto flex w-full max-w-5xl items-center gap-3">

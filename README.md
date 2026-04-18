@@ -61,7 +61,7 @@ The project is currently deployed on AWS:
 
 - `client` - Next.js application
 - `server` - Express API
-- `docs` - product, architecture, ERD, and planning notes
+- `docs` - product, engineering, and design documentation
 - `infra` - deployment, nginx, and production operations assets
 
 ### Start With Docker

@@ -1,0 +1,1360 @@
+openapi: 3.1.0
+info:
+  title: OpsFlow API
+  version: current-v1
+  license:
+    name: MIT
+    identifier: MIT
+  description: |
+    OpenAPI summary for the currently implemented Express API.
+    This file is intentionally concise; see api-design.md for the human-readable route notes.
+servers:
+  - url: http://localhost:4000
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Health
+  - name: Auth
+  - name: Tenant
+  - name: Invitation
+  - name: Customer
+  - name: Job
+  - name: Schedule
+  - name: Team
+  - name: Activity
+  - name: Notification
+  - name: Agent
+
+paths:
+  /api/health:
+    get:
+      tags: [Health]
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      operationId: register
+      security: []
+      requestBody:
+        $ref: "#/components/requestBodies/Register"
+      responses:
+        "201":
+          $ref: "#/components/responses/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      security: []
+      requestBody:
+        $ref: "#/components/requestBodies/Login"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshToken
+      security: []
+      requestBody:
+        $ref: "#/components/requestBodies/Refresh"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      requestBody:
+        $ref: "#/components/requestBodies/Logout"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      operationId: getCurrentUser
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/auth/switch-tenant:
+    post:
+      tags: [Auth]
+      operationId: switchTenant
+      requestBody:
+        $ref: "#/components/requestBodies/SwitchTenant"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/tenants/{tenantId}/invitations:
+    parameters:
+      - $ref: "#/components/parameters/TenantId"
+    post:
+      tags: [Tenant]
+      operationId: createTenantInvitation
+      requestBody:
+        $ref: "#/components/requestBodies/CreateInvitation"
+      responses:
+        "201":
+          $ref: "#/components/responses/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    get:
+      tags: [Tenant]
+      operationId: listTenantInvitations
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/InvitationStatus"
+      responses:
+        "200":
+          $ref: "#/components/responses/PagelessListSuccess"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/tenants/{tenantId}/invitations/{invitationId}/resend:
+    post:
+      tags: [Tenant]
+      operationId: resendTenantInvitation
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/InvitationId"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/tenants/{tenantId}/invitations/{invitationId}/cancel:
+    post:
+      tags: [Tenant]
+      operationId: cancelTenantInvitation
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/InvitationId"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/invitations/mine:
+    get:
+      tags: [Invitation]
+      operationId: listMyInvitations
+      responses:
+        "200":
+          $ref: "#/components/responses/PagelessListSuccess"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/invitations/{invitationId}/accept:
+    post:
+      tags: [Invitation]
+      operationId: acceptInvitationById
+      parameters:
+        - $ref: "#/components/parameters/InvitationId"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/invitations/accept:
+    post:
+      tags: [Invitation]
+      operationId: acceptInvitationByToken
+      requestBody:
+        $ref: "#/components/requestBodies/AcceptInvitation"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/customers:
+    get:
+      tags: [Customer]
+      operationId: listCustomers
+      parameters:
+        - $ref: "#/components/parameters/SearchQuery"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [createdAt_desc, createdAt_asc, name_asc, name_desc]
+      responses:
+        "200":
+          $ref: "#/components/responses/PaginatedListSuccess"
+    post:
+      tags: [Customer]
+      operationId: createCustomer
+      requestBody:
+        $ref: "#/components/requestBodies/CustomerInput"
+      responses:
+        "201":
+          $ref: "#/components/responses/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/customers/{customerId}:
+    parameters:
+      - $ref: "#/components/parameters/CustomerId"
+    get:
+      tags: [Customer]
+      operationId: getCustomerDetail
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Customer]
+      operationId: updateCustomer
+      requestBody:
+        $ref: "#/components/requestBodies/CustomerInput"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/jobs:
+    get:
+      tags: [Job]
+      operationId: listJobs
+      parameters:
+        - $ref: "#/components/parameters/SearchQuery"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/JobStatus"
+        - name: customerId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: scheduledFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: scheduledTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [createdAt_desc, createdAt_asc, scheduledStartAt_asc, scheduledStartAt_desc]
+      responses:
+        "200":
+          $ref: "#/components/responses/PaginatedListSuccess"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Job]
+      operationId: createJob
+      requestBody:
+        $ref: "#/components/requestBodies/JobInput"
+      responses:
+        "201":
+          $ref: "#/components/responses/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/jobs/my:
+    get:
+      tags: [Job]
+      operationId: listMyJobs
+      parameters:
+        - $ref: "#/components/parameters/SearchQuery"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/JobStatus"
+        - name: scheduledFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: scheduledTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          $ref: "#/components/responses/PaginatedListSuccess"
+
+  /api/jobs/schedule/day:
+    get:
+      tags: [Schedule]
+      operationId: getScheduleDay
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: assigneeId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: timezoneOffsetMinutes
+          in: query
+          schema:
+            type: integer
+            minimum: -840
+            maximum: 840
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+
+  /api/jobs/schedule/range:
+    get:
+      tags: [Schedule]
+      operationId: getScheduleRange
+      parameters:
+        - name: rangeStart
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: rangeEnd
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: assigneeId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+
+  /api/jobs/schedule/conflicts:
+    post:
+      tags: [Schedule]
+      operationId: checkScheduleConflicts
+      requestBody:
+        $ref: "#/components/requestBodies/ScheduleConflictCheck"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/jobs/{jobId}:
+    parameters:
+      - $ref: "#/components/parameters/JobId"
+    get:
+      tags: [Job]
+      operationId: getJobDetail
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Job]
+      operationId: updateJob
+      requestBody:
+        $ref: "#/components/requestBodies/JobInput"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/jobs/{jobId}/history:
+    get:
+      tags: [Job]
+      operationId: getJobHistory
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/jobs/{jobId}/status-transitions:
+    post:
+      tags: [Job]
+      operationId: transitionJobStatus
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      requestBody:
+        $ref: "#/components/requestBodies/JobStatusTransition"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/jobs/{jobId}/assign:
+    post:
+      tags: [Job]
+      operationId: assignJob
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      requestBody:
+        $ref: "#/components/requestBodies/AssignJob"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/jobs/{jobId}/unassign:
+    post:
+      tags: [Job]
+      operationId: unassignJob
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/jobs/{jobId}/completion-review:
+    get:
+      tags: [Job]
+      operationId: getLatestJobCompletionReview
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Job]
+      operationId: submitJobCompletionReview
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      requestBody:
+        $ref: "#/components/requestBodies/SubmitCompletionReview"
+      responses:
+        "201":
+          $ref: "#/components/responses/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/jobs/{jobId}/completion-review/{reviewId}/approve:
+    post:
+      tags: [Job]
+      operationId: approveJobCompletionReview
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+        - $ref: "#/components/parameters/ReviewId"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/jobs/{jobId}/completion-review/{reviewId}/return:
+    post:
+      tags: [Job]
+      operationId: returnJobCompletionReview
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+        - $ref: "#/components/parameters/ReviewId"
+      requestBody:
+        $ref: "#/components/requestBodies/ReturnCompletionReview"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/jobs/{jobId}/evidence:
+    get:
+      tags: [Job]
+      operationId: listJobEvidence
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          $ref: "#/components/responses/PagelessListSuccess"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Job]
+      operationId: uploadJobEvidence
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      requestBody:
+        $ref: "#/components/requestBodies/UploadEvidence"
+      responses:
+        "201":
+          $ref: "#/components/responses/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/jobs/{jobId}/evidence/{evidenceId}/download:
+    get:
+      tags: [Job]
+      operationId: downloadJobEvidence
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+        - $ref: "#/components/parameters/EvidenceId"
+      responses:
+        "200":
+          description: Binary evidence file stream.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/jobs/{jobId}/evidence/{evidenceId}:
+    delete:
+      tags: [Job]
+      operationId: deleteJobEvidence
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+        - $ref: "#/components/parameters/EvidenceId"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/memberships:
+    get:
+      tags: [Team]
+      operationId: listMemberships
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/MembershipStatus"
+        - name: role
+          in: query
+          schema:
+            $ref: "#/components/schemas/MembershipRole"
+        - $ref: "#/components/parameters/SearchQuery"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          $ref: "#/components/responses/PaginatedListSuccess"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/memberships/{membershipId}:
+    patch:
+      tags: [Team]
+      operationId: updateMembership
+      parameters:
+        - $ref: "#/components/parameters/MembershipId"
+      requestBody:
+        $ref: "#/components/requestBodies/UpdateMembership"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/activity:
+    get:
+      tags: [Activity]
+      operationId: listActivityFeed
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          $ref: "#/components/responses/PaginatedListSuccess"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/notifications:
+    get:
+      tags: [Notification]
+      operationId: listNotifications
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [all, unread]
+            default: all
+      responses:
+        "200":
+          $ref: "#/components/responses/PaginatedListSuccess"
+
+  /api/notifications/unread-count:
+    get:
+      tags: [Notification]
+      operationId: getUnreadNotificationCount
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+
+  /api/notifications/stream:
+    get:
+      tags: [Notification]
+      operationId: streamNotifications
+      responses:
+        "200":
+          description: Server-sent notification events.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /api/notifications/{notificationId}/read:
+    patch:
+      tags: [Notification]
+      operationId: markNotificationRead
+      parameters:
+        - $ref: "#/components/parameters/NotificationId"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/notifications/read-all:
+    post:
+      tags: [Notification]
+      operationId: markAllNotificationsRead
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+
+  /api/agent/conversations:
+    post:
+      tags: [Agent]
+      operationId: createAgentConversation
+      responses:
+        "201":
+          $ref: "#/components/responses/Success"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    get:
+      tags: [Agent]
+      operationId: listAgentConversations
+      responses:
+        "200":
+          $ref: "#/components/responses/PagelessListSuccess"
+
+  /api/agent/conversations/{conversationId}:
+    get:
+      tags: [Agent]
+      operationId: getAgentConversation
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/agent/conversations/{conversationId}/messages:
+    post:
+      tags: [Agent]
+      operationId: sendAgentMessage
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      requestBody:
+        $ref: "#/components/requestBodies/SendAgentMessage"
+      responses:
+        "200":
+          description: Server-sent assistant events.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/agent/conversations/{conversationId}/proposals/{proposalId}/confirm:
+    post:
+      tags: [Agent]
+      operationId: confirmAgentProposal
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+        - $ref: "#/components/parameters/ProposalId"
+      responses:
+        "201":
+          $ref: "#/components/responses/Success"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    TenantId:
+      name: tenantId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    InvitationId:
+      name: invitationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CustomerId:
+      name: customerId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ReviewId:
+      name: reviewId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    EvidenceId:
+      name: evidenceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    MembershipId:
+      name: membershipId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    NotificationId:
+      name: notificationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ConversationId:
+      name: conversationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ProposalId:
+      name: proposalId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SearchQuery:
+      name: q
+      in: query
+      schema:
+        type: string
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 10
+
+  requestBodies:
+    Register:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/RegisterRequest"
+    Login:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/LoginRequest"
+    Refresh:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/RefreshRequest"
+    Logout:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/LogoutRequest"
+    SwitchTenant:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/SwitchTenantRequest"
+    CreateInvitation:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/CreateInvitationRequest"
+    AcceptInvitation:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AcceptInvitationRequest"
+    CustomerInput:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/CustomerInput"
+    JobInput:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/JobInput"
+    AssignJob:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AssignJobRequest"
+    JobStatusTransition:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/JobStatusTransitionRequest"
+    SubmitCompletionReview:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/SubmitCompletionReviewRequest"
+    ReturnCompletionReview:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ReturnCompletionReviewRequest"
+    ScheduleConflictCheck:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ScheduleConflictCheckRequest"
+    UploadEvidence:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            $ref: "#/components/schemas/UploadEvidenceRequest"
+    UpdateMembership:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/UpdateMembershipRequest"
+    SendAgentMessage:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/SendAgentMessageRequest"
+
+  responses:
+    Success:
+      description: Successful JSON response.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiSuccessResponse"
+    PagelessListSuccess:
+      description: Successful JSON response with an array data payload.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/ApiSuccessResponse"
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+    PaginatedListSuccess:
+      description: Successful JSON response with an array data payload and pagination metadata.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/ApiSuccessResponse"
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  meta:
+                    type: object
+                    required: [pagination]
+                    properties:
+                      pagination:
+                        $ref: "#/components/schemas/PaginationMeta"
+    BadRequest:
+      description: Validation failed or request payload is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiErrorResponse"
+    Unauthorized:
+      description: Authentication failed or token is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiErrorResponse"
+    Forbidden:
+      description: Authenticated but not allowed for this action or tenant.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiErrorResponse"
+    NotFound:
+      description: Resource does not exist or is not visible in the current tenant.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiErrorResponse"
+    Conflict:
+      description: Request conflicts with current resource state.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiErrorResponse"
+    ServiceUnavailable:
+      description: Required external service or configuration is unavailable.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiErrorResponse"
+    InternalServerError:
+      description: Unexpected server error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiErrorResponse"
+
+  schemas:
+    MembershipRole:
+      type: string
+      enum: [OWNER, MANAGER, STAFF]
+    MembershipStatus:
+      type: string
+      enum: [ACTIVE, INVITED, DISABLED]
+    InvitationStatus:
+      type: string
+      enum: [PENDING, ACCEPTED, CANCELLED, EXPIRED]
+    JobStatus:
+      type: string
+      enum: [NEW, SCHEDULED, IN_PROGRESS, PENDING_REVIEW, COMPLETED, CANCELLED]
+    JobEvidenceKind:
+      type: string
+      enum: [SITE_PHOTO, COMPLETION_PROOF, CUSTOMER_DOCUMENT, ISSUE_EVIDENCE]
+    NotificationType:
+      type: string
+      enum:
+        - JOB_ASSIGNED
+        - JOB_UNASSIGNED
+        - JOB_STATUS_CHANGED
+        - JOB_COMPLETION_SUBMITTED
+        - JOB_COMPLETION_APPROVED
+        - JOB_COMPLETION_RETURNED
+
+    RegisterRequest:
+      type: object
+      required: [email, password, displayName]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        displayName:
+          type: string
+          minLength: 1
+        tenantName:
+          type: string
+          minLength: 1
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 1
+        tenantId:
+          type: string
+          format: uuid
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+          minLength: 20
+    LogoutRequest:
+      type: object
+      properties:
+        allDevices:
+          type: boolean
+          default: false
+    SwitchTenantRequest:
+      type: object
+      required: [tenantId]
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+    CreateInvitationRequest:
+      type: object
+      required: [email, role]
+      properties:
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [MANAGER, STAFF]
+    AcceptInvitationRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          minLength: 20
+    CustomerInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        phone:
+          type: string
+          maxLength: 50
+        email:
+          type: string
+          format: email
+        address:
+          type: string
+          maxLength: 500
+        notes:
+          type: string
+          maxLength: 2000
+    JobInput:
+      type: object
+      required: [customerId, title]
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+          maxLength: 5000
+        scheduledStartAt:
+          type: string
+          format: date-time
+        scheduledEndAt:
+          type: string
+          format: date-time
+    AssignJobRequest:
+      type: object
+      required: [membershipId]
+      properties:
+        membershipId:
+          type: string
+          format: uuid
+    JobStatusTransitionRequest:
+      type: object
+      required: [toStatus]
+      properties:
+        toStatus:
+          $ref: "#/components/schemas/JobStatus"
+        reason:
+          type: string
+          maxLength: 5000
+    SubmitCompletionReviewRequest:
+      type: object
+      required: [completionNote]
+      properties:
+        completionNote:
+          type: string
+          minLength: 1
+          maxLength: 5000
+    ReturnCompletionReviewRequest:
+      type: object
+      required: [reviewNote]
+      properties:
+        reviewNote:
+          type: string
+          minLength: 1
+          maxLength: 5000
+    ScheduleConflictCheckRequest:
+      type: object
+      required: [assigneeUserId, scheduledStartAt, scheduledEndAt]
+      properties:
+        assigneeUserId:
+          type: string
+          format: uuid
+        scheduledStartAt:
+          type: string
+          format: date-time
+        scheduledEndAt:
+          type: string
+          format: date-time
+        excludeJobId:
+          type: string
+          format: uuid
+    UploadEvidenceRequest:
+      type: object
+      required: [kind, file]
+      properties:
+        kind:
+          $ref: "#/components/schemas/JobEvidenceKind"
+        note:
+          type: string
+          maxLength: 300
+        file:
+          type: string
+          format: binary
+    UpdateMembershipRequest:
+      type: object
+      properties:
+        role:
+          $ref: "#/components/schemas/MembershipRole"
+        status:
+          type: string
+          enum: [ACTIVE, DISABLED]
+    SendAgentMessageRequest:
+      type: object
+      required: [content, timezone]
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        timezone:
+          type: string
+          minLength: 1
+          maxLength: 100
+
+    PaginationMeta:
+      type: object
+      required: [page, pageSize, total, totalPages]
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        pageSize:
+          type: integer
+          minimum: 1
+        total:
+          type: integer
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 1
+    ApiSuccessResponse:
+      type: object
+      required: [success, message]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        message:
+          type: string
+        data: {}
+        meta:
+          type: object
+          additionalProperties: true
+    ApiErrorResponse:
+      type: object
+      required: [success, message]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true

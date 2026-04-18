@@ -75,7 +75,7 @@ jobs:
           scp \
             -i ~/.ssh/opsflow_deploy_key \
             -P "$EC2_PORT" \
-            deploy/scripts/deploy-prod.sh \
+            infra/scripts/deploy-prod.sh \
             "$EC2_USER@$EC2_HOST:/tmp/opsflow-deploy-prod.sh"
 
       - name: Deploy to EC2

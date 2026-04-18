@@ -68,7 +68,7 @@ services:
 
   nginx:
     build:
-      context: ./deploy/nginx
+      context: ./infra/nginx
       dockerfile: Dockerfile
     container_name: opsflow-nginx-prod
     restart: unless-stopped

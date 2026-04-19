@@ -236,12 +236,12 @@ export function NotificationBell() {
         aria-label="Notifications"
         aria-expanded={isOpen}
         onClick={() => setIsOpen((current) => !current)}
-        className="relative flex h-10 w-10 items-center justify-center rounded-[20px] border border-white/70 bg-white shadow-sm transition hover:bg-slate-50"
+        className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] shadow-sm transition hover:bg-[var(--color-app-panel-muted)]"
       >
         {hasUnread ? (
-          <BellRing className="h-5 w-5 text-cyan-600" />
+          <BellRing className="h-5 w-5 text-[var(--color-brand)]" />
         ) : (
-          <Bell className="h-5 w-5 text-slate-500" />
+          <Bell className="h-5 w-5 text-[var(--color-text-secondary)]" />
         )}
         {hasUnread ? (
           <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white shadow-sm">
@@ -251,11 +251,11 @@ export function NotificationBell() {
       </button>
 
       {isOpen ? (
-        <div className="absolute right-0 top-12 z-50 w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-[24px] border border-white/70 bg-white shadow-[var(--shadow-floating)]">
-          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+        <div className="absolute right-0 top-12 z-50 w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] shadow-[var(--shadow-floating)]">
+          <div className="flex items-center justify-between border-b border-[var(--color-app-border)] px-4 py-3">
             <div>
-              <p className="text-sm font-bold text-slate-900">Notifications</p>
-              <p className="text-xs text-slate-500">
+              <p className="text-sm font-bold text-[var(--color-text)]">Notifications</p>
+              <p className="text-xs text-[var(--color-text-secondary)]">
                 {hasUnread ? `${unreadCount} unread` : "All caught up"}
               </p>
             </div>
@@ -271,22 +271,22 @@ export function NotificationBell() {
           </div>
 
           {error ? (
-            <div className="border-b border-rose-100 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+            <div className="border-b border-[var(--color-app-border)] bg-[var(--color-danger-soft)] px-4 py-3 text-xs text-[var(--color-danger)]">
               {error}
             </div>
           ) : null}
 
           <div className="max-h-[420px] overflow-y-auto">
             {isLoading ? (
-              <div className="px-4 py-8 text-center text-sm text-slate-500">
+              <div className="px-4 py-8 text-center text-sm text-[var(--color-text-secondary)]">
                 Loading notifications...
               </div>
             ) : null}
 
             {!isLoading && items.length === 0 ? (
               <div className="px-4 py-8 text-center">
-                <p className="text-sm font-semibold text-slate-800">No notifications</p>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="text-sm font-semibold text-[var(--color-text)]">No notifications</p>
+                <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
                   Work updates will arrive here.
                 </p>
               </div>
@@ -299,25 +299,25 @@ export function NotificationBell() {
                   const content = (
                     <div
                       className={cn(
-                        "block border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50",
-                        unread ? "bg-cyan-50/50" : "bg-white",
+                        "block border-b border-[var(--color-app-border)] px-4 py-3 text-left transition hover:bg-[var(--color-app-panel-muted)]",
+                        unread ? "bg-[var(--color-brand-soft)]" : "bg-[var(--color-app-panel)]",
                       )}
                     >
                       <div className="flex items-start gap-3">
                         <span
                           className={cn(
                             "mt-1 h-2 w-2 shrink-0 rounded-full",
-                            unread ? "bg-cyan-500" : "bg-slate-200",
+                            unread ? "bg-[var(--color-brand)]" : "bg-[var(--color-app-border-strong)]",
                           )}
                         />
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-semibold text-slate-900">
+                          <span className="block text-sm font-semibold text-[var(--color-text)]">
                             {notification.title}
                           </span>
-                          <span className="mt-1 block text-xs leading-5 text-slate-500">
+                          <span className="mt-1 block text-xs leading-5 text-[var(--color-text-secondary)]">
                             {notification.body}
                           </span>
-                          <span className="mt-2 block text-[11px] font-medium text-slate-400">
+                          <span className="mt-2 block text-[11px] font-medium text-[var(--color-text-muted)]">
                             {formatTimestamp(notification.createdAt)}
                           </span>
                         </span>

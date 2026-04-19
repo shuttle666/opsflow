@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, Inter } from "next/font/google";
+import { DM_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import { AppProviders } from "@/providers/app-providers";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
+const plusJakartaSans = Plus_Jakarta_Sans({
+  variable: "--font-plus-jakarta",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
 });
 
-const jetBrainsMono = IBM_Plex_Mono({
-  variable: "--font-jetbrains-mono",
+const dmMono = DM_Mono({
+  variable: "--font-dm-mono",
   subsets: ["latin"],
   weight: ["400", "500"],
 });
@@ -27,7 +28,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${inter.variable} ${jetBrainsMono.variable} bg-app text-slate-950 antialiased`}
+        className={`${plusJakartaSans.variable} ${dmMono.variable} bg-app text-slate-950 antialiased`}
       >
         <AppProviders>{children}</AppProviders>
       </body>

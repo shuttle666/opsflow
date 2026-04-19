@@ -28,6 +28,7 @@ describe("JobEvidencePanel", () => {
       />,
     );
 
+    await user.click(screen.getByRole("button", { name: "Upload evidence" }));
     await user.selectOptions(screen.getByLabelText("Evidence type"), "COMPLETION_PROOF");
     await user.type(screen.getByLabelText("Note"), "Signed off by customer");
     await user.upload(

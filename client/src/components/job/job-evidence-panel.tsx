@@ -6,9 +6,11 @@ import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
 import { LoadingPanel } from "@/components/ui/loading-panel";
 import { SummaryCard } from "@/components/ui/info-cards";
 import {
+  cn,
   inputClassName,
   secondaryButtonClassName,
   selectClassName,
+  surfaceClassName,
   subtleButtonClassName,
   textAreaClassName,
 } from "@/components/ui/styles";
@@ -78,6 +80,7 @@ export function JobEvidencePanel({
   const [success, setSuccess] = useState<string | null>(null);
   const [activeDeleteId, setActiveDeleteId] = useState<string | null>(null);
   const [activeDownloadId, setActiveDownloadId] = useState<string | null>(null);
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
 
   const combinedError = error ?? clientError;
   const evidenceCountLabel = useMemo(
@@ -116,6 +119,7 @@ export function JobEvidencePanel({
     setNote("");
     setKind("SITE_PHOTO");
     setSuccess("Evidence uploaded successfully.");
+    setIsUploadOpen(false);
     form.reset();
   }
 
@@ -123,29 +127,45 @@ export function JobEvidencePanel({
     <SummaryCard
       eyebrow="Job Evidence"
       title="Field media and proof"
-      description="Store site photos, completion proof, and supporting documents directly on this work order."
+      description="Photos, proof, and documents attached to this work order."
     >
       <div className="space-y-4">
-        <div className="rounded-[24px] border border-dashed border-sky-200 bg-white/72 p-4">
-          <div className="space-y-2">
-            <p className="text-sm font-semibold text-slate-900">Add evidence</p>
-            <p className="text-sm leading-6 text-slate-500">
-              Use this section for completion documents, field photos, customer-provided
-              materials, and issue evidence tied to this job.
-            </p>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-              {evidenceCountLabel}
-            </p>
+        <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-1">
+              <p className="text-sm font-bold text-[var(--color-text)]">Evidence files</p>
+              <p className="text-xs font-semibold uppercase text-[var(--color-text-muted)]">
+                {evidenceCountLabel}
+              </p>
+            </div>
+            {canUpload ? (
+              <button
+                type="button"
+                aria-expanded={isUploadOpen}
+                onClick={() => {
+                  setIsUploadOpen((current) => !current);
+                  setClientError(null);
+                }}
+                className={secondaryButtonClassName}
+              >
+                {isUploadOpen ? "Hide upload" : "Upload evidence"}
+              </button>
+            ) : null}
           </div>
 
           {!canUpload ? (
-            <p className="mt-4 text-sm text-slate-500">
+            <p className="mt-4 text-sm leading-6 text-[var(--color-text-secondary)]">
               Your current role can review evidence on this job, but cannot upload new files.
             </p>
-          ) : (
-            <form className="mt-4 space-y-3" onSubmit={handleSubmit}>
+          ) : isUploadOpen ? (
+            <form
+              className="mt-4 space-y-3 rounded-lg border border-dashed border-[var(--color-brand)] bg-[var(--color-app-panel)] p-4"
+              onSubmit={handleSubmit}
+            >
               <label className="block space-y-2">
-                <span className="text-sm font-medium text-slate-700">Evidence type</span>
+                <span className="text-sm font-semibold text-[var(--color-text)]">
+                  Evidence type
+                </span>
                 <select
                   value={kind}
                   onChange={(event) => setKind(event.target.value as JobEvidenceKind)}
@@ -160,7 +180,7 @@ export function JobEvidencePanel({
               </label>
 
               <label className="block space-y-2">
-                <span className="text-sm font-medium text-slate-700">Note</span>
+                <span className="text-sm font-semibold text-[var(--color-text)]">Note</span>
                 <textarea
                   value={note}
                   onChange={(event) => setNote(event.target.value)}
@@ -171,7 +191,7 @@ export function JobEvidencePanel({
               </label>
 
               <label className="block space-y-2">
-                <span className="text-sm font-medium text-slate-700">File</span>
+                <span className="text-sm font-semibold text-[var(--color-text)]">File</span>
                 <input
                   type="file"
                   accept=".jpg,.jpeg,.png,.webp,.pdf"
@@ -189,17 +209,17 @@ export function JobEvidencePanel({
                   {isUploading ? "Uploading..." : "Add evidence"}
                 </button>
                 {selectedFile ? (
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm text-[var(--color-text-secondary)]">
                     Ready to upload: {selectedFile.name} ({formatFileSize(selectedFile.size)})
                   </p>
                 ) : null}
               </div>
             </form>
-          )}
+          ) : null}
         </div>
 
         {combinedError ? <InlineErrorBanner message={combinedError} /> : null}
-        {success ? <p className="text-sm text-emerald-700">{success}</p> : null}
+        {success ? <p className="text-sm text-[var(--color-success)]">{success}</p> : null}
 
         {isLoading ? (
           <LoadingPanel label="Loading evidence..." compact />
@@ -207,30 +227,34 @@ export function JobEvidencePanel({
           <EmptyStatePanel
             compact
             title="No evidence added yet"
-            description="Photos, completion proof, and supporting documents for this job will appear here."
+            description="Uploaded files will appear here."
           />
         ) : (
           <div className="space-y-3">
             {items.map((item) => (
               <div
                 key={item.id}
-                className="rounded-[24px] border border-white/75 bg-white p-4 shadow-sm"
+                className={cn(surfaceClassName, "p-4")}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-semibold text-slate-900">{item.fileName}</p>
-                      <span className="rounded-full border border-sky-100 bg-sky-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-sky-700">
+                      <p className="text-sm font-bold text-[var(--color-text)]">
+                        {item.fileName}
+                      </p>
+                      <span className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-brand-soft)] px-2.5 py-1 text-[11px] font-semibold uppercase text-[var(--color-brand)]">
                         {formatEvidenceKind(item.kind)}
                       </span>
                     </div>
-                    <p className="text-sm text-slate-600">
+                    <p className="text-sm text-[var(--color-text-secondary)]">
                       {item.mimeType} | {formatFileSize(item.sizeBytes)}
                     </p>
                     {item.note ? (
-                      <p className="text-sm leading-6 text-slate-600">{item.note}</p>
+                      <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
+                        {item.note}
+                      </p>
                     ) : null}
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                    <p className="text-xs uppercase text-[var(--color-text-muted)]">
                       {item.uploadedBy.displayName} | {formatDateTime(item.createdAt)}
                     </p>
                   </div>

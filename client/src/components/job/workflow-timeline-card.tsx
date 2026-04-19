@@ -13,6 +13,7 @@ import {
   cn,
   primaryButtonClassName,
   secondaryButtonClassName,
+  surfaceClassName,
   textAreaClassName,
 } from "@/components/ui/styles";
 import type { TimelineItemView, TransitionActionView } from "@/types/future-ui";
@@ -40,17 +41,17 @@ type WorkflowTimelineCardProps = {
 function stateClasses(state: TimelineItemView["state"]) {
   switch (state) {
     case "completed":
-      return "border-emerald-100 bg-emerald-50 text-emerald-600";
+      return "border-[var(--color-success)] bg-[var(--color-success-soft)] text-[var(--color-success)]";
     case "current":
-      return "border-cyan-100 bg-cyan-50 text-cyan-700";
+      return "border-[var(--color-brand)] bg-[var(--color-brand-soft)] text-[var(--color-brand)]";
     default:
-      return "border-slate-200 bg-slate-50 text-slate-500";
+      return "border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] text-[var(--color-text-muted)]";
   }
 }
 
 function timelineMarkerClasses(item: TimelineItemView) {
   if (item.status === "CANCELLED") {
-    return "border-rose-100 bg-rose-50 text-rose-600";
+    return "border-[var(--color-danger)] bg-[var(--color-danger-soft)] text-[var(--color-danger)]";
   }
 
   return stateClasses(item.state);
@@ -263,79 +264,86 @@ export function WorkflowTimelineCard({
     <SummaryCard
       eyebrow="Progress"
       title="Job lifecycle"
-      description="Review where this job sits in the service flow. Assignment, scheduling, field completion, and evidence should be the normal signals for progress."
+      description="Track current stage, recent movement, and fallback controls without leaving this record."
     >
       <div className="space-y-4">
         <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-[24px] border border-white/75 bg-white p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+          <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4">
+            <p className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
               Current status
             </p>
-            <p className="mt-2 text-xl font-semibold text-slate-950">{currentStatusLabel}</p>
+            <p className="mt-2 text-lg font-bold text-[var(--color-text)]">{currentStatusLabel}</p>
           </div>
-          <div className="rounded-[24px] border border-white/75 bg-white p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+          <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4">
+            <p className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
               Assigned to
             </p>
-            <p className="mt-2 text-xl font-semibold text-slate-950">
+            <p className="mt-2 text-lg font-bold text-[var(--color-text)]">
               {assigneeName ?? "Unassigned"}
             </p>
           </div>
-          <div className="rounded-[24px] border border-white/75 bg-white p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+          <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4">
+            <p className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
               Your access
             </p>
-            <p className="mt-2 text-sm font-semibold text-slate-950">
+            <p className="mt-2 text-sm font-bold text-[var(--color-text)]">
               {formatRoleLabel(currentRole)}
               {currentUserName ? ` - ${currentUserName}` : ""}
             </p>
-            <p className="mt-1 text-sm leading-6 text-slate-500">{effectiveAccessMessage}</p>
+            <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">
+              {effectiveAccessMessage}
+            </p>
           </div>
         </div>
 
-        <div className="rounded-[24px] border border-cyan-100 bg-cyan-50/55 p-4">
+        <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-brand-soft)] p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="max-w-2xl">
-              <p className="text-sm font-semibold text-cyan-950">{statusGuidance.title}</p>
-              <p className="mt-1 text-sm leading-6 text-cyan-900/75">
-                {statusGuidance.description}
-              </p>
-              <p className="mt-3 text-sm leading-6 text-cyan-950">
+              <p className="text-sm font-bold text-[var(--color-text)]">{statusGuidance.title}</p>
+              <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">
                 {statusGuidance.nextStep}
               </p>
             </div>
-            <span className="rounded-full border border-cyan-200 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-700">
+            <span className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3 py-1 text-[11px] font-semibold uppercase text-[var(--color-brand)]">
               Current handoff
             </span>
           </div>
 
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <div className="rounded-[20px] border border-white/75 bg-white/72 p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Owner / Manager
-              </p>
-              <p className="mt-2 text-sm leading-6 text-slate-700">
-                {statusGuidance.ownerManager}
+          <details className="mt-3 group">
+            <summary className="cursor-pointer text-sm font-semibold text-[var(--color-brand)]">
+              Status guidance
+            </summary>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] p-3">
+                <p className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
+                  Owner / Manager
+                </p>
+                <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
+                  {statusGuidance.ownerManager}
+                </p>
+              </div>
+              <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] p-3">
+                <p className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
+                  Assigned staff
+                </p>
+                <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
+                  {statusGuidance.staff}
+                </p>
+              </div>
+              <p className="md:col-span-2 text-sm leading-6 text-[var(--color-text-secondary)]">
+                {statusGuidance.description}
               </p>
             </div>
-            <div className="rounded-[20px] border border-white/75 bg-white/72 p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Assigned staff
-              </p>
-              <p className="mt-2 text-sm leading-6 text-slate-700">{statusGuidance.staff}</p>
-            </div>
-          </div>
+          </details>
         </div>
 
         {hasManualStatusActions ? (
-          <div className="space-y-3 rounded-[24px] border border-white/75 bg-white p-4 shadow-sm">
+          <div className={`${surfaceClassName} space-y-3 p-4`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="max-w-xl">
-                <p className="text-sm font-semibold text-slate-900">Manual status controls</p>
-                <p className="text-sm leading-6 text-slate-500">
-                  Hidden by default because lifecycle progress should come from assignment,
-                  scheduling, field completion, and evidence events. Use this only to correct or
-                  unblock the record.
+                <p className="text-sm font-bold text-[var(--color-text)]">Status controls</p>
+                <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
+                  Manual transitions stay folded until they are needed for correction or unblock.
                 </p>
               </div>
               <button
@@ -359,22 +367,24 @@ export function WorkflowTimelineCard({
                     <div
                       key={action.id}
                       className={cn(
-                        "rounded-[20px] border p-3",
+                        "rounded-lg border p-3",
                         selectedActionId === action.id
-                          ? "border-cyan-200 bg-cyan-50/70"
-                          : "border-slate-100 bg-slate-50/70",
+                          ? "border-[var(--color-brand)] bg-[var(--color-brand-soft)]"
+                          : "border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)]",
                       )}
                     >
                       <div className="flex h-full flex-col gap-3">
                         <div className="space-y-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-sm font-semibold text-slate-900">{action.label}</p>
-                            <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">
+                            <p className="text-sm font-bold text-[var(--color-text)]">
+                              {action.label}
+                            </p>
+                            <span className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-2.5 py-1 text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
                               {actionInputSummary(action)}
                             </span>
                           </div>
                           {action.description ? (
-                            <p className="text-sm leading-6 text-slate-500">
+                            <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
                               {action.description}
                             </p>
                           ) : null}
@@ -395,9 +405,11 @@ export function WorkflowTimelineCard({
                 </div>
 
                 {selectedAction && inputRequired ? (
-                  <div className="space-y-3 rounded-[20px] border border-dashed border-sky-200 bg-slate-50/70 p-4">
+                  <div className="space-y-3 rounded-lg border border-dashed border-[var(--color-brand)] bg-[var(--color-app-panel-muted)] p-4">
                     <label className="block space-y-2">
-                      <span className="text-sm font-medium text-slate-800">{inputLabel}</span>
+                      <span className="text-sm font-semibold text-[var(--color-text)]">
+                        {inputLabel}
+                      </span>
                       <textarea
                         value={reason}
                         onChange={(event) => setReason(event.target.value)}
@@ -432,8 +444,8 @@ export function WorkflowTimelineCard({
               </>
             ) : null}
 
-            {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-            {success ? <p className="text-sm text-emerald-700">{success}</p> : null}
+            {error ? <p className="text-sm text-[var(--color-danger)]">{error}</p> : null}
+            {success ? <p className="text-sm text-[var(--color-success)]">{success}</p> : null}
           </div>
         ) : isTerminalStatus ? (
           <EmptyStatePanel
@@ -443,12 +455,11 @@ export function WorkflowTimelineCard({
           />
         ) : null}
 
-        <div className="space-y-3 rounded-[24px] border border-white/75 bg-white p-4 shadow-sm">
+        <div className={`${surfaceClassName} space-y-3 p-4`}>
           <div>
-            <p className="text-sm font-semibold text-slate-900">Status history</p>
-            <p className="text-sm leading-6 text-slate-500">
-              Completed stages show who moved the job and when. Pending stages stay visible so
-              the remaining path is clear.
+            <p className="text-sm font-bold text-[var(--color-text)]">Status history</p>
+            <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
+              A compact view of the path already taken and the next expected stage.
             </p>
           </div>
 
@@ -457,23 +468,23 @@ export function WorkflowTimelineCard({
               <div key={item.id} className="flex gap-3">
                 <div className="flex shrink-0 flex-col items-center">
                   <div
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-xs font-semibold ${timelineMarkerClasses(item)}`}
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-semibold ${timelineMarkerClasses(item)}`}
                   >
                     <StatusMarkerIcon status={item.status} />
                   </div>
                   {item.id !== items[items.length - 1]?.id ? (
-                    <div className="mt-2 h-full w-px bg-app-border" />
+                    <div className="mt-2 h-full w-px bg-[var(--color-app-border)]" />
                   ) : null}
                 </div>
                 <div className="min-w-0 flex-1 pb-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-slate-900">{item.label}</p>
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                    <p className="text-sm font-bold text-[var(--color-text)]">{item.label}</p>
+                    <p className="text-xs uppercase text-[var(--color-text-muted)]">
                       {item.timestamp ?? "Pending"}
                     </p>
                   </div>
                   {item.description ? (
-                    <p className="mt-1 text-sm leading-6 text-slate-600">
+                    <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">
                       {item.description}
                     </p>
                   ) : null}

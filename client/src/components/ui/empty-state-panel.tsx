@@ -19,13 +19,13 @@ export function EmptyStatePanel({
   return (
     <div
       className={cn(
-        "rounded-[28px] border border-dashed border-sky-200 bg-white/72 text-center shadow-sm",
+        "rounded-lg border border-dashed border-[var(--color-app-border-strong)] bg-[var(--color-app-panel-muted)] text-center shadow-sm",
         compact ? "px-5 py-6" : "px-6 py-10",
       )}
     >
       <div className="mx-auto max-w-md space-y-2">
-        <p className="text-sm font-semibold text-slate-900">{title}</p>
-        <p className="text-sm leading-6 text-slate-500">{description}</p>
+        <p className="text-sm font-semibold text-[var(--color-text)]">{title}</p>
+        <p className="text-sm leading-6 text-[var(--color-text-secondary)]">{description}</p>
       </div>
 
       {actionLabel && actionHref ? (

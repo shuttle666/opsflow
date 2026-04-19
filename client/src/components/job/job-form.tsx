@@ -77,7 +77,7 @@ export function JobForm({
       >
         <div className="grid gap-5 md:grid-cols-2">
           <label className="block space-y-2 md:col-span-2">
-            <span className="text-sm font-medium text-slate-700">Customer</span>
+            <span className="text-sm font-medium text-[var(--color-text-secondary)]">Customer</span>
             <select {...register("customerId")} className={selectClassName}>
               <option value="">Select customer</option>
               {customers.map((customer) => (
@@ -92,7 +92,7 @@ export function JobForm({
           </label>
 
           <label className="block space-y-2 md:col-span-2">
-            <span className="text-sm font-medium text-slate-700">Job title</span>
+            <span className="text-sm font-medium text-[var(--color-text-secondary)]">Job title</span>
             <input
               {...register("title")}
               className={inputClassName}
@@ -104,7 +104,7 @@ export function JobForm({
           </label>
 
           <label className="block space-y-2 md:col-span-2">
-            <span className="text-sm font-medium text-slate-700">Description</span>
+            <span className="text-sm font-medium text-[var(--color-text-secondary)]">Description</span>
             <textarea
               {...register("description")}
               rows={4}
@@ -117,7 +117,7 @@ export function JobForm({
           </label>
 
           <label className="block space-y-2">
-            <span className="text-sm font-medium text-slate-700">Start time</span>
+            <span className="text-sm font-medium text-[var(--color-text-secondary)]">Start time</span>
             <input
               {...startTimeField}
               type="datetime-local"
@@ -159,7 +159,7 @@ export function JobForm({
           </label>
 
           <label className="block space-y-2">
-            <span className="text-sm font-medium text-slate-700">End time</span>
+            <span className="text-sm font-medium text-[var(--color-text-secondary)]">End time</span>
             <input
               {...endTimeField}
               type="datetime-local"

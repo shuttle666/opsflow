@@ -95,7 +95,7 @@ export function InvitationCreateCard() {
         title="Invitation management"
         description="Tenant context is not available yet."
       >
-        <p className="text-sm text-slate-600">Please refresh your session first.</p>
+        <p className="text-sm text-[var(--color-text-secondary)]">Please refresh your session first.</p>
       </SectionCard>
     );
   }
@@ -106,11 +106,11 @@ export function InvitationCreateCard() {
       <SectionCard
         eyebrow="Team access"
         title="Invitation management"
-        description="Only owner and manager roles can invite new members."
-      >
-        <p className="text-sm text-slate-600">
-          Your current role is <span className="font-semibold">{currentTenant.role}</span>.
-        </p>
+      description="Only owner and manager roles can invite new members."
+    >
+      <p className="text-sm text-[var(--color-text-secondary)]">
+        Your current role is <span className="font-semibold">{currentTenant.role}</span>.
+      </p>
       </SectionCard>
     );
   }
@@ -152,7 +152,7 @@ export function InvitationCreateCard() {
         >
           <div className="grid gap-4 md:grid-cols-[1.4fr_0.8fr]">
             <label className="block space-y-2">
-              <span className="text-sm font-medium text-slate-700">Invitee email</span>
+              <span className="text-sm font-medium text-[var(--color-text-secondary)]">Invitee email</span>
               <input
                 {...register("email")}
                 placeholder="new.member@example.com"
@@ -164,7 +164,7 @@ export function InvitationCreateCard() {
             </label>
 
             <label className="block space-y-2">
-              <span className="text-sm font-medium text-slate-700">Role</span>
+              <span className="text-sm font-medium text-[var(--color-text-secondary)]">Role</span>
               <select {...register("role")} className={selectClassName}>
                 <option value="MANAGER">MANAGER</option>
                 <option value="STAFF">STAFF</option>
@@ -191,10 +191,10 @@ export function InvitationCreateCard() {
       {success ? <p className="mt-4 text-sm text-emerald-700">{success}</p> : null}
 
       <div className="mt-6 space-y-3">
-        <p className="text-sm font-semibold text-slate-800">Pending invitations</p>
+        <p className="text-sm font-semibold text-[var(--color-text)]">Pending invitations</p>
 
         {loadingList ? (
-          <p className="text-sm text-slate-600">Loading invitations...</p>
+          <p className="text-sm text-[var(--color-text-secondary)]">Loading invitations...</p>
         ) : null}
 
         {!loadingList && invitations.length === 0 ? (
@@ -208,15 +208,15 @@ export function InvitationCreateCard() {
         {invitations.map((invitation) => (
           <div
             key={invitation.id}
-            className="rounded-[24px] border border-white/70 bg-white p-4 text-sm shadow-sm"
+            className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4 text-sm shadow-sm"
           >
-            <p className="font-semibold text-slate-900">{invitation.email}</p>
+            <p className="font-semibold text-[var(--color-text)]">{invitation.email}</p>
             <div className="mt-2 flex flex-wrap gap-2">
               <StatusBadge kind="role" value={invitation.role} />
               <StatusBadge kind="invitation" value={invitation.status} />
             </div>
-            <p className="text-slate-600">Expires: {formatDate(invitation.expiresAt)}</p>
-            <p className="text-slate-600">
+            <p className="text-[var(--color-text-secondary)]">Expires: {formatDate(invitation.expiresAt)}</p>
+            <p className="text-[var(--color-text-secondary)]">
               Invited by: {invitation.invitedBy.displayName} ({invitation.invitedBy.email})
             </p>
 

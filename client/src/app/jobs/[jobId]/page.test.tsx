@@ -209,7 +209,7 @@ describe("job detail page", () => {
 
     expect(await screen.findByText("Job lifecycle")).toBeInTheDocument();
     expect(screen.getAllByText("Cancelled").length).toBeGreaterThan(0);
-    expect(screen.queryByText("Scheduled")).not.toBeInTheDocument();
+    expect(screen.getByText("Scheduled")).toBeInTheDocument();
     expect(screen.queryByText("Completed")).not.toBeInTheDocument();
     expect(screen.queryByText("-")).not.toBeInTheDocument();
   });
@@ -318,7 +318,9 @@ describe("job detail page", () => {
       });
     });
 
-    expect(await screen.findByText("Completion submitted for review.")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getAllByText("Completion submitted for review.").length).toBeGreaterThan(0);
+    });
     expect(screen.getAllByText("Pending review").length).toBeGreaterThan(0);
   });
 
@@ -518,7 +520,9 @@ describe("job detail page", () => {
 
     render(<JobDetailPage />);
 
-    expect(await screen.findByText("PENDING_REVIEW")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getAllByText("Pending review").length).toBeGreaterThan(0);
+    });
     expect(screen.getByText("Waiting for review.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Approve completion" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Return for rework" })).not.toBeInTheDocument();

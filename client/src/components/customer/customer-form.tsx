@@ -46,7 +46,7 @@ export function CustomerForm({
       >
         <div className="grid gap-5 md:grid-cols-2">
           <label className="block space-y-2">
-            <span className="text-sm font-medium text-slate-700">Customer name</span>
+            <span className="text-sm font-medium text-[var(--color-text-secondary)]">Customer name</span>
             <input
               {...register("name")}
               className={inputClassName}
@@ -58,7 +58,7 @@ export function CustomerForm({
           </label>
 
           <label className="block space-y-2">
-            <span className="text-sm font-medium text-slate-700">Phone</span>
+            <span className="text-sm font-medium text-[var(--color-text-secondary)]">Phone</span>
             <input
               {...register("phone")}
               className={inputClassName}
@@ -70,7 +70,7 @@ export function CustomerForm({
           </label>
 
           <label className="block space-y-2">
-            <span className="text-sm font-medium text-slate-700">Email</span>
+            <span className="text-sm font-medium text-[var(--color-text-secondary)]">Email</span>
             <input
               {...register("email")}
               className={inputClassName}
@@ -82,7 +82,7 @@ export function CustomerForm({
           </label>
 
           <label className="block space-y-2 md:col-span-2">
-            <span className="text-sm font-medium text-slate-700">Address</span>
+            <span className="text-sm font-medium text-[var(--color-text-secondary)]">Address</span>
             <textarea
               {...register("address")}
               rows={4}

@@ -22,15 +22,15 @@ type StatCardProps = {
 function statToneClassName(tone: NonNullable<StatCardProps["tone"]>) {
   switch (tone) {
     case "success":
-      return "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/80";
+      return "bg-[var(--color-success-soft)] text-[var(--color-success)] ring-1 ring-[var(--color-app-border)]";
     case "warning":
-      return "bg-amber-100 text-amber-700 ring-1 ring-amber-200/80";
+      return "bg-[var(--color-warning-soft)] text-[var(--color-warning)] ring-1 ring-[var(--color-app-border)]";
     case "indigo":
-      return "bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200/80";
+      return "bg-[var(--color-brand-soft)] text-[var(--color-brand)] ring-1 ring-[var(--color-app-border)]";
     case "neutral":
-      return "bg-slate-200 text-slate-600 ring-1 ring-slate-300/80";
+      return "bg-[var(--color-app-panel-muted)] text-[var(--color-text-secondary)] ring-1 ring-[var(--color-app-border)]";
     default:
-      return "bg-sky-100 text-sky-700 ring-1 ring-sky-200/80";
+      return "bg-[var(--color-brand-soft)] text-[var(--color-brand)] ring-1 ring-[var(--color-app-border)]";
   }
 }
 
@@ -45,12 +45,16 @@ function BaseInfoCard({
     <section className={cn(surfaceClassName, "p-5", className)}>
       <div className="space-y-2">
         {eyebrow ? (
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+          <p className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
             {eyebrow}
           </p>
         ) : null}
-        <h3 className="text-lg font-bold text-slate-900">{title}</h3>
-        {description ? <p className="text-sm leading-6 text-slate-500">{description}</p> : null}
+        <h3 className="text-lg font-bold text-[var(--color-text)]">{title}</h3>
+        {description ? (
+          <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
+            {description}
+          </p>
+        ) : null}
       </div>
       {children ? <div className="mt-5">{children}</div> : null}
     </section>
@@ -58,7 +62,7 @@ function BaseInfoCard({
 }
 
 export function SummaryCard(props: InfoCardProps) {
-  return <BaseInfoCard {...props} className={cn("p-6", props.className)} />;
+  return <BaseInfoCard {...props} className={cn("p-5", props.className)} />;
 }
 
 export function MetaCard(props: InfoCardProps) {
@@ -79,21 +83,21 @@ export function StatCard({
   trendLabel,
 }: StatCardProps) {
   return (
-    <div className={`${surfaceClassName} flex flex-col gap-3 p-5 transition-shadow hover:shadow-[0_20px_44px_-28px_rgba(6,182,212,0.18)]`}>
+    <div className={`${surfaceClassName} flex flex-col gap-3 p-5 transition hover:border-[var(--color-brand)] hover:shadow-[var(--shadow-panel-hover)]`}>
       <div className="flex items-center gap-3">
         <div
           className={cn(
-            "flex h-10 w-10 items-center justify-center rounded-xl",
+            "flex h-8 w-8 items-center justify-center rounded-lg",
             statToneClassName(tone),
           )}
         >
           {icon ? icon : <span className="text-sm font-semibold">{label.slice(0, 1)}</span>}
         </div>
-        <p className="text-sm font-medium text-slate-500">{label}</p>
+        <p className="text-sm font-medium text-[var(--color-text-secondary)]">{label}</p>
       </div>
 
       <div className="flex flex-col items-start gap-1">
-        <p className="font-mono text-3xl font-bold tracking-tight text-slate-900">{value}</p>
+        <p className="font-mono text-3xl font-bold text-[var(--color-text)]">{value}</p>
         {trend !== undefined && trendLabel ? (
           <div className="mt-1 flex items-center gap-1.5">
             {trend > 0 ? (
@@ -101,12 +105,12 @@ export function StatCard({
             ) : trend < 0 ? (
               <TrendingDown className="h-4 w-4 text-rose-500" />
             ) : null}
-            <span className={cn("text-xs font-semibold", trend > 0 ? "text-emerald-600" : trend < 0 ? "text-rose-600" : "text-slate-400")}>
+            <span className={cn("text-xs font-semibold", trend > 0 ? "text-[var(--color-success)]" : trend < 0 ? "text-[var(--color-danger)]" : "text-[var(--color-text-muted)]")}>
               {trendLabel}
             </span>
           </div>
         ) : meta ? (
-          <p className="text-xs font-semibold text-cyan-600">{meta}</p>
+          <p className="text-xs font-semibold text-[var(--color-brand)]">{meta}</p>
         ) : null}
       </div>
     </div>

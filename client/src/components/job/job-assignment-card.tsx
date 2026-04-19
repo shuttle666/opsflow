@@ -3,9 +3,11 @@
 import { useEffect, useState } from "react";
 import { ActionCard } from "@/components/ui/info-cards";
 import {
+  cn,
   primaryButtonClassName,
   secondaryButtonClassName,
   selectClassName,
+  surfaceClassName,
 } from "@/components/ui/styles";
 import {
   assignJobRequest,
@@ -89,34 +91,49 @@ export function JobAssignmentCard({ job, onJobChange }: JobAssignmentCardProps) 
     <ActionCard
       eyebrow="Assignment"
       title="Staff assignment"
-      description="Assign this work order to an active staff member in the current tenant."
+      description="Current owner for field work and handoff."
     >
-      <div className="space-y-4 text-sm text-slate-700">
-        <div className="rounded-[24px] border border-white/75 bg-white p-4 shadow-sm">
-          <p>
-            Current assignee:{" "}
-            <span className="font-semibold">
+      <div className="space-y-4 text-sm text-[var(--color-text-secondary)]">
+        <div className={cn(surfaceClassName, "flex items-center gap-3 p-4 shadow-none")}>
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--color-brand-soft)] text-sm font-bold text-[var(--color-brand)]">
+            {(job.assignedTo?.displayName ?? "U").slice(0, 1).toUpperCase()}
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
+              Current assignee
+            </p>
+            <p className="truncate text-sm font-bold text-[var(--color-text)]">
               {job.assignedTo?.displayName ?? "Unassigned"}
-            </span>
-          </p>
-          {job.assignedTo?.email ? <p>Email: {job.assignedTo.email}</p> : null}
+            </p>
+            {job.assignedTo?.email ? (
+              <p className="truncate text-xs text-[var(--color-text-secondary)]">
+                {job.assignedTo.email}
+              </p>
+            ) : null}
+          </div>
         </div>
 
         {!assignable ? (
-          <p className="text-slate-600">
+          <p className="text-[var(--color-text-secondary)]">
             Your current role can review the assignee but cannot change it.
           </p>
         ) : (
           <>
-            {isLoading ? <p className="text-slate-600">Loading staff members...</p> : null}
+            {isLoading ? (
+              <p className="text-[var(--color-text-secondary)]">Loading staff members...</p>
+            ) : null}
 
             {!isLoading && staffMembers.length === 0 ? (
-              <p className="text-slate-600">No active staff members are available yet.</p>
+              <p className="text-[var(--color-text-secondary)]">
+                No active staff members are available yet.
+              </p>
             ) : null}
 
             {staffMembers.length > 0 ? (
               <label className="block space-y-2">
-                <span className="text-sm font-medium text-slate-700">Assign to staff</span>
+                <span className="text-sm font-semibold text-[var(--color-text)]">
+                  Assign to staff
+                </span>
                 <select
                   value={selectedMembershipId}
                   onChange={(event) => setSelectedMembershipId(event.target.value)}
@@ -199,8 +216,8 @@ export function JobAssignmentCard({ job, onJobChange }: JobAssignmentCardProps) 
           </>
         )}
 
-        {error ? <p className="text-rose-600">{error}</p> : null}
-        {success ? <p className="text-emerald-700">{success}</p> : null}
+        {error ? <p className="text-[var(--color-danger)]">{error}</p> : null}
+        {success ? <p className="text-[var(--color-success)]">{success}</p> : null}
       </div>
     </ActionCard>
   );

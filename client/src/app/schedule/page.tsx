@@ -13,6 +13,7 @@ import {
   Calendar,
   Layers3,
   ShieldCheck,
+  Sparkles,
   Users,
 } from "@/components/ui/icons";
 import { LoadingPanel } from "@/components/ui/loading-panel";
@@ -22,6 +23,7 @@ import {
   cn,
   primaryButtonClassName,
   secondaryButtonClassName,
+  strongSurfaceClassName,
   surfaceClassName,
   subtleButtonClassName,
 } from "@/components/ui/styles";
@@ -48,7 +50,7 @@ type ScheduleJobWithLane = ScheduleDayJobItem & {
 };
 
 const weekDayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const hourHeight = 72;
+const hourHeight = 54;
 const dayHours = Array.from({ length: 24 }, (_, hour) => hour);
 
 function canManageSchedule(role: string | undefined) {
@@ -122,8 +124,7 @@ function formatWeekTitle(start: Date, end: Date) {
 
 function formatHourLabel(hour: number) {
   return new Date(2026, 0, 1, hour, 0, 0).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
+    hour: "numeric",
   });
 }
 
@@ -224,13 +225,6 @@ function formatLongDate(date: Date) {
   });
 }
 
-function formatDayLabel(date: Date) {
-  return date.toLocaleDateString([], {
-    month: "short",
-    day: "numeric",
-  });
-}
-
 function jobAssigneeLabel(job: ScheduleJobWithLane) {
   return job.assignedTo?.displayName ?? job.laneLabel;
 }
@@ -285,6 +279,87 @@ function getDayBlockMetrics(job: ScheduleDayJobItem, day: Date) {
   };
 }
 
+function getTimelineWindow(jobs: ScheduleJobWithLane[], days: Date[]) {
+  const visibleHours = jobs
+    .flatMap((job) =>
+      days.flatMap((day) => {
+        if (!jobOverlapsDay(job, day) || !job.scheduledStartAt || !job.scheduledEndAt) {
+          return [];
+        }
+        const start = new Date(job.scheduledStartAt);
+        const end = new Date(job.scheduledEndAt);
+        return [start.getHours(), Math.max(end.getHours() + (end.getMinutes() > 0 ? 1 : 0), start.getHours() + 1)];
+      }),
+    );
+
+  if (visibleHours.length === 0) {
+    return { startHour: 8, endHour: 18 };
+  }
+
+  const startHour = Math.max(0, Math.min(8, Math.min(...visibleHours)));
+  const endHour = Math.min(24, Math.max(18, Math.max(...visibleHours)));
+  return { startHour, endHour: Math.max(startHour + 1, endHour) };
+}
+
+function getTimelineBlockMetrics(
+  job: ScheduleDayJobItem,
+  day: Date,
+  startHour: number,
+  endHour: number,
+) {
+  if (!job.scheduledStartAt || !job.scheduledEndAt) {
+    return { top: 0, height: hourHeight };
+  }
+
+  const windowStart = new Date(day);
+  windowStart.setHours(startHour, 0, 0, 0);
+  const windowEnd = new Date(day);
+  windowEnd.setHours(endHour, 0, 0, 0);
+  const jobStart = new Date(job.scheduledStartAt);
+  const jobEnd = new Date(job.scheduledEndAt);
+  const visibleStart = new Date(Math.max(jobStart.getTime(), windowStart.getTime()));
+  const visibleEnd = new Date(Math.min(jobEnd.getTime(), windowEnd.getTime()));
+  const startMinutes = (visibleStart.getTime() - windowStart.getTime()) / 60_000;
+  const endMinutes = (visibleEnd.getTime() - windowStart.getTime()) / 60_000;
+
+  return {
+    top: Math.max(0, (startMinutes / 60) * hourHeight),
+    height: Math.max(((endMinutes - startMinutes) / 60) * hourHeight, 42),
+  };
+}
+
+function jobAccent(job: ScheduleDayJobItem) {
+  if (job.hasConflict) {
+    return {
+      background: "var(--color-danger-soft)",
+      border: "var(--color-danger)",
+      text: "var(--color-danger)",
+    };
+  }
+
+  if (job.status === "IN_PROGRESS") {
+    return {
+      background: "var(--color-warning-soft)",
+      border: "var(--color-warning)",
+      text: "var(--color-warning)",
+    };
+  }
+
+  if (job.status === "COMPLETED") {
+    return {
+      background: "var(--color-success-soft)",
+      border: "var(--color-success)",
+      text: "var(--color-success)",
+    };
+  }
+
+  return {
+    background: "var(--color-brand-soft)",
+    border: "var(--color-brand)",
+    text: "var(--color-brand)",
+  };
+}
+
 function DayJobBlock({
   day,
   job,
@@ -293,32 +368,30 @@ function DayJobBlock({
   job: ScheduleDayJobItem;
 }) {
   const metrics = getDayBlockMetrics(job, day);
+  const accent = jobAccent(job);
 
   return (
     <Link
       href={`/jobs/${job.id}`}
-      className={cn(
-        "absolute inset-x-2 rounded-lg border px-3 py-2 text-left shadow-sm transition hover:shadow-md",
-        job.hasConflict
-          ? "border-rose-200 bg-rose-50/90 text-rose-900"
-          : "border-cyan-100 bg-white/90 text-slate-800",
-      )}
+      className="absolute inset-x-2 overflow-hidden rounded-lg border bg-[var(--color-app-panel)] px-3 py-2 text-left shadow-sm transition hover:shadow-[var(--shadow-panel-hover)]"
       style={{
         top: `${metrics.top}px`,
         minHeight: `${metrics.height}px`,
+        borderLeft: `3px solid ${accent.border}`,
+        background: accent.background,
       }}
     >
       <div className="space-y-1">
         <div className="flex items-start justify-between gap-2">
-          <p className="line-clamp-2 text-sm font-semibold">{job.title}</p>
+          <p className="line-clamp-2 text-sm font-semibold text-[var(--color-text)]">{job.title}</p>
           <StatusBadge kind="job" value={job.status} />
         </div>
-        <p className="text-xs text-slate-600">{job.customer.name}</p>
-        <p className="text-xs font-medium text-slate-500">
+        <p className="text-xs text-[var(--color-text-secondary)]">{job.customer.name}</p>
+        <p className="text-xs font-medium text-[var(--color-text-muted)]">
           {formatTimeRange(job.scheduledStartAt, job.scheduledEndAt)}
         </p>
         {job.hasConflict ? (
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-rose-600">
+          <p className="text-[11px] font-semibold uppercase text-[var(--color-danger)]">
             Conflict
           </p>
         ) : null}
@@ -345,15 +418,15 @@ function DayView({
             gridTemplateColumns: `88px repeat(${lanes.length}, minmax(240px, 1fr))`,
           }}
         >
-          <div className="border-r border-white/40 bg-white/50">
-            <div className="h-16 border-b border-white/40 px-4 py-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+          <div className="border-r border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)]">
+            <div className="h-14 border-b border-[var(--color-app-border)] px-4 py-4 text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
               Time
             </div>
             <div className="relative" style={{ height: `${hourHeight * 24}px` }}>
               {dayHours.map((hour) => (
                 <div
                   key={hour}
-                  className="absolute inset-x-0 border-t border-dashed border-slate-200/80 px-4 pt-2 text-xs text-slate-400"
+                  className="absolute inset-x-0 border-t border-dashed border-[var(--color-app-border)] px-4 pt-2 font-mono text-[10px] text-[var(--color-text-muted)]"
                   style={{ top: `${hour * hourHeight}px` }}
                 >
                   {formatHourLabel(hour)}
@@ -363,29 +436,29 @@ function DayView({
           </div>
 
           {lanes.map((lane) => (
-            <div key={lane.key} className="min-w-[240px] border-r border-white/30 last:border-r-0">
-              <div className="flex h-16 items-center justify-between border-b border-white/40 bg-white/40 px-4">
+            <div key={lane.key} className="min-w-[240px] border-r border-[var(--color-app-border)] last:border-r-0">
+              <div className="flex h-14 items-center justify-between border-b border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-4">
                 <div>
-                  <p className="text-sm font-semibold text-slate-900">{lane.label}</p>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-sm font-semibold text-[var(--color-text)]">{lane.label}</p>
+                  <p className="text-xs text-[var(--color-text-muted)]">
                     {lane.jobs.length} job{lane.jobs.length === 1 ? "" : "s"}
                   </p>
                 </div>
                 {lane.hasConflict ? (
-                  <span className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-rose-600">
+                  <span className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-danger-soft)] px-2 py-1 text-[11px] font-semibold uppercase text-[var(--color-danger)]">
                     Conflict
                   </span>
                 ) : null}
               </div>
 
               <div
-                className="relative bg-[linear-gradient(180deg,rgba(255,255,255,0.58)_0%,rgba(248,250,252,0.78)_100%)]"
+                className="relative bg-[var(--color-app-panel)]"
                 style={{ height: `${hourHeight * 24}px` }}
               >
                 {dayHours.map((hour) => (
                   <div
                     key={`${lane.key}-${hour}`}
-                    className="absolute inset-x-0 border-t border-dashed border-slate-200/70"
+                    className="absolute inset-x-0 border-t border-dashed border-[var(--color-app-border)]"
                     style={{ top: `${hour * hourHeight}px` }}
                   />
                 ))}
@@ -412,36 +485,34 @@ function ScheduleJobCard({
   job: ScheduleJobWithLane;
   compact?: boolean;
 }) {
+  const accent = jobAccent(job);
+
   return (
     <Link
       href={`/jobs/${job.id}`}
-      className={cn(
-        "block rounded-lg border p-3 text-left shadow-sm transition hover:shadow-md",
-        job.hasConflict
-          ? "border-rose-200 bg-rose-50/90 text-rose-900"
-          : "border-cyan-100 bg-white/90 text-slate-800",
-      )}
+      className="block rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] p-3 text-left shadow-sm transition hover:shadow-[var(--shadow-panel-hover)]"
+      style={{ borderLeft: `3px solid ${accent.border}` }}
     >
       <div className="space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-slate-500">
+            <p className="font-mono text-[11px] font-semibold text-[var(--color-text-muted)]">
               {formatTimeRange(job.scheduledStartAt, job.scheduledEndAt)}
             </p>
-            <p className={cn("font-semibold text-slate-900", compact ? "line-clamp-2 text-sm" : "text-sm")}>
+            <p className={cn("font-semibold text-[var(--color-text)]", compact ? "line-clamp-2 text-sm" : "text-sm")}>
               {job.title}
             </p>
           </div>
           {!compact ? <StatusBadge kind="job" value={job.status} /> : null}
         </div>
-        <div className="space-y-1 text-xs text-slate-600">
+        <div className="space-y-1 text-xs text-[var(--color-text-secondary)]">
           <p>{job.customer.name}</p>
           <p>{jobAssigneeLabel(job)}</p>
         </div>
         <div className="flex items-center justify-between gap-2">
           {compact ? <StatusBadge kind="job" value={job.status} /> : <span />}
           {job.hasConflict ? (
-            <span className="rounded-full border border-rose-200 bg-white/70 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-rose-600">
+            <span className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-danger-soft)] px-2 py-0.5 text-[11px] font-semibold uppercase text-[var(--color-danger)]">
               Conflict
             </span>
           ) : null}
@@ -461,53 +532,120 @@ function WeekView({
   embedded?: boolean;
 }) {
   const today = todayLocalDate();
+  const { startHour, endHour } = getTimelineWindow(jobs, days);
+  const hours = Array.from({ length: endHour - startHour }, (_, index) => startHour + index);
+  const timelineHeight = hours.length * hourHeight;
 
   return (
     <section className={embedded ? "overflow-hidden p-0" : `${surfaceClassName} overflow-hidden p-0`}>
       <div className="overflow-x-auto">
-        <div className="grid min-w-[980px] grid-cols-7">
-          {days.map((day) => {
-            const dayJobs = jobsForDay(jobs, day);
-            const isToday = isSameLocalDate(day, today);
+        <div className="min-w-[980px]">
+          <div className="grid border-b border-[var(--color-app-border)]" style={{ gridTemplateColumns: "52px repeat(7, minmax(120px, 1fr))" }}>
+            <div className="bg-[var(--color-app-panel-muted)]" />
+            {days.map((day) => {
+              const dayJobs = jobsForDay(jobs, day);
+              const isToday = isSameLocalDate(day, today);
 
-            return (
-              <div key={day.toISOString()} className="min-h-[520px] border-r border-white/40 last:border-r-0">
+              return (
                 <div
-                  className={cn(
-                    "border-b border-white/50 px-4 py-4",
-                    isToday ? "bg-cyan-50/80" : "bg-white/45",
-                  )}
+                  key={`header-${day.toISOString()}`}
+                  className="border-l border-[var(--color-app-border)] px-2 py-2 text-center"
                 >
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  <p className={cn("text-[11px] font-semibold uppercase", isToday ? "text-[var(--color-brand)]" : "text-[var(--color-text-muted)]")}>
                     {weekDayLabels[(day.getDay() + 6) % 7]}
                   </p>
-                  <div className="mt-1 flex items-center justify-between gap-3">
-                    <p className="text-base font-bold text-slate-900">{formatDayLabel(day)}</p>
-                    <span
-                      className={cn(
-                        "rounded-full px-2 py-1 text-xs font-semibold",
-                        isToday ? "bg-cyan-600 text-white" : "bg-white/80 text-slate-500",
-                      )}
-                    >
-                      {dayJobs.length}
-                    </span>
+                  <div
+                    className={cn(
+                      "mx-auto mt-1 flex h-7 w-7 items-center justify-center rounded-lg text-sm font-bold",
+                      isToday
+                        ? "bg-[var(--color-brand)] text-white"
+                        : "text-[var(--color-text)]",
+                    )}
+                  >
+                    {day.getDate()}
                   </div>
+                  <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">
+                    {dayJobs.length} job{dayJobs.length === 1 ? "" : "s"}
+                  </p>
                 </div>
+              );
+            })}
+          </div>
 
-                <div className="space-y-3 p-3">
+          <div className="grid bg-[var(--color-app-panel)]" style={{ gridTemplateColumns: "52px repeat(7, minmax(120px, 1fr))" }}>
+            <div className="border-r border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)]" style={{ height: timelineHeight }}>
+              {hours.map((hour) => (
+                <div
+                  key={hour}
+                  className="flex justify-end border-b border-[var(--color-app-border)] pr-2 pt-1 font-mono text-[10px] text-[var(--color-text-muted)]"
+                  style={{ height: hourHeight }}
+                >
+                  {formatHourLabel(hour)}
+                </div>
+              ))}
+            </div>
+
+          {days.map((day) => {
+            const dayJobs = jobsForDay(jobs, day);
+
+            return (
+              <div
+                key={day.toISOString()}
+                className="relative border-r border-[var(--color-app-border)] last:border-r-0"
+                style={{ height: timelineHeight }}
+              >
+                {hours.map((hour) => (
+                  <div
+                    key={`${day.toISOString()}-${hour}`}
+                    className="absolute inset-x-0 border-b border-[var(--color-app-border)]"
+                    style={{ top: (hour - startHour) * hourHeight, height: hourHeight }}
+                  />
+                ))}
+
                   {dayJobs.length > 0 ? (
-                    dayJobs.map((job) => (
-                      <ScheduleJobCard key={`${day.toISOString()}-${job.id}`} job={job} compact />
-                    ))
+                    dayJobs.map((job) => {
+                      const metrics = getTimelineBlockMetrics(job, day, startHour, endHour);
+                      const accent = jobAccent(job);
+                      return (
+                        <Link
+                          key={`${day.toISOString()}-${job.id}`}
+                          href={`/jobs/${job.id}`}
+                          className="absolute left-1 right-1 z-10 overflow-hidden rounded-lg border border-[var(--color-app-border)] px-2 py-1.5 text-left shadow-sm transition hover:shadow-[var(--shadow-panel-hover)]"
+                          style={{
+                            top: `${metrics.top + 2}px`,
+                            minHeight: `${metrics.height - 4}px`,
+                            background: accent.background,
+                            borderLeft: `3px solid ${accent.border}`,
+                          }}
+                        >
+                          <p className="truncate text-[11px] font-bold" style={{ color: accent.text }}>
+                            {job.title}
+                          </p>
+                          <p className="mt-0.5 truncate text-[10px] text-[var(--color-text-secondary)]">
+                            {job.customer.name}
+                          </p>
+                          {metrics.height >= 54 ? (
+                            <p className="mt-1 truncate font-mono text-[10px] text-[var(--color-text-muted)]">
+                              {formatTimeRange(job.scheduledStartAt, job.scheduledEndAt)}
+                            </p>
+                          ) : null}
+                          {job.hasConflict ? (
+                            <p className="mt-1 text-[10px] font-semibold uppercase text-[var(--color-danger)]">
+                              Conflict
+                            </p>
+                          ) : null}
+                        </Link>
+                      );
+                    })
                   ) : (
-                    <p className="rounded-lg border border-dashed border-slate-200 bg-white/50 px-3 py-6 text-center text-sm text-slate-400">
+                    <p className="absolute left-2 right-2 top-3 rounded-lg border border-dashed border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-3 py-4 text-center text-xs text-[var(--color-text-muted)]">
                       No jobs
                     </p>
                   )}
-                </div>
               </div>
             );
           })}
+          </div>
         </div>
       </div>
     </section>
@@ -537,15 +675,15 @@ function MonthView({
       <section
         className={cn(
           embedded
-            ? "overflow-hidden p-0 xl:border-r xl:border-white/50"
+            ? "overflow-hidden p-0 xl:border-r xl:border-[var(--color-app-border)]"
             : `${surfaceClassName} overflow-hidden p-0`,
         )}
       >
-        <div className="grid grid-cols-7 border-b border-white/50 bg-white/45">
+        <div className="grid grid-cols-7 border-b border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)]">
           {weekDayLabels.map((label) => (
             <div
               key={label}
-              className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500"
+              className="px-3 py-3 text-center text-[11px] font-semibold uppercase text-[var(--color-text-muted)]"
             >
               {label}
             </div>
@@ -564,22 +702,22 @@ function MonthView({
                 type="button"
                 onClick={() => onSelectDate(day)}
                 className={cn(
-                  "min-h-36 border-r border-b border-white/45 p-3 text-left transition last:border-r-0 hover:bg-white/70",
-                  isSelected ? "bg-cyan-50/90 ring-2 ring-inset ring-cyan-300" : "bg-white/35",
-                  !isCurrentMonth && "text-slate-400",
+                  "min-h-36 border-r border-b border-[var(--color-app-border)] bg-[var(--color-app-panel)] p-3 text-left transition last:border-r-0 hover:bg-[var(--color-app-panel-muted)]",
+                  isSelected ? "ring-2 ring-inset ring-[var(--color-brand)]" : "",
+                  !isCurrentMonth && "opacity-55",
                 )}
               >
                 <div className="flex items-center justify-between gap-2">
                   <span
                     className={cn(
                       "flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold",
-                      isToday ? "bg-cyan-600 text-white" : "bg-white/80 text-slate-700",
-                      !isCurrentMonth && !isToday && "text-slate-400",
+                      isToday ? "bg-[var(--color-brand)] text-white" : "text-[var(--color-text)]",
+                      !isCurrentMonth && !isToday && "text-[var(--color-text-muted)]",
                     )}
                   >
                     {day.getDate()}
                   </span>
-                  <span className="rounded-full bg-white/80 px-2 py-1 text-xs font-semibold text-slate-500">
+                  <span className="rounded-lg bg-[var(--color-app-panel-muted)] px-2 py-1 text-xs font-semibold text-[var(--color-text-muted)]">
                     {dayJobs.length}
                   </span>
                 </div>
@@ -588,18 +726,14 @@ function MonthView({
                   {dayJobs.slice(0, 3).map((job) => (
                     <div
                       key={`${day.toISOString()}-${job.id}`}
-                      className={cn(
-                        "truncate rounded-md border px-2 py-1 text-xs font-medium",
-                        job.hasConflict
-                          ? "border-rose-200 bg-rose-50 text-rose-700"
-                          : "border-cyan-100 bg-white/85 text-slate-700",
-                      )}
+                      className="truncate rounded-md border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-2 py-1 text-xs font-medium text-[var(--color-text-secondary)]"
+                      style={{ borderLeft: `3px solid ${jobAccent(job).border}` }}
                     >
                       {formatTimeRange(job.scheduledStartAt, job.scheduledEndAt)} {job.title}
                     </div>
                   ))}
                   {dayJobs.length > 3 ? (
-                    <p className="px-1 text-xs font-semibold text-slate-500">
+                    <p className="px-1 text-xs font-semibold text-[var(--color-text-muted)]">
                       +{dayJobs.length - 3} more
                     </p>
                   ) : null}
@@ -613,16 +747,16 @@ function MonthView({
       <section
         className={cn(
           embedded
-            ? "border-t border-white/50 bg-white/32 p-5 xl:border-l-0 xl:border-t-0"
+            ? "border-t border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-5 xl:border-l-0 xl:border-t-0"
             : `${surfaceClassName} p-5`,
         )}
       >
         <div className="mb-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+          <p className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
             Selected day
           </p>
-          <h2 className="mt-1 text-lg font-bold text-slate-900">{formatLongDate(selectedDate)}</h2>
-          <p className="mt-1 text-sm text-slate-500">
+          <h2 className="mt-1 text-lg font-bold text-[var(--color-text)]">{formatLongDate(selectedDate)}</h2>
+          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
             {selectedJobs.length} job{selectedJobs.length === 1 ? "" : "s"}
           </p>
         </div>
@@ -633,7 +767,7 @@ function MonthView({
               <ScheduleJobCard key={`selected-${job.id}`} job={job} />
             ))
           ) : (
-            <p className="rounded-lg border border-dashed border-slate-200 bg-white/50 px-4 py-8 text-center text-sm text-slate-400">
+            <p className="rounded-lg border border-dashed border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-4 py-8 text-center text-sm text-[var(--color-text-muted)]">
               No jobs scheduled
             </p>
           )}
@@ -709,35 +843,23 @@ function CalendarToolbar({
   }
 
   return (
-    <section className="grid gap-3 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative">
-          <input
-            ref={datePickerRef}
-            type="date"
-            value={toDateInputValue(anchorDate)}
-            onChange={(event) => onDateChange(event.target.value)}
-            className="sr-only"
-            tabIndex={-1}
-            aria-hidden="true"
-          />
-          <button
-            type="button"
-            onClick={openDatePicker}
-            className="group flex min-w-[240px] items-start gap-3 rounded-2xl border border-white/75 bg-white/88 px-4 py-3 text-left shadow-sm transition hover:bg-white"
-          >
-            <span className="mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-cyan-50 text-cyan-600">
-              <Calendar className="h-7 w-7" />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                {viewModeLabel(viewMode)}
-              </span>
-              <span className="mt-1 block truncate text-lg font-bold text-slate-900">
-                {period.title}
-              </span>
-            </span>
-          </button>
+    <section className="grid gap-3 p-3 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] p-1">
+          {(["week", "day", "month"] as ViewMode[]).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              aria-pressed={viewMode === mode}
+              onClick={() => onViewModeChange(mode)}
+              className={cn(
+                "h-8 rounded-md px-3 text-xs font-semibold capitalize text-[var(--color-text-secondary)] transition hover:bg-[var(--color-app-panel-muted)]",
+                viewMode === mode && "bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand)]",
+              )}
+            >
+              {mode}
+            </button>
+          ))}
         </div>
 
         {allowManage ? (
@@ -750,16 +872,16 @@ function CalendarToolbar({
               disabled={isLoadingMembers}
               className={cn(
                 subtleButtonClassName,
-                "h-12 w-12 px-0",
-                selectedAssigneeId && "!border-cyan-300 !bg-cyan-50 !text-cyan-700",
+                "h-9 w-9 px-0",
+                selectedAssigneeId && "!border-[var(--color-brand)] !bg-[var(--color-brand-soft)] !text-[var(--color-brand)]",
               )}
             >
-              <Users className="h-7 w-7" />
+              <Users className="h-4 w-4" />
             </button>
 
             {isAssigneeMenuOpen ? (
-              <div className="absolute left-0 top-[3.25rem] z-20 min-w-[220px] rounded-2xl border border-white/70 bg-white/95 p-2 shadow-[0_18px_38px_-24px_rgba(15,23,42,0.28)] backdrop-blur">
-                <div className="mb-1 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+              <div className="absolute left-0 top-11 z-20 min-w-[220px] rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] p-2 shadow-[var(--shadow-floating)]">
+                <div className="mb-1 px-3 py-2 text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
                   Assignee
                 </div>
                 <div className="space-y-1">
@@ -770,10 +892,10 @@ function CalendarToolbar({
                       setIsAssigneeMenuOpen(false);
                     }}
                     className={cn(
-                      "flex w-full items-center rounded-xl px-3 py-2 text-left text-sm font-medium transition",
+                      "flex w-full items-center rounded-md px-3 py-2 text-left text-sm font-medium transition",
                       !selectedAssigneeId
-                        ? "bg-slate-900 text-white"
-                        : "text-slate-700 hover:bg-slate-50",
+                        ? "bg-[var(--color-text)] text-[var(--color-app-panel)]"
+                        : "text-[var(--color-text-secondary)] hover:bg-[var(--color-app-panel-muted)] hover:text-[var(--color-text)]",
                     )}
                   >
                     All staff
@@ -787,10 +909,10 @@ function CalendarToolbar({
                         setIsAssigneeMenuOpen(false);
                       }}
                       className={cn(
-                        "flex w-full items-center rounded-xl px-3 py-2 text-left text-sm font-medium transition",
+                        "flex w-full items-center rounded-md px-3 py-2 text-left text-sm font-medium transition",
                         selectedAssigneeId === membership.userId
-                          ? "bg-slate-900 text-white"
-                          : "text-slate-700 hover:bg-slate-50",
+                          ? "bg-[var(--color-text)] text-[var(--color-app-panel)]"
+                          : "text-[var(--color-text-secondary)] hover:bg-[var(--color-app-panel-muted)] hover:text-[var(--color-text)]",
                       )}
                     >
                       {membership.displayName}
@@ -803,24 +925,31 @@ function CalendarToolbar({
         ) : null}
       </div>
 
-      <div className="flex justify-center">
-        <div className="flex flex-wrap items-center gap-2">
-          {(["day", "week", "month"] as ViewMode[]).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              aria-pressed={viewMode === mode}
-              onClick={() => onViewModeChange(mode)}
-              className={cn(
-                subtleButtonClassName,
-                "capitalize",
-                viewMode === mode && "!border-slate-900 !bg-slate-900 !text-white hover:!bg-slate-800",
-              )}
-            >
-              {mode}
-            </button>
-          ))}
-        </div>
+      <div className="relative flex justify-start lg:justify-center">
+        <input
+          ref={datePickerRef}
+          type="date"
+          value={toDateInputValue(anchorDate)}
+          onChange={(event) => onDateChange(event.target.value)}
+          className="sr-only"
+          tabIndex={-1}
+          aria-hidden="true"
+        />
+        <button
+          type="button"
+          onClick={openDatePicker}
+          className="flex min-w-[220px] items-center justify-center gap-2 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3 py-2 text-center shadow-sm transition hover:bg-[var(--color-app-panel-muted)]"
+        >
+          <Calendar className="h-4 w-4 text-[var(--color-brand)]" />
+          <span className="min-w-0">
+            <span className="block text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
+              {viewModeLabel(viewMode)}
+            </span>
+            <span className="block truncate text-sm font-bold text-[var(--color-text)]">
+              {period.title}
+            </span>
+          </span>
+        </button>
       </div>
 
       <div className="flex justify-start lg:justify-end">
@@ -829,14 +958,14 @@ function CalendarToolbar({
             type="button"
             aria-label={previousLabel(viewMode)}
             onClick={() => onMovePeriod(-1)}
-            className={cn(subtleButtonClassName, "h-12 w-12 px-0")}
+            className={cn(subtleButtonClassName, "h-9 w-9 px-0")}
           >
-            <ArrowRight className="h-7 w-7 rotate-180" />
+            <ArrowRight className="h-4 w-4 rotate-180" />
           </button>
           <button
             type="button"
             onClick={onToday}
-            className={secondaryButtonClassName}
+            className={cn(secondaryButtonClassName, "h-9")}
           >
             Today
           </button>
@@ -844,9 +973,9 @@ function CalendarToolbar({
             type="button"
             aria-label={nextLabel(viewMode)}
             onClick={() => onMovePeriod(1)}
-            className={cn(subtleButtonClassName, "h-12 w-12 px-0")}
+            className={cn(subtleButtonClassName, "h-9 w-9 px-0")}
           >
-            <ArrowRight className="h-7 w-7" />
+            <ArrowRight className="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -1019,8 +1148,8 @@ export default function SchedulePage() {
             description="Your current role cannot access the schedule view."
           />
         ) : (
-          <div className="space-y-5">
-            <section className="grid gap-4 md:grid-cols-3">
+          <div className="space-y-4">
+            <section className="grid gap-3 md:grid-cols-3">
               <StatCard
                 label="Scheduled jobs"
                 value={String(schedule?.totalJobs ?? 0)}
@@ -1055,8 +1184,37 @@ export default function SchedulePage() {
               />
             </section>
 
+            {allowManage ? (
+              <section className={`${strongSurfaceClassName} p-5`}>
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                  <div className="flex gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[image:var(--gradient-brand)] text-white shadow-[0_10px_24px_-16px_var(--color-brand-glow)]">
+                      <Sparkles className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-[var(--color-text)]">
+                        {schedule?.conflictCount
+                          ? "AI can review this schedule for conflicts"
+                          : "Plan the next dispatch move with AI"}
+                      </p>
+                      <p className="mt-1 max-w-2xl text-sm leading-6 text-[var(--color-text-secondary)]">
+                        {schedule?.conflictCount
+                          ? "Ask the planner to resolve overlaps, rebalance assignments, and draft a confirmed dispatch proposal."
+                          : "Use the planner to create visits, assign available staff, and check timing before anything is saved."}
+                      </p>
+                    </div>
+                  </div>
+
+                  <Link href="/agent" className={primaryButtonClassName}>
+                    <Sparkles className="h-4 w-4" />
+                    Ask AI to review
+                  </Link>
+                </div>
+              </section>
+            ) : null}
+
             <section className={`${surfaceClassName} overflow-hidden p-0`}>
-              <div className="border-b border-white/60 bg-white/38">
+              <div className="border-b border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)]">
                 <CalendarToolbar
                   period={period}
                   viewMode={viewMode}

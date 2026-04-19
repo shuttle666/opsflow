@@ -9,12 +9,16 @@ import { JobAssignmentCard } from "@/components/job/job-assignment-card";
 import { JobCompletionReviewCard } from "@/components/job/job-completion-review-card";
 import { WorkflowTimelineCard } from "@/components/job/workflow-timeline-card";
 import { AppShell } from "@/components/ui/app-shell";
-import { DetailLayout } from "@/components/ui/detail-layout";
-import { SummaryCard } from "@/components/ui/info-cards";
 import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
 import { LoadingPanel } from "@/components/ui/loading-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { secondaryButtonClassName } from "@/components/ui/styles";
+import {
+  cn,
+  primaryButtonClassName,
+  secondaryButtonClassName,
+  surfaceClassName,
+  strongSurfaceClassName,
+} from "@/components/ui/styles";
 import {
   deleteJobEvidenceRequest,
   downloadJobEvidenceRequest,
@@ -204,6 +208,130 @@ function getTransitionAction(status: JobStatus): TransitionActionView {
 
 function getTransitionActions(statuses: JobStatus[]): TransitionActionView[] {
   return statuses.map((status) => getTransitionAction(status));
+}
+
+function initialsFor(name: string | undefined | null) {
+  if (!name) {
+    return "OF";
+  }
+
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+}
+
+function DetailCard({
+  eyebrow,
+  title,
+  children,
+  className,
+}: {
+  eyebrow?: string;
+  title?: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={cn(surfaceClassName, "p-5", className)}>
+      {eyebrow || title ? (
+        <div className="mb-4 space-y-1">
+          {eyebrow ? (
+            <p className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
+              {eyebrow}
+            </p>
+          ) : null}
+          {title ? (
+            <h2 className="text-base font-bold text-[var(--color-text)]">{title}</h2>
+          ) : null}
+        </div>
+      ) : null}
+      {children}
+    </section>
+  );
+}
+
+function InfoRow({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: React.ReactNode;
+  mono?: boolean;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 border-b border-[var(--color-app-border)] py-2 last:border-b-0">
+      <span className="text-sm text-[var(--color-text-secondary)]">{label}</span>
+      <span
+        className={cn(
+          "max-w-[62%] text-right text-sm font-semibold text-[var(--color-text)]",
+          mono && "font-mono text-xs",
+        )}
+      >
+        {value || "-"}
+      </span>
+    </div>
+  );
+}
+
+function OverviewMetric({
+  label,
+  value,
+  meta,
+}: {
+  label: string;
+  value: React.ReactNode;
+  meta?: string;
+}) {
+  return (
+    <div className={`${surfaceClassName} p-4`}>
+      <p className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
+        {label}
+      </p>
+      <div className="mt-2 text-base font-bold text-[var(--color-text)]">{value}</div>
+      {meta ? (
+        <p className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)]">{meta}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function WorkflowActivityCard({ history }: { history: JobHistoryItem[] }) {
+  const recentItems = history.slice(-4).reverse();
+
+  return (
+    <DetailCard eyebrow="Activity" title="Recent workflow activity">
+      {recentItems.length === 0 ? (
+        <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
+          No workflow changes have been recorded yet.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {recentItems.map((item) => (
+            <div key={item.id} className="flex gap-3">
+              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[var(--color-brand)]" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-[var(--color-text)]">
+                  {formatStatusLabel(item.fromStatus)} to {formatStatusLabel(item.toStatus)}
+                </p>
+                <p className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]">
+                  {item.changedBy?.displayName ?? "System"} | {formatDateTime(item.changedAt)}
+                </p>
+                {item.reason ? (
+                  <p className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)]">
+                    {item.reason}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </DetailCard>
+  );
 }
 
 export default function JobDetailPage() {
@@ -485,67 +613,119 @@ export default function JobDetailPage() {
   }
 
   return (
-    <AppShell
-      title={job?.title ?? "Job detail"}
-      actions={
-        job && canEdit ? (
-          <Link href={`/jobs/${job.id}/edit`} className={secondaryButtonClassName}>
-            Edit job
-          </Link>
-        ) : undefined
-      }
-    >
+    <AppShell title="Job detail">
       <AuthGuard>
         {isLoading ? <LoadingPanel label="Loading job..." /> : null}
         {error ? <InlineErrorBanner message={error} /> : null}
 
         {job ? (
-          <DetailLayout
-            main={
-              <>
-                <SummaryCard
-                  eyebrow="Overview"
-                  title={job.title}
-                >
-                  <div className="space-y-5">
-                    <div className="flex flex-wrap gap-2">
+          <div className="space-y-5">
+            <section className={`${strongSurfaceClassName} p-5`}>
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex min-w-0 gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-soft)] text-sm font-bold text-[var(--color-brand)]">
+                    {initialsFor(job.customer.name)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase text-[var(--color-text-muted)]">
+                      Job #{job.id}
+                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-3">
+                      <h1 className="text-2xl font-extrabold text-[var(--color-text)]">
+                        {job.title}
+                      </h1>
                       <StatusBadge kind="job" value={job.status} />
                     </div>
+                    <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+                      {job.customer.name} | Created by {job.createdBy.displayName}
+                    </p>
+                  </div>
+                </div>
 
-                    <div className="rounded-[24px] border border-white/75 bg-white p-5 shadow-sm">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                <div className="flex flex-wrap gap-2">
+                  <Link href={`/customers/${job.customer.id}`} className={secondaryButtonClassName}>
+                    Open customer detail
+                  </Link>
+                  {canEdit ? (
+                    <Link href={`/jobs/${job.id}/edit`} className={primaryButtonClassName}>
+                      Edit job
+                    </Link>
+                  ) : null}
+                </div>
+              </div>
+            </section>
+
+            <section className="grid gap-4 md:grid-cols-3">
+              <OverviewMetric
+                label="Status"
+                value={<StatusBadge kind="job" value={job.status} />}
+                meta={formatStatusLabel(job.status)}
+              />
+              <OverviewMetric
+                label="Scheduled"
+                value={formatScheduleRange(job.scheduledStartAt, job.scheduledEndAt)}
+                meta="Visit window"
+              />
+              <OverviewMetric
+                label="Assigned"
+                value={job.assignedTo?.displayName ?? "Unassigned"}
+                meta={job.assignedTo?.email ?? "No staff member assigned"}
+              />
+            </section>
+
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+              <div className="min-w-0 space-y-5">
+                <DetailCard eyebrow="Description" title="Work summary">
+                  <p className="text-sm leading-7 text-[var(--color-text-secondary)]">
+                    {job.description ?? "No job description has been captured yet."}
+                  </p>
+                </DetailCard>
+
+                <DetailCard eyebrow="Context" title="Schedule and customer">
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    <div>
+                      <p className="mb-2 text-sm font-semibold text-[var(--color-text)]">
+                        Schedule
+                      </p>
+                      <InfoRow
+                        label="Window"
+                        value={formatScheduleRange(job.scheduledStartAt, job.scheduledEndAt)}
+                        mono
+                      />
+                      <InfoRow label="Created" value={formatDateTime(job.createdAt)} mono />
+                      <InfoRow label="Updated" value={formatDateTime(job.updatedAt)} mono />
+                    </div>
+
+                    <div>
+                      <p className="mb-2 text-sm font-semibold text-[var(--color-text)]">
                         Customer
                       </p>
-                      <p className="mt-3 text-sm font-semibold text-slate-900">
-                        {job.customer.name}
-                      </p>
-                      <div className="mt-3 space-y-1 text-sm text-slate-700">
-                        <p>Phone: {job.customer.phone ?? "-"}</p>
-                        <p>Email: {job.customer.email ?? "-"}</p>
+                      <div className="mb-2 flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-brand-soft)] text-xs font-bold text-[var(--color-brand)]">
+                          {initialsFor(job.customer.name)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-[var(--color-text)]">
+                            {job.customer.name}
+                          </p>
+                          <p className="truncate text-xs text-[var(--color-text-secondary)]">
+                            {job.customer.email ?? "No email"}
+                          </p>
+                        </div>
                       </div>
+                      <InfoRow label="Phone" value={job.customer.phone ?? "-"} />
+                      <InfoRow label="Email" value={job.customer.email ?? "-"} />
                       <div className="mt-4">
-                        <Link href={`/customers/${job.customer.id}`} className={secondaryButtonClassName}>
+                        <Link
+                          href={`/customers/${job.customer.id}`}
+                          className={secondaryButtonClassName}
+                        >
                           Open customer detail
                         </Link>
                       </div>
                     </div>
-
-                    <div className="rounded-[24px] border border-white/75 bg-white p-5 shadow-sm">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                        Scheduled window
-                      </p>
-                      <p className="mt-3 text-sm text-slate-700">
-                        {formatScheduleRange(job.scheduledStartAt, job.scheduledEndAt)}
-                      </p>
-                      <p className="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                        Description
-                      </p>
-                      <p className="mt-3 text-sm leading-7 text-slate-500">
-                        {job.description ?? "No job description has been captured yet."}
-                      </p>
-                    </div>
                   </div>
-                </SummaryCard>
+                </DetailCard>
 
                 <WorkflowTimelineCard
                   items={workflow ? getTimelineItems(job, workflow.history) : []}
@@ -582,10 +762,9 @@ export default function JobDetailPage() {
                   onApprove={handleCompletionReviewApprove}
                   onReturn={handleCompletionReviewReturn}
                 />
-              </>
-            }
-            sidebar={
-              <>
+              </div>
+
+              <aside className="space-y-5">
                 <JobAssignmentCard job={job} onJobChange={setJob} />
                 <JobEvidencePanel
                   items={evidence}
@@ -597,9 +776,10 @@ export default function JobDetailPage() {
                   onDelete={handleEvidenceDelete}
                   onDownload={handleEvidenceDownload}
                 />
-              </>
-            }
-          />
+                <WorkflowActivityCard history={workflow?.history ?? []} />
+              </aside>
+            </div>
+          </div>
         ) : null}
       </AuthGuard>
     </AppShell>

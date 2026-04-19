@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Calendar } from "@/components/ui/icons";
 import { surfaceClassName, badgeBaseClassName, cn } from "@/components/ui/styles";
+import { formatBadgeLabel } from "@/components/ui/status-badge";
 
 export type ScheduleItem = {
   id: string;
@@ -15,20 +16,20 @@ export type ScheduleItem = {
 };
 
 const statusBadgeClassName: Record<string, string> = {
-  SCHEDULED: "bg-cyan-50 text-cyan-700 border-cyan-100",
-  IN_PROGRESS: "bg-amber-50 text-amber-600 border-amber-100",
-  PENDING_REVIEW: "bg-sky-50 text-sky-700 border-sky-100",
-  COMPLETED: "bg-emerald-50 text-emerald-600 border-emerald-100",
-  NEW: "bg-sky-50 text-sky-600 border-sky-100",
-  CANCELLED: "bg-slate-100 text-slate-500 border-slate-200",
+  SCHEDULED: "bg-[var(--color-brand-surface)] text-[var(--color-brand)] border-[var(--color-app-border)]",
+  IN_PROGRESS: "bg-[var(--color-warning-soft)] text-[var(--color-warning)] border-[var(--color-app-border)]",
+  PENDING_REVIEW: "bg-[var(--color-brand-soft)] text-[var(--color-brand)] border-[var(--color-app-border)]",
+  COMPLETED: "bg-[var(--color-success-soft)] text-[var(--color-success)] border-[var(--color-app-border)]",
+  NEW: "bg-[var(--color-brand-soft)] text-[var(--color-brand)] border-[var(--color-app-border)]",
+  CANCELLED: "bg-[var(--color-app-panel-muted)] text-[var(--color-text-secondary)] border-[var(--color-app-border)]",
 };
 
 const avatarColors = [
-  "bg-sky-100 text-sky-700",
-  "bg-cyan-100 text-cyan-700",
-  "bg-indigo-100 text-indigo-700",
-  "bg-amber-100 text-amber-700",
-  "bg-emerald-100 text-emerald-700",
+  "bg-[var(--color-brand-soft)] text-[var(--color-brand)]",
+  "bg-[var(--color-success-soft)] text-[var(--color-success)]",
+  "bg-[var(--color-warning-soft)] text-[var(--color-warning)]",
+  "bg-[var(--color-brand-surface)] text-[var(--color-brand)]",
+  "bg-[var(--color-app-panel-muted)] text-[var(--color-text-secondary)]",
 ];
 
 function avatarColor(name: string) {
@@ -49,14 +50,14 @@ export function TodaysScheduleCard({ items, loading = false }: TodaysScheduleCar
     <div className={`${surfaceClassName} flex flex-1 flex-col p-6`}>
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-50 text-sky-600">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--color-brand-soft)] text-[var(--color-brand)]">
             <Calendar className="h-5 w-5" />
           </div>
-          <h2 className="text-lg font-bold text-slate-900">Today&apos;s Schedule</h2>
+          <h2 className="text-lg font-bold text-[var(--color-text)]">Today&apos;s Schedule</h2>
         </div>
         <Link
           href="/jobs"
-          className="text-sm font-semibold text-sky-500 transition-colors hover:text-sky-600"
+          className="text-sm font-semibold text-[var(--color-brand)] transition-colors hover:text-[var(--color-brand-strong)]"
         >
           View All
         </Link>
@@ -64,30 +65,30 @@ export function TodaysScheduleCard({ items, loading = false }: TodaysScheduleCar
 
       {loading ? (
         <div className="flex flex-1 items-center justify-center py-12">
-          <p className="text-sm text-slate-400">Loading schedule...</p>
+          <p className="text-sm text-[var(--color-text-muted)]">Loading schedule...</p>
         </div>
       ) : items.length === 0 ? (
         <div className="flex flex-1 items-center justify-center py-12">
-          <p className="text-sm text-slate-400">No jobs scheduled for today</p>
+          <p className="text-sm text-[var(--color-text-muted)]">No jobs scheduled for today</p>
         </div>
       ) : (
         <div className="w-full overflow-x-auto">
           <table className="w-full border-separate border-spacing-y-3 text-left text-sm">
             <thead>
-              <tr className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                <th className="min-w-[200px] px-4 pb-2">Customer</th>
-                <th className="min-w-[160px] px-4 pb-2">Job Type</th>
-                <th className="w-32 px-4 pb-2">Status</th>
-                <th className="w-24 px-4 pb-2 text-right">Time</th>
+              <tr className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
+                <th className="min-w-[200px] px-4 py-2.5">Customer</th>
+                <th className="min-w-[160px] px-4 py-2.5">Job Type</th>
+                <th className="w-32 px-4 py-2.5">Status</th>
+                <th className="w-24 px-4 py-2.5 text-right">Time</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item) => (
                 <tr
                   key={item.id}
-                  className="group cursor-pointer rounded-2xl bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-sky-100 hover:bg-slate-50 hover:shadow-md"
+                  className="group cursor-pointer rounded-lg bg-[var(--color-app-panel)] shadow-sm transition hover:bg-[var(--color-app-panel-muted)] hover:shadow-[var(--shadow-panel-hover)]"
                 >
-                  <td className="rounded-l-2xl border-y border-l border-white px-4 py-4 group-hover:border-sky-100">
+                  <td className="rounded-l-lg border-y border-l border-[var(--color-app-border)] px-4 py-3">
                     <div className="flex items-center gap-3">
                       <div
                         className={cn(
@@ -98,28 +99,29 @@ export function TodaysScheduleCard({ items, loading = false }: TodaysScheduleCar
                         {item.customerInitials}
                       </div>
                       <div>
-                        <div className="font-semibold text-slate-900">{item.customerName}</div>
+                        <div className="font-semibold text-[var(--color-text)]">{item.customerName}</div>
                         {item.address ? (
-                          <div className="mt-0.5 text-xs text-slate-500">{item.address}</div>
+                          <div className="mt-0.5 text-xs text-[var(--color-text-secondary)]">{item.address}</div>
                         ) : null}
                       </div>
                     </div>
                   </td>
-                  <td className="border-y border-white px-4 py-4 group-hover:border-sky-100">
-                    <span className="font-medium text-slate-700">{item.jobType}</span>
+                  <td className="border-y border-[var(--color-app-border)] px-4 py-3">
+                    <span className="font-medium text-[var(--color-text-secondary)]">{item.jobType}</span>
                   </td>
-                  <td className="border-y border-white px-4 py-4 group-hover:border-sky-100">
+                  <td className="border-y border-[var(--color-app-border)] px-4 py-3">
                     <span
                       className={cn(
                         badgeBaseClassName,
-                        statusBadgeClassName[item.status] ?? "bg-slate-100 text-slate-500 border-slate-200",
+                        statusBadgeClassName[item.status] ?? "bg-[var(--color-app-panel-muted)] text-[var(--color-text-secondary)] border-[var(--color-app-border)]",
                       )}
                     >
-                      {item.status}
+                      <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
+                      {formatBadgeLabel(item.status)}
                     </span>
                   </td>
-                  <td className="rounded-r-2xl border-y border-r border-white px-4 py-4 text-right group-hover:border-sky-100">
-                    <span className="font-mono text-sm font-medium text-slate-600">{item.time}</span>
+                  <td className="rounded-r-lg border-y border-r border-[var(--color-app-border)] px-4 py-3 text-right">
+                    <span className="font-mono text-sm font-medium text-[var(--color-text-secondary)]">{item.time}</span>
                   </td>
                 </tr>
               ))}

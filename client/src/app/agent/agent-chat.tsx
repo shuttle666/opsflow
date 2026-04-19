@@ -9,7 +9,6 @@ import {
   cn,
   inputClassName,
   primaryButtonClassName,
-  secondaryButtonClassName,
   subtleButtonClassName,
   surfaceClassName,
 } from "@/components/ui/styles";
@@ -74,7 +73,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   if (message.role === "user") {
     return (
       <div className="flex justify-end pl-12">
-        <div className="max-w-[88%] rounded-[22px] rounded-br-lg bg-[linear-gradient(135deg,#0891b2_0%,#0ea5e9_52%,#38bdf8_100%)] px-5 py-3 text-[13.5px] leading-relaxed text-white shadow-[0_8px_24px_-12px_rgba(8,145,178,0.5)] sm:max-w-[80%] lg:max-w-[75%]">
+        <div className="max-w-[88%] rounded-[14px] rounded-br px-4 py-3 text-[13px] leading-relaxed text-white shadow-[0_8px_22px_-16px_var(--color-brand-glow)] sm:max-w-[80%] lg:max-w-[75%]" style={{ background: "var(--color-brand)" }}>
           {message.content}
         </div>
       </div>
@@ -83,7 +82,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 
   return (
     <div className="flex justify-start pr-12">
-      <div className="max-w-[88%] rounded-[22px] rounded-bl-lg border border-white/60 bg-white/70 px-5 py-3 text-[13.5px] leading-relaxed text-slate-700 shadow-[0_8px_20px_-14px_rgba(14,165,233,0.15)] backdrop-blur-sm sm:max-w-[80%] lg:max-w-[75%]">
+      <div className="max-w-[88%] rounded-[14px] rounded-bl border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-4 py-3 text-[13px] leading-relaxed text-[var(--color-text)] sm:max-w-[80%] lg:max-w-[75%]">
         <div className="agent-markdown">
           <Markdown>{message.content}</Markdown>
         </div>
@@ -99,16 +98,16 @@ function ToolCallIndicator({ toolCall }: { toolCall: ActiveToolCall }) {
   return (
     <div
       className={cn(
-        "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-medium",
+        "inline-flex items-center gap-2 rounded-lg border px-3 py-1 text-[11px] font-medium",
         done
-          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-          : "border-cyan-200 bg-cyan-50 text-cyan-700",
+          ? "border-[var(--color-app-border)] bg-[var(--color-success-soft)] text-[var(--color-success)]"
+          : "border-[var(--color-app-border)] bg-[var(--color-brand-soft)] text-[var(--color-brand)]",
       )}
     >
       <span
         className={cn(
           "h-1.5 w-1.5 rounded-full",
-          done ? "bg-emerald-500" : "animate-pulse bg-cyan-500",
+          done ? "bg-[var(--color-success)]" : "animate-pulse bg-[var(--color-brand)]",
         )}
       />
       {label}
@@ -130,19 +129,19 @@ function ProposalCard({
   const isCustomerOnly = proposal.intent === "create_customer";
 
   return (
-    <div className="overflow-hidden rounded-[28px] border border-cyan-200/70 bg-white/82 shadow-[0_18px_40px_-24px_rgba(14,165,233,0.28)] backdrop-blur-sm">
-      <div className="border-b border-cyan-100/80 bg-[linear-gradient(180deg,rgba(236,254,255,0.88)_0%,rgba(255,255,255,0.82)_100%)] px-5 py-4">
+    <div className="overflow-hidden rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] shadow-[var(--shadow-panel)]">
+      <div className="border-b border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-5 py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-600">
+            <p className="text-[11px] font-semibold uppercase text-[var(--color-brand)]">
               Dispatch Proposal
             </p>
-            <h3 className="mt-1 text-lg font-bold text-slate-900">
+            <h3 className="mt-1 text-lg font-bold text-[var(--color-text)]">
               {isCustomerOnly
                 ? `Create customer: ${proposal.customer.name ?? "New customer"}`
                 : proposal.jobDraft.title}
             </h3>
-            <p className="mt-2 text-sm text-slate-500">
+            <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
               Confidence {(proposal.confidence * 100).toFixed(0)}%
             </p>
           </div>
@@ -159,31 +158,31 @@ function ProposalCard({
 
       <div className="p-5">
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-[22px] border border-white/70 bg-slate-50/80 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+        <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4">
+          <p className="text-xs font-semibold uppercase text-[var(--color-text-muted)]">
             Customer
           </p>
-          <p className="mt-2 text-sm font-semibold text-slate-900">
+          <p className="mt-2 text-sm font-semibold text-[var(--color-text)]">
             {proposal.customer.status === "matched"
               ? proposal.customer.matches?.[0]?.name ?? proposal.customer.query ?? "Matched customer"
               : proposal.customer.name ?? proposal.customer.query ?? "Customer to be resolved"}
           </p>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
             Status: {proposal.customer.status}
           </p>
           {proposal.customer.phone ? (
-            <p className="mt-1 text-sm text-slate-500">Phone: {proposal.customer.phone}</p>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Phone: {proposal.customer.phone}</p>
           ) : null}
           {proposal.customer.email ? (
-            <p className="mt-1 text-sm text-slate-500">Email: {proposal.customer.email}</p>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Email: {proposal.customer.email}</p>
           ) : null}
         </div>
 
-        <div className="rounded-[22px] border border-white/70 bg-slate-50/80 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+        <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4">
+          <p className="text-xs font-semibold uppercase text-[var(--color-text-muted)]">
             {isCustomerOnly ? "Intent" : "Schedule"}
           </p>
-          <p className="mt-2 text-sm font-semibold text-slate-900">
+          <p className="mt-2 text-sm font-semibold text-[var(--color-text)]">
             {isCustomerOnly
               ? "Create customer record"
               : formatScheduleRange(
@@ -191,34 +190,34 @@ function ProposalCard({
                   proposal.scheduleDraft.scheduledEndAt ?? null,
                 )}
           </p>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
             {isCustomerOnly
               ? `Proposal type: ${proposal.intent}`
               : `Timezone: ${proposal.scheduleDraft.timezone}`}
           </p>
         </div>
 
-        <div className="rounded-[22px] border border-white/70 bg-slate-50/80 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+        <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4">
+          <p className="text-xs font-semibold uppercase text-[var(--color-text-muted)]">
             {isCustomerOnly ? "Customer details" : "Assignee"}
           </p>
-          <p className="mt-2 text-sm font-semibold text-slate-900">
+          <p className="mt-2 text-sm font-semibold text-[var(--color-text)]">
             {isCustomerOnly
               ? proposal.customer.address ?? "No address provided"
               : proposal.assigneeDraft?.displayName ?? "Unassigned"}
           </p>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
             {isCustomerOnly
               ? proposal.customer.notes ?? "No extra notes"
               : `Status: ${proposal.assigneeDraft?.status ?? "missing"}`}
           </p>
         </div>
 
-        <div className="rounded-[22px] border border-white/70 bg-slate-50/80 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+        <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4">
+          <p className="text-xs font-semibold uppercase text-[var(--color-text-muted)]">
             {isCustomerOnly ? "Job draft" : "Notes"}
           </p>
-          <p className="mt-2 text-sm text-slate-600">
+          <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
             {isCustomerOnly
               ? "No job will be created. Confirming this proposal creates only the customer record."
               : proposal.jobDraft.description?.trim() || "No extra description provided."}
@@ -227,11 +226,11 @@ function ProposalCard({
       </div>
 
       {proposal.warnings.length > 0 ? (
-        <div className="mt-4 rounded-[22px] border border-amber-200 bg-amber-50/70 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
+        <div className="mt-4 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-warning-soft)] p-4">
+          <p className="text-xs font-semibold uppercase text-[var(--color-warning)]">
             Warnings
           </p>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-900">
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[var(--color-text)]">
             {proposal.warnings.map((warning) => (
               <li key={warning}>{warning}</li>
             ))}
@@ -240,7 +239,7 @@ function ProposalCard({
       ) : null}
 
       {result ? (
-        <div className="mt-4 rounded-[22px] border border-emerald-200 bg-emerald-50/70 p-4 text-sm text-emerald-900">
+        <div className="mt-4 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-success-soft)] p-4 text-sm text-[var(--color-success)]">
           {result.entityType === "customer" ? (
             <>
               {result.usedExistingCustomer ? "Reused" : "Created"} <strong>{result.createdCustomerName ?? "customer"}</strong>.
@@ -272,15 +271,12 @@ function ProposalCard({
 function EmptyState() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-5 px-6 text-center">
-      <div className="relative">
-        <div className="absolute -inset-3 rounded-full bg-cyan-400/20 blur-xl" />
-        <div className="relative flex h-[72px] w-[72px] items-center justify-center rounded-full bg-[linear-gradient(135deg,#0891b2_0%,#0ea5e9_52%,#38bdf8_100%)] shadow-[0_20px_40px_-16px_rgba(8,145,178,0.55)]">
-          <Sparkles className="h-8 w-8 text-white" />
-        </div>
+      <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-[image:var(--gradient-brand)] text-white shadow-[0_16px_34px_-24px_var(--color-brand-glow)]">
+        <Sparkles className="h-6 w-6" />
       </div>
       <div className="space-y-1.5">
-        <h3 className="text-xl font-bold text-slate-800">Dispatch Planner</h3>
-        <p className="max-w-md text-sm leading-relaxed text-slate-500">
+        <h3 className="text-xl font-bold text-[var(--color-text)]">Dispatch Planner</h3>
+        <p className="max-w-md text-sm leading-relaxed text-[var(--color-text-secondary)]">
           Describe the work in natural language, let AI draft the schedule and assignee, then confirm before anything is created.
         </p>
       </div>
@@ -292,7 +288,7 @@ function EmptyState() {
         ].map((suggestion) => (
           <span
             key={suggestion}
-            className="rounded-full border border-slate-200/70 bg-white/70 px-3.5 py-1.5 text-[12px] text-slate-500 shadow-sm backdrop-blur-sm"
+            className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-3.5 py-1.5 text-[12px] text-[var(--color-text-secondary)]"
           >
             {suggestion}
           </span>
@@ -533,14 +529,14 @@ export function AgentChat() {
   return (
     <div className={`${surfaceClassName} relative flex h-[calc(100vh-180px)] min-w-0 overflow-hidden`}>
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center justify-between border-b border-white/30 px-5 py-3">
+        <div className="flex items-center justify-between border-b border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-5 py-3">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[linear-gradient(135deg,#0891b2_0%,#0ea5e9_100%)] shadow-[0_12px_24px_-14px_rgba(8,145,178,0.55)]">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[image:var(--gradient-brand)] shadow-[0_12px_24px_-18px_var(--color-brand-glow)]">
               <Sparkles className="h-4 w-4 text-white" />
             </div>
             <div>
-              <p className="text-[13px] font-semibold text-slate-700">Dispatch Planner</p>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[13px] font-semibold text-[var(--color-text)]">Dispatch Planner</p>
+              <p className="text-[11px] text-[var(--color-text-muted)]">
                 Draft schedules and assignments first, then confirm before execution.
               </p>
             </div>
@@ -553,14 +549,14 @@ export function AgentChat() {
                 resetComposerState();
                 setIsHistoryOpen(false);
               }}
-              className={cn(subtleButtonClassName, "h-8 gap-1.5 !rounded-xl px-3 text-[12px]")}
+              className={cn(subtleButtonClassName, "h-8 gap-1.5 px-3 text-[12px]")}
             >
               New
             </button>
             <button
               type="button"
               onClick={() => setIsHistoryOpen((current) => !current)}
-              className={cn(subtleButtonClassName, "h-8 gap-1.5 !rounded-xl px-3 text-[12px]")}
+              className={cn(subtleButtonClassName, "h-8 gap-1.5 px-3 text-[12px]")}
               aria-expanded={isHistoryOpen}
               aria-controls="planner-history-panel"
             >
@@ -592,7 +588,7 @@ export function AgentChat() {
 
               {streamingText ? (
                 <div className="flex justify-start pr-12">
-                  <div className="max-w-[88%] rounded-[22px] rounded-bl-lg border border-white/60 bg-white/70 px-5 py-3 text-[13.5px] leading-relaxed text-slate-700 shadow-[0_8px_20px_-14px_rgba(14,165,233,0.15)] backdrop-blur-sm sm:max-w-[80%] lg:max-w-[75%]">
+                  <div className="max-w-[88%] rounded-[14px] rounded-bl border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-4 py-3 text-[13px] leading-relaxed text-[var(--color-text)] sm:max-w-[80%] lg:max-w-[75%]">
                     <div className="agent-markdown">
                       <Markdown>{streamingText}</Markdown>
                     </div>
@@ -601,7 +597,7 @@ export function AgentChat() {
               ) : null}
 
               {error ? (
-                <div className="rounded-[20px] border border-rose-200 bg-rose-50/80 px-4 py-3 text-sm text-rose-700">
+                <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-danger-soft)] px-4 py-3 text-sm text-[var(--color-danger)]">
                   {error}
                 </div>
               ) : null}
@@ -612,7 +608,7 @@ export function AgentChat() {
         </div>
 
         {pendingProposal ? (
-          <div className="border-t border-white/30 bg-[linear-gradient(180deg,rgba(248,250,252,0.42)_0%,rgba(255,255,255,0.72)_100%)] px-4 py-4 backdrop-blur-sm sm:px-6 lg:px-8">
+          <div className="border-t border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-4 py-4 sm:px-6 lg:px-8">
             <div className="mx-auto w-full max-w-5xl">
               <ProposalCard
                 proposal={pendingProposal}
@@ -625,8 +621,8 @@ export function AgentChat() {
         ) : null}
 
         {!pendingProposal && confirmResult ? (
-          <div className="border-t border-white/30 bg-[linear-gradient(180deg,rgba(236,253,245,0.48)_0%,rgba(255,255,255,0.76)_100%)] px-4 py-4 backdrop-blur-sm sm:px-6 lg:px-8">
-            <div className="mx-auto w-full max-w-5xl rounded-[24px] border border-emerald-200 bg-emerald-50/80 px-5 py-4 text-sm text-emerald-900 shadow-[0_14px_34px_-24px_rgba(16,185,129,0.35)]">
+          <div className="border-t border-[var(--color-app-border)] bg-[var(--color-success-soft)] px-4 py-4 sm:px-6 lg:px-8">
+            <div className="mx-auto w-full max-w-5xl rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-5 py-4 text-sm text-[var(--color-success)] shadow-sm">
               {confirmResult.entityType === "customer" ? (
                 <>
                   {confirmResult.usedExistingCustomer ? "Reused" : "Created"}{" "}
@@ -653,7 +649,7 @@ export function AgentChat() {
           </div>
         ) : null}
 
-        <div className="border-t border-white/30 bg-white/20 px-4 py-4 backdrop-blur-sm sm:px-6 lg:px-8">
+        <div className="border-t border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-4 py-4 sm:px-6 lg:px-8">
           <form onSubmit={handleSubmit} className="mx-auto flex w-full max-w-5xl items-center gap-3">
             <input
               value={input}
@@ -669,7 +665,7 @@ export function AgentChat() {
             <button
               type="submit"
               disabled={!input.trim() || isStreaming}
-              className={cn(primaryButtonClassName, "h-11 gap-2 rounded-[18px] px-4")}
+              className={cn(primaryButtonClassName, "h-9 gap-2 px-4")}
             >
               <Send className="h-4 w-4" />
               {isStreaming ? "Sending..." : "Send"}
@@ -682,7 +678,7 @@ export function AgentChat() {
         <button
           type="button"
           aria-label="Close history panel"
-          className="absolute inset-0 z-10 bg-slate-900/12 backdrop-blur-[1px]"
+          className="absolute inset-0 z-10 bg-black/10 backdrop-blur-[1px]"
           onClick={() => setIsHistoryOpen(false)}
         />
       ) : null}
@@ -690,18 +686,18 @@ export function AgentChat() {
       <aside
         id="planner-history-panel"
         className={cn(
-          "absolute inset-y-0 right-0 z-20 flex w-full max-w-[280px] flex-col rounded-l-[28px] border-l border-slate-200/30 bg-slate-50/95 shadow-[-8px_0_40px_-16px_rgba(15,23,42,0.10)] backdrop-blur-xl transition-transform duration-200",
+          "absolute inset-y-0 right-0 z-20 flex w-full max-w-[280px] flex-col rounded-l-lg border-l border-[var(--color-app-border)] bg-[var(--color-app-panel)] shadow-[var(--shadow-floating)] transition-transform duration-200",
           isHistoryOpen ? "translate-x-0" : "translate-x-full",
         )}
       >
-        <div className="flex items-center justify-between border-b border-slate-200/40 px-5 py-4">
-          <span className="text-[13px] font-semibold text-slate-700">
+        <div className="flex items-center justify-between border-b border-[var(--color-app-border)] px-5 py-4">
+          <span className="text-[13px] font-semibold text-[var(--color-text)]">
             Planner History
           </span>
           <button
             type="button"
             onClick={() => setIsHistoryOpen(false)}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-200/50 hover:text-slate-600"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-[var(--color-text-muted)] transition hover:bg-[var(--color-app-panel-muted)] hover:text-[var(--color-text)]"
             aria-label="Close history"
           >
             <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -710,14 +706,14 @@ export function AgentChat() {
           </button>
         </div>
 
-        <div className="border-b border-slate-200/30 px-4 pb-2 pt-3">
+        <div className="border-b border-[var(--color-app-border)] px-4 pb-2 pt-3">
           <button
             type="button"
             onClick={() => {
               resetComposerState();
               setIsHistoryOpen(false);
             }}
-            className="flex h-9 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200/60 bg-white text-[12px] font-semibold text-slate-600 shadow-sm transition hover:border-slate-300/60 hover:bg-white hover:text-slate-800"
+            className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] text-[12px] font-semibold text-[var(--color-text-secondary)] shadow-sm transition hover:border-[var(--color-app-border-strong)] hover:text-[var(--color-text)]"
           >
             <span className="text-base leading-none">+</span>
             New conversation
@@ -728,7 +724,7 @@ export function AgentChat() {
           {isLoadingConversations ? (
             <LoadingPanel label="Loading planner history..." compact />
           ) : historyItems.length === 0 ? (
-            <p className="px-2 pt-10 text-center text-xs leading-relaxed text-slate-400">
+            <p className="px-2 pt-10 text-center text-xs leading-relaxed text-[var(--color-text-muted)]">
               No conversations yet.
               <br />
               Start a new chat to begin.
@@ -746,23 +742,23 @@ export function AgentChat() {
                       setIsHistoryOpen(false);
                     }}
                     className={cn(
-                      "group rounded-xl px-3.5 py-2.5 text-left transition",
+                      "group rounded-lg px-3.5 py-2.5 text-left transition",
                       active
-                        ? "bg-white shadow-sm"
-                        : "hover:bg-white/70",
+                        ? "bg-[var(--color-app-panel-muted)] shadow-sm"
+                        : "hover:bg-[var(--color-app-panel-muted)]",
                     )}
                   >
                     <p
                       className={cn(
                         "truncate text-[12.5px] leading-snug",
                         active
-                          ? "font-semibold text-slate-800"
-                          : "font-medium text-slate-600 group-hover:text-slate-800",
+                          ? "font-semibold text-[var(--color-text)]"
+                          : "font-medium text-[var(--color-text-secondary)] group-hover:text-[var(--color-text)]",
                       )}
                     >
                       {conversation.preview || "New conversation"}
                     </p>
-                    <p className="mt-0.5 text-[10.5px] text-slate-400">
+                    <p className="mt-0.5 text-[10.5px] text-[var(--color-text-muted)]">
                       {formatRelativeTime(conversation.updatedAt)}
                     </p>
                   </button>

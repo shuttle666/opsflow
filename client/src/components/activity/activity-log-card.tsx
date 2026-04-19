@@ -15,13 +15,13 @@ type ActivityLogCardProps = {
 function toneClassName(tone: ActivityFeedItem["tone"]) {
   switch (tone) {
     case "success":
-      return "bg-emerald-50 text-emerald-500";
+      return "bg-[var(--color-success-soft)] text-[var(--color-success)]";
     case "warning":
-      return "bg-amber-50 text-amber-500";
+      return "bg-[var(--color-warning-soft)] text-[var(--color-warning)]";
     case "brand":
-      return "bg-sky-50 text-sky-500";
+      return "bg-[var(--color-brand-soft)] text-[var(--color-brand)]";
     default:
-      return "bg-slate-100 text-slate-500";
+      return "bg-[var(--color-app-panel-muted)] text-[var(--color-text-secondary)]";
   }
 }
 
@@ -48,10 +48,10 @@ export function ActivityLogCard({
   return (
     <div className={cn(surfaceClassName, "flex flex-col p-6")}>
       <div className="mb-6 flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-50 text-sky-600">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--color-brand-soft)] text-[var(--color-brand)]">
           <History className="h-5 w-5" />
         </div>
-        <h2 className="text-lg font-bold text-slate-900">{title}</h2>
+        <h2 className="text-lg font-bold text-[var(--color-text)]">{title}</h2>
       </div>
 
       {loading ? <LoadingPanel label="Loading activity log..." compact /> : null}
@@ -72,7 +72,7 @@ export function ActivityLogCard({
             return (
               <div
                 key={item.id}
-                className="flex gap-4 rounded-[20px] border border-transparent p-4 transition-colors hover:border-sky-100 hover:bg-white"
+                className="flex gap-4 rounded-lg border border-transparent p-4 transition-colors hover:border-[var(--color-app-border)] hover:bg-[var(--color-app-panel-muted)]"
               >
                 <div
                   className={cn(
@@ -83,12 +83,12 @@ export function ActivityLogCard({
                   <Icon className="h-[18px] w-[18px]" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <span className="text-sm font-semibold text-slate-900">{item.title}</span>
-                  <span className="mt-0.5 block text-xs text-slate-500">
+                  <span className="text-sm font-semibold text-[var(--color-text)]">{item.title}</span>
+                  <span className="mt-0.5 block text-xs text-[var(--color-text-secondary)]">
                     {item.description}
                   </span>
                 </div>
-                <span className="mt-1 whitespace-nowrap font-mono text-[10px] font-medium text-slate-400">
+                <span className="mt-1 whitespace-nowrap font-mono text-[10px] font-medium text-[var(--color-text-muted)]">
                   {item.timestamp}
                 </span>
               </div>

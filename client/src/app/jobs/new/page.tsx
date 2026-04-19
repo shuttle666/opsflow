@@ -153,7 +153,7 @@ function NewJobPageContent() {
                 }}
               />
             ) : (
-              <div className="space-y-4 text-sm text-slate-600">
+              <div className="space-y-4 text-sm text-[var(--color-text-secondary)]">
                 <p>No customers are available yet. Create a customer before opening a job.</p>
                 <Link
                   href="/customers/new"

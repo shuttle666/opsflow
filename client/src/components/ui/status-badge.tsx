@@ -13,17 +13,17 @@ type BadgeTone =
 function toneClassName(tone: BadgeTone) {
   switch (tone) {
     case "brand":
-      return "border-sky-100 bg-sky-50 text-sky-700";
+      return "border-[var(--color-app-border)] bg-[var(--color-brand-soft)] text-[var(--color-brand)]";
     case "success":
-      return "border-emerald-100 bg-emerald-50 text-emerald-600";
+      return "border-[var(--color-app-border)] bg-[var(--color-success-soft)] text-[var(--color-success)]";
     case "warning":
-      return "border-amber-100 bg-amber-50 text-amber-600";
+      return "border-[var(--color-app-border)] bg-[var(--color-warning-soft)] text-[var(--color-warning)]";
     case "danger":
-      return "border-rose-100 bg-rose-50 text-rose-600";
+      return "border-[var(--color-app-border)] bg-[var(--color-danger-soft)] text-[var(--color-danger)]";
     case "indigo":
-      return "border-indigo-100 bg-indigo-50 text-indigo-600";
+      return "border-[var(--color-app-border)] bg-[var(--color-brand-surface)] text-[var(--color-brand)]";
     default:
-      return "border-slate-200 bg-slate-50 text-slate-500";
+      return "border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] text-[var(--color-text-secondary)]";
   }
 }
 
@@ -79,6 +79,28 @@ function roleTone(role: MembershipRole): BadgeTone {
   }
 }
 
+const statusLabels: Record<string, string> = {
+  NEW: "New",
+  SCHEDULED: "Scheduled",
+  IN_PROGRESS: "In progress",
+  PENDING_REVIEW: "Pending review",
+  COMPLETED: "Completed",
+  CANCELLED: "Cancelled",
+  ACTIVE: "Active",
+  INVITED: "Invited",
+  DISABLED: "Disabled",
+  PENDING: "Pending",
+  ACCEPTED: "Accepted",
+  EXPIRED: "Expired",
+  OWNER: "Owner",
+  MANAGER: "Manager",
+  STAFF: "Staff",
+};
+
+export function formatBadgeLabel(value: string) {
+  return statusLabels[value] ?? value.replace(/_/g, " ").toLowerCase().replace(/^\w/, (letter) => letter.toUpperCase());
+}
+
 type StatusBadgeProps =
   | { kind: "job"; value: JobStatus; className?: string }
   | { kind: "membership"; value: MembershipStatus; className?: string }
@@ -97,7 +119,11 @@ export function StatusBadge(props: StatusBadgeProps) {
 
   return (
     <span className={cn(badgeBaseClassName, toneClassName(tone), props.className)}>
-      {props.value}
+      <span
+        aria-hidden="true"
+        className="h-1.5 w-1.5 rounded-full bg-current opacity-80"
+      />
+      {formatBadgeLabel(props.value)}
     </span>
   );
 }

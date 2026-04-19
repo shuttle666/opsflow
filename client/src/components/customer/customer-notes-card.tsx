@@ -62,7 +62,11 @@ export function CustomerNotesCard({
   }
 
   return (
-    <ActionCard eyebrow="Internal" title="Notes">
+    <ActionCard
+      eyebrow="Internal notes"
+      title="Customer notes"
+      description="Private context for scheduling, service preferences, and handoff."
+    >
       <div className="space-y-3 text-sm">
         {isEditing ? (
           <>
@@ -95,11 +99,11 @@ export function CustomerNotesCard({
                 Cancel
               </button>
             </div>
-            {error ? <p className="text-rose-600">{error}</p> : null}
+            {error ? <p className="text-[var(--color-danger)]">{error}</p> : null}
           </>
         ) : (
           <>
-            <p className="whitespace-pre-wrap leading-6 text-slate-600">
+            <p className="whitespace-pre-wrap leading-6 text-[var(--color-text-secondary)]">
               {customer.notes || "No notes yet."}
             </p>
             {canEdit ? (

@@ -14,6 +14,7 @@ import {
   inputClassName,
   primaryButtonClassName,
   badgeBaseClassName,
+  selectClassName,
   subtleButtonClassName,
 } from "@/components/ui/styles";
 import { listCustomersRequest } from "@/features/customer/customer-api";
@@ -124,7 +125,7 @@ export default function CustomersPage() {
       <AuthGuard>
         <DataTableCard
           toolbar={
-            <div className="flex flex-wrap items-center gap-3 px-6 pt-5">
+            <div className="flex flex-wrap items-center gap-3">
               <form
                 className="flex items-center gap-3"
                 onSubmit={(event) => {
@@ -152,7 +153,7 @@ export default function CustomersPage() {
                       | "name_desc",
                   );
                 }}
-                className="h-11 rounded-full border border-slate-200 bg-white px-4 pr-8 text-sm text-slate-600 shadow-sm outline-none transition focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10"
+                className={selectClassName}
               >
                 <option value="createdAt_desc">Newest first</option>
                 <option value="createdAt_asc">Oldest first</option>
@@ -163,7 +164,7 @@ export default function CustomersPage() {
           }
           feedback={error ? <InlineErrorBanner message={error} /> : null}
           footer={
-            <div className="flex flex-col gap-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 text-sm text-[var(--color-text-secondary)] sm:flex-row sm:items-center sm:justify-between">
               <p>
                 Page {pagination.page} of {pagination.totalPages} | Total {pagination.total}
               </p>
@@ -205,51 +206,55 @@ export default function CustomersPage() {
               />
             </div>
           ) : (
-            <div className="overflow-x-auto px-3 pb-3">
-              <table className="min-w-full border-separate border-spacing-y-3 text-sm">
-                <thead className="text-left text-[11px] uppercase tracking-wider text-slate-400">
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-collapse text-sm">
+                <thead className="border-b border-[var(--color-app-border)] text-left text-[11px] uppercase text-[var(--color-text-muted)]">
                   <tr>
-                    <th className="px-4 pb-2 font-semibold">Name</th>
-                    <th className="px-4 pb-2 font-semibold">Email</th>
-                    <th className="px-4 pb-2 font-semibold">Phone</th>
-                    <th className="px-4 pb-2 font-semibold">Status</th>
-                    <th className="px-4 pb-2 font-semibold">Action</th>
+                    <th className="px-4 py-2.5 font-semibold">Name</th>
+                    <th className="px-4 py-2.5 font-semibold">Email</th>
+                    <th className="px-4 py-2.5 font-semibold">Phone</th>
+                    <th className="px-4 py-2.5 font-semibold">Status</th>
+                    <th className="px-4 py-2.5 font-semibold">Action</th>
                   </tr>
                 </thead>
-                <tbody className="text-slate-700">
+                <tbody className="divide-y divide-[var(--color-app-border)] text-[var(--color-text-secondary)]">
                   {customers.map((customer) => (
                     <tr
                       key={customer.id}
-                      className="group cursor-pointer rounded-2xl bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-md"
+                      className="group transition hover:bg-[var(--color-app-panel-muted)]"
                     >
-                      <td className="rounded-l-2xl border-y border-l border-white px-4 py-4 group-hover:border-sky-100">
-                        <Link href={`/customers/${customer.id}`} className="flex items-center gap-3 hover:text-cyan-700">
+                      <td className="px-4 py-3">
+                        <Link
+                          href={`/customers/${customer.id}`}
+                          className="flex items-center gap-3 transition hover:text-[var(--color-brand)]"
+                        >
                           <div
                             className={cn(
-                              "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold",
+                              "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold",
                               avatarColor(customer.name),
                             )}
                           >
                             {initialsFor(customer.name)}
                           </div>
-                          <span className="font-semibold text-slate-900">{customer.name}</span>
+                          <span className="font-semibold text-[var(--color-text)]">{customer.name}</span>
                         </Link>
                       </td>
-                      <td className="border-y border-white px-4 py-4 group-hover:border-sky-100">
+                      <td className="px-4 py-3">
                         {customer.email ?? "-"}
                       </td>
-                      <td className="border-y border-white px-4 py-4 group-hover:border-sky-100">
+                      <td className="px-4 py-3 font-mono text-xs">
                         {customer.phone ?? "-"}
                       </td>
-                      <td className="border-y border-white px-4 py-4 group-hover:border-sky-100">
-                        <span className={cn(badgeBaseClassName, "bg-emerald-50 text-emerald-600 border-emerald-100")}>
-                          ACTIVE
+                      <td className="px-4 py-3">
+                        <span className={cn(badgeBaseClassName, "border-[var(--color-app-border)] bg-[var(--color-success-soft)] text-[var(--color-success)]")}>
+                          <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
+                          Active
                         </span>
                       </td>
-                      <td className="rounded-r-2xl border-y border-r border-white px-4 py-4 group-hover:border-sky-100">
+                      <td className="px-4 py-3">
                         <Link
                           href={`/customers/${customer.id}`}
-                          className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--color-text-muted)] transition hover:bg-[var(--color-app-panel-muted)] hover:text-[var(--color-text)]"
                         >
                           <MoreHorizontal className="h-5 w-5" />
                         </Link>

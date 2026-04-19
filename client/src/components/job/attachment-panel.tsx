@@ -1,6 +1,10 @@
 import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
 import { SummaryCard } from "@/components/ui/info-cards";
-import { secondaryButtonClassName, subtleButtonClassName } from "@/components/ui/styles";
+import {
+  secondaryButtonClassName,
+  subtleButtonClassName,
+  surfaceClassName,
+} from "@/components/ui/styles";
 import type { AttachmentItemView } from "@/types/future-ui";
 
 type AttachmentPanelProps = {
@@ -15,10 +19,10 @@ export function AttachmentPanel({ items }: AttachmentPanelProps) {
       description="Upload, preview, and download controls are staged here for the future attachment API."
     >
       <div className="space-y-4">
-        <div className="rounded-[24px] border border-dashed border-sky-200 bg-white/72 p-4">
+        <div className="rounded-lg border border-dashed border-[var(--color-brand)] bg-[var(--color-app-panel-muted)] p-4">
           <div className="space-y-2">
-            <p className="text-sm font-semibold text-slate-900">Upload zone</p>
-            <p className="text-sm leading-6 text-slate-500">
+            <p className="text-sm font-semibold text-[var(--color-text)]">Upload zone</p>
+            <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
               The UI is ready for drag-and-drop and file picker wiring. Upload
               stays disabled until the Phase 7 attachment endpoints are available.
             </p>
@@ -41,15 +45,15 @@ export function AttachmentPanel({ items }: AttachmentPanelProps) {
             {items.map((item) => (
               <div
                 key={item.id}
-                className="rounded-[24px] border border-white/75 bg-white p-4 shadow-sm"
+                className={`${surfaceClassName} p-4`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-1">
-                    <p className="text-sm font-semibold text-slate-900">{item.fileName}</p>
-                    <p className="text-sm text-slate-600">
+                    <p className="text-sm font-semibold text-[var(--color-text)]">{item.fileName}</p>
+                    <p className="text-sm text-[var(--color-text-secondary)]">
                       {item.mimeType} | {item.sizeLabel}
                     </p>
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                    <p className="text-xs uppercase text-[var(--color-text-muted)]">
                       {item.uploadedBy} | {item.uploadedAt}
                     </p>
                   </div>

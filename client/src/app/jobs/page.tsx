@@ -9,7 +9,7 @@ import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
 import { FilterToolbar } from "@/components/ui/filter-toolbar";
 import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
 import { LoadingPanel } from "@/components/ui/loading-panel";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { formatBadgeLabel, StatusBadge } from "@/components/ui/status-badge";
 import { SummaryCard } from "@/components/ui/info-cards";
 import {
   inputClassName,
@@ -24,12 +24,12 @@ import type { CustomerListItem, PaginationMeta } from "@/types/customer";
 import type { JobListItem, JobStatus } from "@/types/job";
 
 const jobStatuses: Array<{ value: JobStatus; label: string }> = [
-  { value: "NEW", label: "NEW" },
-  { value: "SCHEDULED", label: "SCHEDULED" },
-  { value: "IN_PROGRESS", label: "IN_PROGRESS" },
-  { value: "PENDING_REVIEW", label: "PENDING_REVIEW" },
-  { value: "COMPLETED", label: "COMPLETED" },
-  { value: "CANCELLED", label: "CANCELLED" },
+  { value: "NEW", label: formatBadgeLabel("NEW") },
+  { value: "SCHEDULED", label: formatBadgeLabel("SCHEDULED") },
+  { value: "IN_PROGRESS", label: formatBadgeLabel("IN_PROGRESS") },
+  { value: "PENDING_REVIEW", label: formatBadgeLabel("PENDING_REVIEW") },
+  { value: "COMPLETED", label: formatBadgeLabel("COMPLETED") },
+  { value: "CANCELLED", label: formatBadgeLabel("CANCELLED") },
 ];
 
 function canManageJobs(role: string | undefined) {
@@ -165,7 +165,7 @@ export default function JobsPage() {
             title="Open your assigned job queue"
             description="Staff members work from the personal jobs view instead of the tenant-wide operations list."
           >
-            <div className="space-y-4 text-sm text-slate-600">
+            <div className="space-y-4 text-sm text-[var(--color-text-secondary)]">
               <Link
                 href="/jobs/my"
                 className={primaryButtonClassName}
@@ -187,7 +187,7 @@ export default function JobsPage() {
                   }}
                 >
                   <label className="space-y-2">
-                  <span className="text-sm font-medium text-slate-700">Search</span>
+                  <span className="text-xs font-semibold uppercase text-[var(--color-text-muted)]">Search</span>
                   <input
                     value={queryInput}
                     onChange={(event) => setQueryInput(event.target.value)}
@@ -197,7 +197,7 @@ export default function JobsPage() {
                 </label>
 
                   <label className="space-y-2">
-                    <span className="text-sm font-medium text-slate-700">Status</span>
+                    <span className="text-xs font-semibold uppercase text-[var(--color-text-muted)]">Status</span>
                     <select
                       value={statusFilter}
                       onChange={(event) => {
@@ -216,7 +216,7 @@ export default function JobsPage() {
                   </label>
 
                   <label className="space-y-2">
-                    <span className="text-sm font-medium text-slate-700">Customer</span>
+                    <span className="text-xs font-semibold uppercase text-[var(--color-text-muted)]">Customer</span>
                     <select
                       value={customerFilter}
                       onChange={(event) => {
@@ -235,7 +235,7 @@ export default function JobsPage() {
                   </label>
 
                   <label className="space-y-2">
-                    <span className="text-sm font-medium text-slate-700">Sort</span>
+                    <span className="text-xs font-semibold uppercase text-[var(--color-text-muted)]">Sort</span>
                     <select
                       value={sort}
                       onChange={(event) => {
@@ -267,7 +267,7 @@ export default function JobsPage() {
             }
             feedback={error ? <InlineErrorBanner message={error} /> : null}
             footer={
-              <div className="flex flex-col gap-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 text-sm text-[var(--color-text-secondary)] sm:flex-row sm:items-center sm:justify-between">
                 <p>
                   Page {pagination.page} of {pagination.totalPages} | Total {pagination.total}
                 </p>
@@ -309,42 +309,45 @@ export default function JobsPage() {
                 />
               </div>
             ) : (
-              <div className="overflow-x-auto px-3 pb-3">
-                <table className="min-w-full border-separate border-spacing-y-3 text-sm">
-                  <thead className="text-left text-[11px] uppercase tracking-[0.18em] text-slate-400">
+              <div className="overflow-x-auto">
+                <table className="min-w-full border-collapse text-sm">
+                  <thead className="border-b border-[var(--color-app-border)] text-left text-[11px] uppercase text-[var(--color-text-muted)]">
                     <tr>
-                      <th className="px-4 py-3 font-semibold">Title</th>
-                      <th className="px-4 py-3 font-semibold">Customer</th>
-                      <th className="px-4 py-3 font-semibold">Status</th>
-                      <th className="px-4 py-3 font-semibold">Scheduled</th>
-                      <th className="px-4 py-3 font-semibold">Assigned</th>
-                      <th className="px-4 py-3 font-semibold">Updated</th>
+                      <th className="px-4 py-2.5 font-semibold">Title</th>
+                      <th className="px-4 py-2.5 font-semibold">Customer</th>
+                      <th className="px-4 py-2.5 font-semibold">Status</th>
+                      <th className="px-4 py-2.5 font-semibold">Scheduled</th>
+                      <th className="px-4 py-2.5 font-semibold">Assigned</th>
+                      <th className="px-4 py-2.5 font-semibold">Updated</th>
                     </tr>
                   </thead>
-                  <tbody className="text-slate-700">
+                  <tbody className="divide-y divide-[var(--color-app-border)] text-[var(--color-text-secondary)]">
                     {jobs.map((job) => (
                       <tr
                         key={job.id}
-                        className="group rounded-[24px] bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-slate-50"
+                        className="group transition hover:bg-[var(--color-app-panel-muted)]"
                       >
-                        <td className="rounded-l-[24px] border-y border-l border-white px-4 py-4 font-medium text-slate-900 group-hover:border-sky-100">
-                          <Link href={`/jobs/${job.id}`} className="hover:text-cyan-700">
+                        <td className="px-4 py-3 font-semibold text-[var(--color-text)]">
+                          <Link
+                            href={`/jobs/${job.id}`}
+                            className="transition hover:text-[var(--color-brand)]"
+                          >
                             {job.title}
                           </Link>
                         </td>
-                        <td className="border-y border-white px-4 py-4 group-hover:border-sky-100">
+                        <td className="px-4 py-3">
                           {job.customer.name}
                         </td>
-                        <td className="border-y border-white px-4 py-4 group-hover:border-sky-100">
+                        <td className="px-4 py-3">
                           <StatusBadge kind="job" value={job.status} />
                         </td>
-                        <td className="border-y border-white px-4 py-4 group-hover:border-sky-100">
+                        <td className="px-4 py-3 font-mono text-xs">
                           {formatScheduleRange(job.scheduledStartAt, job.scheduledEndAt)}
                         </td>
-                        <td className="border-y border-white px-4 py-4 group-hover:border-sky-100">
+                        <td className="px-4 py-3">
                           {job.assignedToName ?? "-"}
                         </td>
-                        <td className="rounded-r-[24px] border-y border-r border-white px-4 py-4 group-hover:border-sky-100">
+                        <td className="px-4 py-3 font-mono text-xs">
                           {formatDateTime(job.updatedAt)}
                         </td>
                       </tr>

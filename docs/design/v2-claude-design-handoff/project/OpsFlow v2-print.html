@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpsFlow UI Design — Print</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-font-smoothing: antialiased; background: #fff; }
+    input, select, button, textarea { font-family: inherit; }
+    table { font-size: inherit; }
+
+    @page { size: landscape; margin: 0; }
+
+    .print-page {
+      width: 100vw; height: 100vh;
+      break-before: page; break-inside: avoid;
+      overflow: hidden; position: relative;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    .print-page:first-child { break-before: auto; }
+
+    /* Page label */
+    .page-label {
+      position: absolute; top: 16px; right: 24px; z-index: 100;
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+      padding: 4px 12px; border-radius: 6px;
+      background: rgba(124,92,252,0.1); color: #7C5CFC;
+    }
+
+    /* Hide tweaks, scrollbars */
+    .tweaks-panel { display: none !important; }
+    ::-webkit-scrollbar { display: none; }
+
+    @media print {
+      body { background: #fff; }
+      .print-page { page-break-before: always; page-break-inside: avoid; }
+      .print-page:first-child { page-break-before: auto; }
+    }
+  </style>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel" src="v2/theme.jsx"></script>
+  <script type="text/babel" src="v2/shared.jsx"></script>
+  <script type="text/babel" src="v2/dashboard.jsx"></script>
+  <script type="text/babel" src="v2/data-pages.jsx"></script>
+  <script type="text/babel" src="v2/other-pages.jsx"></script>
+  <script type="text/babel" src="v2/detail-pages.jsx"></script>
+  <script type="text/babel" src="v2/shell.jsx"></script>
+
+  <script type="text/babel">
+    // Static sidebar for print
+    function PrintSidebar({ activePage }) {
+      const t = useT();
+      return React.createElement('aside', {
+        style: {
+          width: 230, minWidth: 230, height: '100%', position: 'absolute', left: 0, top: 0,
+          display: 'flex', flexDirection: 'column',
+          background: t.sidebarGradient, overflow: 'hidden',
+        }
+      },
+        React.createElement('div', {
+          style: { display: 'flex', alignItems: 'center', gap: 11, padding: '18px 20px', height: 60, flexShrink: 0 }
+        },
+          React.createElement('div', {
+            style: {
+              width: 32, height: 32, borderRadius: 10, flexShrink: 0,
+              background: t.gradient,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontWeight: 800, fontSize: 15, boxShadow: `0 4px 12px ${t.primaryGlow}`,
+            }
+          }, 'O'),
+          React.createElement('span', { style: { fontSize: 17, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' } }, 'OpsFlow'),
+        ),
+        React.createElement('nav', {
+          style: { flex: 1, padding: '12px 12px', display: 'flex', flexDirection: 'column', gap: 2 }
+        },
+          V2_NAV.map(item => {
+            const active = activePage === item.id;
+            return React.createElement('div', {
+              key: item.id,
+              style: {
+                display: 'flex', alignItems: 'center', gap: 11, position: 'relative',
+                padding: '9px 14px', borderRadius: 10,
+                background: active ? 'rgba(255,255,255,0.1)' : 'transparent',
+                color: active ? '#fff' : 'rgba(255,255,255,0.45)',
+                fontWeight: active ? 600 : 500, fontSize: 13,
+              }
+            },
+              active && React.createElement('div', {
+                style: { position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', width: 3, height: 20, borderRadius: 2, background: t.sidebarAccent }
+              }),
+              React.createElement(V2Icon, { d: item.d, size: 19 }),
+              React.createElement('span', null, item.label),
+            );
+          }),
+        ),
+        React.createElement('div', {
+          style: { padding: '14px 16px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: 10 }
+        },
+          React.createElement('div', {
+            style: { width: 34, height: 34, borderRadius: 34, flexShrink: 0, background: 'rgba(255,255,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: 700 }
+          }, 'AC'),
+          React.createElement('div', null,
+            React.createElement('div', { style: { fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.85)' } }, 'Alex Chen'),
+            React.createElement('div', { style: { fontSize: 11, color: 'rgba(255,255,255,0.35)' } }, 'Owner'),
+          ),
+        ),
+      );
+    }
+
+    function PrintPage({ pageId, title, children }) {
+      const t = useT();
+      return React.createElement('div', { className: 'print-page', style: { background: t.bg, fontFamily: '"Plus Jakarta Sans", sans-serif', color: t.text } },
+        React.createElement('span', { className: 'page-label' }, title),
+        React.createElement(PrintSidebar, { activePage: pageId }),
+        React.createElement('div', { style: { marginLeft: 230, height: '100%', display: 'flex', flexDirection: 'column' } },
+          React.createElement('header', { style: { height: 56, padding: '0 28px', display: 'flex', alignItems: 'center' } },
+            React.createElement('h1', { style: { fontSize: 20, fontWeight: 800, letterSpacing: '-0.03em' } }, title),
+          ),
+          React.createElement('div', { style: { flex: 1, padding: '0 28px 20px', overflow: 'hidden', maxWidth: 1200 } },
+            React.createElement(V2NavContext.Provider, { value: { openJobDetail: () => {}, openCustomerDetail: () => {}, back: () => {} } },
+              children,
+            ),
+          ),
+        ),
+      );
+    }
+
+    function PrintApp() {
+      return React.createElement(ThemeProvider2, null,
+        React.createElement(PrintAppInner),
+      );
+    }
+
+    function PrintAppInner() {
+      const t = useT();
+      React.useEffect(() => { t.setSchemeKey('violet'); t.setDark(false); }, []);
+
+      const pages = [
+        { id: 'dashboard', title: 'Dashboard', comp: V2DashboardPage },
+        { id: 'customers', title: 'Customers', comp: V2CustomersPage },
+        { id: 'jobs', title: 'Jobs', comp: V2JobsPage },
+        { id: 'schedule', title: 'Schedule', comp: V2SchedulePage },
+        { id: 'team', title: 'Team', comp: V2TeamPage },
+        { id: 'agent', title: 'AI Planner', comp: V2AgentPage },
+      ];
+
+      return React.createElement(React.Fragment, null,
+        pages.map(p => React.createElement(PrintPage, { key: p.id, pageId: p.id, title: p.title },
+          React.createElement(p.comp),
+        )),
+        // Job Detail page
+        React.createElement('div', { className: 'print-page', style: { background: t.bg, fontFamily: '"Plus Jakarta Sans", sans-serif', color: t.text } },
+          React.createElement('span', { className: 'page-label' }, 'Job Detail'),
+          React.createElement(PrintSidebar, { activePage: 'jobs' }),
+          React.createElement('div', { style: { marginLeft: 230, height: '100%', display: 'flex', flexDirection: 'column' } },
+            React.createElement('header', { style: { height: 56, padding: '0 28px', display: 'flex', alignItems: 'center' } },
+              React.createElement('h1', { style: { fontSize: 20, fontWeight: 800, letterSpacing: '-0.03em' } }, 'Job Detail'),
+            ),
+            React.createElement('div', { style: { flex: 1, padding: '0 28px 20px', overflow: 'hidden', maxWidth: 1200 } },
+              React.createElement(V2JobDetailPage, { onBack: () => {} }),
+            ),
+          ),
+        ),
+        // Customer Detail page
+        React.createElement('div', { className: 'print-page', style: { background: t.bg, fontFamily: '"Plus Jakarta Sans", sans-serif', color: t.text } },
+          React.createElement('span', { className: 'page-label' }, 'Customer Detail'),
+          React.createElement(PrintSidebar, { activePage: 'customers' }),
+          React.createElement('div', { style: { marginLeft: 230, height: '100%', display: 'flex', flexDirection: 'column' } },
+            React.createElement('header', { style: { height: 56, padding: '0 28px', display: 'flex', alignItems: 'center' } },
+              React.createElement('h1', { style: { fontSize: 20, fontWeight: 800, letterSpacing: '-0.03em' } }, 'Customer Detail'),
+            ),
+            React.createElement('div', { style: { flex: 1, padding: '0 28px 20px', overflow: 'hidden', maxWidth: 1200 } },
+              React.createElement(V2CustomerDetailPage, { onBack: () => {} }),
+            ),
+          ),
+        ),
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(PrintApp));
+
+    // Auto-print after fonts + Babel scripts load
+    document.fonts.ready.then(() => {
+      setTimeout(() => { window.print(); }, 800);
+    });
+  </script>
+</body>
+</html>

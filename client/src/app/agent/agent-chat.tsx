@@ -44,14 +44,14 @@ const PLANNER_SUGGESTIONS = [
   "Show crew workload",
 ];
 
-const agentGhostButtonClassName =
-  "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-2.5 text-[12px] font-semibold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-soft)] disabled:cursor-not-allowed disabled:opacity-50";
+const agentHeaderButtonClassName =
+  "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3 text-[12px] font-semibold text-[var(--color-brand)] shadow-sm transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-soft)] disabled:cursor-not-allowed disabled:opacity-50";
 
 const composerInputClassName =
-  "h-10 min-w-0 flex-1 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3.5 text-[13px] text-[var(--color-text)] outline-none transition placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-brand)] focus:ring-[3px] focus:ring-[var(--color-brand-soft)] disabled:cursor-not-allowed disabled:opacity-60";
+  "h-9 min-w-0 flex-1 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3.5 text-[13px] text-[var(--color-text)] outline-none transition placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-brand)] focus:ring-[3px] focus:ring-[var(--color-brand-soft)] disabled:cursor-not-allowed disabled:opacity-60";
 
 const composerSendButtonClassName =
-  "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--color-brand)] text-white shadow-[0_4px_16px_-10px_var(--color-brand-glow)] transition hover:bg-[var(--color-brand-strong)] disabled:cursor-not-allowed disabled:opacity-50";
+  "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-brand)] text-white shadow-[0_4px_16px_-10px_var(--color-brand-glow)] transition hover:bg-[var(--color-brand-strong)] disabled:cursor-not-allowed disabled:opacity-50";
 
 function canUsePlanner(role: string | undefined) {
   return role === "OWNER" || role === "MANAGER";
@@ -93,8 +93,8 @@ function AiAvatar() {
 function MessageBubble({ message }: { message: ChatMessage }) {
   if (message.role === "user") {
     return (
-      <div className="flex flex-row-reverse gap-2.5 pl-12">
-        <div className="max-w-[88%] rounded-[14px] rounded-br px-4 py-3 text-[13px] leading-relaxed text-white shadow-[0_2px_8px_var(--color-brand-glow)] sm:max-w-[80%] lg:max-w-[72%]" style={{ background: "var(--color-brand)" }}>
+      <div className="flex flex-row-reverse gap-2.5 pl-4 sm:pl-12">
+        <div className="max-w-[92%] rounded-[14px] rounded-br px-4 py-3 text-[13px] leading-relaxed text-white shadow-[0_2px_8px_var(--color-brand-glow)] sm:max-w-[84%] lg:max-w-[78%] xl:max-w-[74%]" style={{ background: "var(--color-brand)" }}>
           {message.content}
         </div>
       </div>
@@ -102,9 +102,9 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   }
 
   return (
-    <div className="flex gap-2.5 pr-12">
+    <div className="flex gap-2.5 pr-4 sm:pr-12">
       <AiAvatar />
-      <div className="max-w-[88%] rounded-[14px] rounded-bl bg-[var(--color-app-panel-muted)] px-4 py-3 text-[13px] leading-relaxed text-[var(--color-text)] sm:max-w-[80%] lg:max-w-[72%]">
+      <div className="max-w-[92%] rounded-[14px] rounded-bl bg-[var(--color-app-panel-muted)] px-4 py-3 text-[13px] leading-relaxed text-[var(--color-text)] sm:max-w-[84%] lg:max-w-[78%] xl:max-w-[74%]">
         <div className="agent-markdown">
           <Markdown>{message.content}</Markdown>
         </div>
@@ -527,6 +527,7 @@ export function AgentChat() {
   }, [conversationId, loadConversation, pendingProposal, refreshConversations, withAccessTokenRetry]);
 
   const historyItems = useMemo(() => conversations, [conversations]);
+  const isEmptyConversation = messages.length === 0 && !isStreaming;
 
   const resetComposerState = useCallback(() => {
     setConversationId(null);
@@ -547,7 +548,7 @@ export function AgentChat() {
   }
 
   return (
-    <div className={`${surfaceClassName} relative flex h-[calc(100vh-150px)] min-w-0 overflow-hidden`}>
+    <div className={`${surfaceClassName} relative flex h-[calc(100dvh-7rem)] min-h-[420px] min-w-0 overflow-hidden`}>
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center justify-between border-b border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-4 py-3">
           <div className="flex items-center gap-2.5">
@@ -569,14 +570,17 @@ export function AgentChat() {
                 resetComposerState();
                 setIsHistoryOpen(false);
               }}
-              className={agentGhostButtonClassName}
+              className={agentHeaderButtonClassName}
             >
               New
             </button>
             <button
               type="button"
               onClick={() => setIsHistoryOpen((current) => !current)}
-              className={agentGhostButtonClassName}
+              className={cn(
+                agentHeaderButtonClassName,
+                isHistoryOpen && "border-[var(--color-brand)] bg-[var(--color-brand-soft)]",
+              )}
               aria-expanded={isHistoryOpen}
               aria-controls="planner-history-panel"
             >
@@ -586,11 +590,16 @@ export function AgentChat() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-5">
-          {messages.length === 0 && !isStreaming ? (
+        <div
+          className={cn(
+            "min-h-0 flex-1 overflow-y-auto px-5 py-5",
+            isEmptyConversation && "flex items-center",
+          )}
+        >
+          {isEmptyConversation ? (
             <EmptyState onSuggestion={setInput} />
           ) : (
-            <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
+            <div className="flex w-full flex-col gap-4">
               {messages.map((message) => (
                 <MessageBubble key={message.id} message={message} />
               ))}
@@ -607,9 +616,9 @@ export function AgentChat() {
               ) : null}
 
               {streamingText ? (
-                <div className="flex gap-2.5 pr-12">
+                <div className="flex gap-2.5 pr-4 sm:pr-12">
                   <AiAvatar />
-                  <div className="max-w-[88%] rounded-[14px] rounded-bl bg-[var(--color-app-panel-muted)] px-4 py-3 text-[13px] leading-relaxed text-[var(--color-text)] sm:max-w-[80%] lg:max-w-[72%]">
+                  <div className="max-w-[92%] rounded-[14px] rounded-bl bg-[var(--color-app-panel-muted)] px-4 py-3 text-[13px] leading-relaxed text-[var(--color-text)] sm:max-w-[84%] lg:max-w-[78%] xl:max-w-[74%]">
                     <div className="agent-markdown">
                       <Markdown>{streamingText}</Markdown>
                     </div>
@@ -630,7 +639,7 @@ export function AgentChat() {
 
         {pendingProposal ? (
           <div className="border-t border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-4 py-4 sm:px-6 lg:px-8">
-            <div className="mx-auto w-full max-w-4xl">
+            <div className="mx-auto w-full max-w-6xl">
               <ProposalCard
                 proposal={pendingProposal}
                 onConfirm={handleConfirmProposal}
@@ -643,7 +652,7 @@ export function AgentChat() {
 
         {!pendingProposal && confirmResult ? (
           <div className="border-t border-[var(--color-app-border)] bg-[var(--color-success-soft)] px-4 py-4 sm:px-6 lg:px-8">
-            <div className="mx-auto w-full max-w-4xl rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-5 py-4 text-sm text-[var(--color-success)] shadow-sm">
+            <div className="mx-auto w-full max-w-6xl rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-5 py-4 text-sm text-[var(--color-success)] shadow-sm">
               {confirmResult.entityType === "customer" ? (
                 <>
                   {confirmResult.usedExistingCustomer ? "Reused" : "Created"}{" "}
@@ -670,8 +679,8 @@ export function AgentChat() {
           </div>
         ) : null}
 
-        <div className="border-t border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-4 py-3">
-          <form onSubmit={handleSubmit} className="mx-auto flex w-full max-w-4xl items-center gap-2">
+        <div className="border-t border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-4 py-2.5">
+          <form onSubmit={handleSubmit} className="flex w-full items-center gap-2">
             <input
               value={input}
               onChange={(event) => setInput(event.target.value)}

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 export type ThemeMode = "light" | "dark" | "system";
-export type ThemeScheme = "ocean";
+export type ThemeScheme = "violet" | "ocean" | "ember";
 
 type ThemeStore = {
   mode: ThemeMode;
@@ -12,10 +12,12 @@ type ThemeStore = {
 };
 
 const THEME_STORAGE_KEY = "opsflow-theme";
+const THEME_STORAGE_VERSION = 2;
 
 type StoredTheme = {
   mode?: ThemeMode;
   scheme?: ThemeScheme;
+  version?: number;
 };
 
 function isThemeMode(value: unknown): value is ThemeMode {
@@ -23,12 +25,12 @@ function isThemeMode(value: unknown): value is ThemeMode {
 }
 
 function isThemeScheme(value: unknown): value is ThemeScheme {
-  return value === "ocean";
+  return value === "violet" || value === "ocean" || value === "ember";
 }
 
 function readStoredTheme(): Pick<ThemeStore, "mode" | "scheme"> {
   if (typeof window === "undefined") {
-    return { mode: "system", scheme: "ocean" };
+    return { mode: "system", scheme: "violet" };
   }
 
   try {
@@ -37,10 +39,14 @@ function readStoredTheme(): Pick<ThemeStore, "mode" | "scheme"> {
 
     return {
       mode: isThemeMode(parsed.mode) ? parsed.mode : "system",
-      scheme: isThemeScheme(parsed.scheme) ? parsed.scheme : "ocean",
+      scheme: isThemeScheme(parsed.scheme)
+        ? parsed.version === THEME_STORAGE_VERSION
+          ? parsed.scheme
+          : "violet"
+        : "violet",
     };
   } catch {
-    return { mode: "system", scheme: "ocean" };
+    return { mode: "system", scheme: "violet" };
   }
 }
 
@@ -49,7 +55,10 @@ function writeStoredTheme(theme: Pick<ThemeStore, "mode" | "scheme">) {
     return;
   }
 
-  window.localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(theme));
+  window.localStorage.setItem(
+    THEME_STORAGE_KEY,
+    JSON.stringify({ ...theme, version: THEME_STORAGE_VERSION }),
+  );
 }
 
 const initialTheme = readStoredTheme();

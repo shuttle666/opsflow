@@ -128,6 +128,21 @@ function createScheduleResult() {
   };
 }
 
+function createEmptyScheduleResult() {
+  const result = createScheduleResult();
+
+  return {
+    ...result,
+    totalJobs: 0,
+    conflictCount: 0,
+    lanes: result.lanes.map((lane) => ({
+      ...lane,
+      hasConflict: false,
+      jobs: [],
+    })),
+  };
+}
+
 describe("schedule page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -261,6 +276,19 @@ describe("schedule page", () => {
       new Date(dayInput!.rangeStart).getTime() - new Date(previousDayInput!.rangeStart).getTime();
     expect(previousDelta).toBeGreaterThan(23 * 60 * 60 * 1000);
     expect(previousDelta).toBeLessThan(25 * 60 * 60 * 1000);
+  });
+
+  it("hides empty staff lanes in day view", async () => {
+    vi.mocked(getScheduleRangeRequest).mockResolvedValue(createEmptyScheduleResult());
+    const user = userEvent.setup();
+    render(<SchedulePage />);
+
+    await screen.findByText("Week view");
+    await user.click(screen.getByRole("button", { name: /^day$/i }));
+
+    expect(await screen.findByText("No jobs scheduled")).toBeInTheDocument();
+    expect(screen.queryByText("Sam Staff")).not.toBeInTheDocument();
+    expect(screen.queryByText("Unassigned")).not.toBeInTheDocument();
   });
 
   it("switches to a month grid with selected day details", async () => {

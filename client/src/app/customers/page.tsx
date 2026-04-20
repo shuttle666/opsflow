@@ -8,13 +8,12 @@ import { DataTableCard } from "@/components/ui/data-table-card";
 import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
 import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
 import { LoadingPanel } from "@/components/ui/loading-panel";
-import { MoreHorizontal } from "@/components/ui/icons";
+import { MoreHorizontal, Search } from "@/components/ui/icons";
 import {
   cn,
   inputClassName,
   primaryButtonClassName,
   badgeBaseClassName,
-  selectClassName,
   subtleButtonClassName,
 } from "@/components/ui/styles";
 import { listCustomersRequest } from "@/features/customer/customer-api";
@@ -22,6 +21,9 @@ import { useAuthStore } from "@/store/auth-store";
 import type { CustomerListItem, PaginationMeta } from "@/types/customer";
 
 type ContactFilter = "all" | "has_contact" | "missing_contact";
+
+const toolbarSelectClassName =
+  "h-9 w-full rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3 pr-8 text-[13px] text-[var(--color-text)] shadow-sm outline-none transition focus:border-[var(--color-brand)] focus:ring-[3px] focus:ring-[var(--color-brand-soft)] sm:w-[160px]";
 
 function canManageCustomers(role: string | undefined) {
   return role === "OWNER" || role === "MANAGER";
@@ -139,55 +141,61 @@ export default function CustomersPage() {
       <AuthGuard>
         <DataTableCard
           toolbar={
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
               <form
-                className="flex items-center gap-3"
+                className="relative w-full lg:w-[260px]"
                 onSubmit={(event) => {
                   event.preventDefault();
                   setPage(1);
                   setQuery(queryInput.trim());
                 }}
               >
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
                 <input
                   value={queryInput}
                   onChange={(event) => setQueryInput(event.target.value)}
                   placeholder="Search customers..."
-                  className={`${inputClassName} w-[260px]`}
+                  className={`${inputClassName} !pl-9`}
                 />
               </form>
-              <select
-                aria-label="Contact filter"
-                value={contactFilter}
-                onChange={(event) => {
-                  setPage(1);
-                  setContactFilter(event.target.value as ContactFilter);
-                }}
-                className={selectClassName}
-              >
-                <option value="all">All contacts</option>
-                <option value="has_contact">Has contact</option>
-                <option value="missing_contact">Missing contact</option>
-              </select>
-              <select
-                aria-label="Sort customers"
-                value={sort}
-                onChange={(event) => {
-                  setPage(1);
-                  setSort(
-                    event.target.value as
-                      | "createdAt_desc"
-                      | "createdAt_asc"
-                      | "name_asc"
-                      | "name_desc",
-                  );
-                }}
-                className={selectClassName}
-              >
-                <option value="createdAt_desc">Newest first</option>
-                <option value="createdAt_asc">Oldest first</option>
-                <option value="name_asc">Name A-Z</option>
-                <option value="name_desc">Name Z-A</option>
-              </select>
+              <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+                <select
+                  aria-label="Contact filter"
+                  value={contactFilter}
+                  onChange={(event) => {
+                    setPage(1);
+                    setContactFilter(event.target.value as ContactFilter);
+                  }}
+                  className={toolbarSelectClassName}
+                >
+                  <option value="all">All contacts</option>
+                  <option value="has_contact">Has contact</option>
+                  <option value="missing_contact">Missing contact</option>
+                </select>
+                <select
+                  aria-label="Sort customers"
+                  value={sort}
+                  onChange={(event) => {
+                    setPage(1);
+                    setSort(
+                      event.target.value as
+                        | "createdAt_desc"
+                        | "createdAt_asc"
+                        | "name_asc"
+                        | "name_desc",
+                    );
+                  }}
+                  className={toolbarSelectClassName}
+                >
+                  <option value="createdAt_desc">Newest first</option>
+                  <option value="createdAt_asc">Oldest first</option>
+                  <option value="name_asc">Name A-Z</option>
+                  <option value="name_desc">Name Z-A</option>
+                </select>
+                <span className="text-xs font-medium text-[var(--color-text-muted)] sm:ml-auto">
+                  {visibleCustomers.length} customers
+                </span>
+              </div>
             </div>
           }
           feedback={error ? <InlineErrorBanner message={error} /> : null}

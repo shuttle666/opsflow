@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { NotificationBell } from "@/components/notification/notification-bell";
 import { useAuthStore } from "@/store/auth-store";
-import { useThemeStore, type ThemeMode } from "@/store/theme-store";
+import { useThemeStore, type ThemeMode, type ThemeScheme } from "@/store/theme-store";
 import { BrandMark } from "@/components/ui/brand-mark";
 import {
   Briefcase,
@@ -60,6 +60,32 @@ const publicNavigation = [
 ];
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "opsflow-sidebar-collapsed";
+
+const themeSchemeOptions: Array<{
+  value: ThemeScheme;
+  label: string;
+  color: string;
+  gradient: string;
+}> = [
+  {
+    value: "violet",
+    label: "Electric Violet",
+    color: "#7c5cfc",
+    gradient: "linear-gradient(135deg, #7c5cfc 0%, #a78bfa 52%, #c4b5fd 100%)",
+  },
+  {
+    value: "ocean",
+    label: "Deep Ocean",
+    color: "#2563eb",
+    gradient: "linear-gradient(135deg, #2563eb 0%, #3b82f6 52%, #60a5fa 100%)",
+  },
+  {
+    value: "ember",
+    label: "Warm Ember",
+    color: "#e04f16",
+    gradient: "linear-gradient(135deg, #e04f16 0%, #f97316 52%, #fb923c 100%)",
+  },
+];
 
 type WorkspaceNavItem = {
   href: string;
@@ -182,10 +208,14 @@ function SidebarNav({
 
 function ThemeToggle() {
   const mode = useThemeStore((state) => state.mode);
+  const scheme = useThemeStore((state) => state.scheme);
   const setMode = useThemeStore((state) => state.setMode);
+  const setScheme = useThemeStore((state) => state.setScheme);
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const label = themeModeLabel(mode);
+  const modeLabel = themeModeLabel(mode);
+  const schemeLabel = themeSchemeLabel(scheme);
+  const activeSchemeColor = themeSchemeOptions.find((option) => option.value === scheme)?.color ?? "#7c5cfc";
 
   useEffect(() => {
     if (!isOpen) {
@@ -218,11 +248,12 @@ function ThemeToggle() {
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
-        className="flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] text-[var(--color-text-secondary)] shadow-sm transition hover:bg-[var(--color-app-panel-muted)] hover:text-[var(--color-text)]"
+        className="flex h-9 w-9 items-center justify-center rounded-lg border border-transparent text-white shadow-[0_4px_16px_-10px_var(--color-brand-glow)] transition hover:opacity-90"
+        style={{ background: activeSchemeColor }}
         aria-haspopup="menu"
         aria-expanded={isOpen}
-        aria-label={`Theme mode: ${label}`}
-        title={`Theme: ${label}`}
+        aria-label={`Theme: ${modeLabel}, ${schemeLabel}`}
+        title={`Theme: ${modeLabel}, ${schemeLabel}`}
       >
         {themeModeIcon(mode)}
       </button>
@@ -230,7 +261,7 @@ function ThemeToggle() {
       {isOpen ? (
         <div
           role="menu"
-          className="absolute right-0 top-11 z-50 w-40 overflow-hidden rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] p-1 shadow-[var(--shadow-floating)]"
+          className="absolute right-0 top-11 z-50 w-52 overflow-hidden rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] p-1 shadow-[var(--shadow-floating)]"
         >
           {(["system", "light", "dark"] as ThemeMode[]).map((option) => {
             const active = option === mode;
@@ -257,6 +288,36 @@ function ThemeToggle() {
               </button>
             );
           })}
+          <div className="mx-2 my-1 border-t border-[var(--color-app-border)]" />
+          <div className="flex items-center gap-2 px-2 py-1.5" role="group" aria-label="Theme color">
+            {themeSchemeOptions.map((option) => {
+              const active = option.value === scheme;
+
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={active}
+                  aria-label={option.label}
+                  title={option.label}
+                  onClick={() => setScheme(option.value)}
+                  className={cn(
+                    "flex h-8 w-8 items-center justify-center rounded-lg border transition hover:bg-[var(--color-app-panel-muted)]",
+                    active
+                      ? "border-[var(--color-brand)] bg-[var(--color-brand-soft)]"
+                      : "border-[var(--color-app-border)]",
+                  )}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="h-4 w-4 rounded-[4px] shadow-sm"
+                    style={{ background: option.gradient }}
+                  />
+                </button>
+              );
+            })}
+          </div>
         </div>
       ) : null}
     </div>
@@ -282,6 +343,17 @@ function themeModeLabel(mode: ThemeMode) {
       return "Dark";
     default:
       return "System";
+  }
+}
+
+function themeSchemeLabel(scheme: ThemeScheme) {
+  switch (scheme) {
+    case "ocean":
+      return "Deep Ocean";
+    case "ember":
+      return "Warm Ember";
+    default:
+      return "Electric Violet";
   }
 }
 

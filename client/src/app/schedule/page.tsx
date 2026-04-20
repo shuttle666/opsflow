@@ -213,6 +213,22 @@ function collectJobs(lanes: ScheduleLane[]) {
     .sort(compareJobsByTime);
 }
 
+function getLanesWithJobsForDay(lanes: ScheduleLane[], day: Date) {
+  return lanes
+    .map((lane) => {
+      const jobs = lane.jobs
+        .filter((job) => jobOverlapsDay(job, day))
+        .sort(compareJobsByTime);
+
+      return {
+        ...lane,
+        jobs,
+        hasConflict: jobs.some((job) => job.hasConflict),
+      };
+    })
+    .filter((lane) => lane.jobs.length > 0);
+}
+
 function jobsForDay(jobs: ScheduleJobWithLane[], day: Date) {
   return jobs.filter((job) => jobOverlapsDay(job, day)).sort(compareJobsByTime);
 }
@@ -1056,6 +1072,10 @@ export default function SchedulePage() {
     () => schedule?.lanes ?? [],
     [schedule],
   );
+  const dayLanes = useMemo(
+    () => getLanesWithJobsForDay(visibleLanes, period.start),
+    [period.start, visibleLanes],
+  );
   const visibleJobs = useMemo(() => collectJobs(visibleLanes), [visibleLanes]);
 
   useEffect(() => {
@@ -1304,8 +1324,21 @@ export default function SchedulePage() {
                     }
                   />
                 </div>
+              ) : viewMode === "day" && dayLanes.length === 0 ? (
+                <div className="p-5">
+                  <EmptyStatePanel
+                    title="No jobs scheduled"
+                    description={
+                      selectedAssigneeId
+                        ? "The selected staff member has no jobs scheduled for this day."
+                        : allowManage
+                          ? "No assigned or unassigned jobs are scheduled for this day."
+                          : "No jobs are assigned to you for this day."
+                    }
+                  />
+                </div>
               ) : viewMode === "day" ? (
-                <DayView day={period.start} lanes={visibleLanes} embedded />
+                <DayView day={period.start} lanes={dayLanes} embedded />
               ) : viewMode === "week" ? (
                 <WeekView days={period.days} jobs={visibleJobs} embedded />
               ) : (

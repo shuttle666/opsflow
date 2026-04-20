@@ -25,7 +25,7 @@ export const secondaryButtonClassName =
   "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3.5 text-[13px] font-semibold text-[var(--color-text)] shadow-sm transition hover:border-[var(--color-app-border-strong)] hover:bg-[var(--color-app-panel-muted)] disabled:cursor-not-allowed disabled:opacity-60";
 
 export const darkSurfacePrimaryButtonClassName =
-  "inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-white/20 bg-white px-3.5 text-[13px] font-semibold text-[#6b4fe0] shadow-sm transition hover:bg-white/90 hover:text-[#523cc5] disabled:cursor-not-allowed disabled:opacity-60";
+  "inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-white/20 bg-white px-3.5 text-[13px] font-semibold !text-zinc-950 shadow-sm transition hover:bg-white/90 hover:!text-zinc-950 disabled:cursor-not-allowed disabled:opacity-60";
 
 export const darkSurfaceSecondaryButtonClassName =
   "inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-3.5 text-[13px] font-semibold !text-white transition hover:bg-white/15 hover:!text-white disabled:cursor-not-allowed disabled:opacity-60";

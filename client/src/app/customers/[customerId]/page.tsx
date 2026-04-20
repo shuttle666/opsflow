@@ -66,9 +66,9 @@ function DetailCard({
   className?: string;
 }) {
   return (
-    <section className={cn(surfaceClassName, "p-5", className)}>
+    <section className={cn(surfaceClassName, className?.includes("p-0") ? "p-0" : "p-4", className)}>
       {eyebrow || title ? (
-        <div className="mb-4 space-y-1">
+        <div className="mb-3 space-y-1">
           {eyebrow ? (
             <p className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
               {eyebrow}
@@ -94,7 +94,7 @@ function InfoRow({
   mono?: boolean;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-[var(--color-app-border)] py-2 last:border-b-0">
+    <div className="flex items-start justify-between gap-4 border-b border-[var(--color-app-border)] py-1.5 last:border-b-0">
       <span className="text-sm text-[var(--color-text-secondary)]">{label}</span>
       <span
         className={cn(
@@ -120,7 +120,7 @@ function OverviewMetric({
   tone?: "default" | "brand" | "success";
 }) {
   return (
-    <div className={`${surfaceClassName} p-4`}>
+    <div className={`${surfaceClassName} p-3.5`}>
       <p className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
         {label}
       </p>
@@ -143,21 +143,22 @@ function OverviewMetric({
 
 function JobHistoryCard({ jobs }: { jobs: CustomerJobSummary[] }) {
   return (
-    <DetailCard
-      eyebrow="Job history"
-      title="Recent jobs"
-      className="overflow-hidden p-0"
-    >
+    <section className={`${surfaceClassName} overflow-hidden p-0`}>
       <div className="flex items-center justify-between gap-3 border-b border-[var(--color-app-border)] px-5 py-4">
-        <div className="flex items-center gap-2">
-          <h2 className="text-base font-bold text-[var(--color-text)]">Job History</h2>
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
+            Job history
+          </p>
+          <h2 className="mt-1 text-base font-bold text-[var(--color-text)]">Recent jobs</h2>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
           <span className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-brand-soft)] px-2 py-1 text-[11px] font-semibold text-[var(--color-brand)]">
             {jobs.length}
           </span>
+          <Link href="/jobs" className={secondaryButtonClassName}>
+            View all
+          </Link>
         </div>
-        <Link href="/jobs" className={secondaryButtonClassName}>
-          View all
-        </Link>
       </div>
 
       {jobs.length ? (
@@ -191,7 +192,7 @@ function JobHistoryCard({ jobs }: { jobs: CustomerJobSummary[] }) {
           No jobs have been linked to this customer yet.
         </p>
       )}
-    </DetailCard>
+    </section>
   );
 }
 
@@ -252,11 +253,11 @@ export default function CustomerDetailPage() {
         {error ? <InlineErrorBanner message={error} /> : null}
 
         {customer ? (
-          <div className="space-y-5">
-            <section className={`${strongSurfaceClassName} p-5`}>
+          <div className="space-y-4">
+            <section className={`${strongSurfaceClassName} p-4`}>
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex min-w-0 items-center gap-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[var(--color-brand-soft)] text-sm font-bold text-[var(--color-brand)]">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--color-brand-soft)] text-sm font-bold text-[var(--color-brand)]">
                     {initialsFor(customer.name)}
                   </div>
                   <div className="min-w-0">
@@ -311,12 +312,12 @@ export default function CustomerDetailPage() {
               />
             </section>
 
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
-              <div className="min-w-0 space-y-5">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+              <div className="min-w-0 space-y-4">
                 <JobHistoryCard jobs={customer.jobs} />
               </div>
 
-              <aside className="space-y-5">
+              <aside className="space-y-4">
                 <DetailCard eyebrow="Contact" title="Contact information">
                   <InfoRow label="Phone" value={customer.phone ?? "-"} />
                   <InfoRow label="Email" value={customer.email ?? "-"} />

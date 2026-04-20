@@ -7,7 +7,18 @@ import { listMembershipsRequest, updateMembershipRequest } from "@/features/memb
 import { useAuthStore } from "@/store/auth-store";
 
 vi.mock("@/components/ui/app-shell", () => ({
-  AppShell: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  AppShell: ({
+    children,
+    actions,
+  }: {
+    children: ReactNode;
+    actions?: ReactNode;
+  }) => (
+    <div>
+      {actions}
+      {children}
+    </div>
+  ),
 }));
 
 vi.mock("@/components/ui/section-card", () => ({
@@ -91,6 +102,14 @@ describe("team page", () => {
     render(<TeamPage />);
 
     expect(await screen.findByText("Sam Staff")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Invite Member" })).toBeInTheDocument();
+    expect(screen.queryByText("Add New Member")).not.toBeInTheDocument();
+    expect(screen.queryByText("Role guidance")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Invite Member" }));
+    expect(screen.getByRole("dialog", { name: "Invite member" })).toBeInTheDocument();
+    expect(screen.getByText("Invitation management")).toBeInTheDocument();
+
     await user.selectOptions(screen.getByLabelText("Role for sam@acme.example"), "MANAGER");
     await user.click(screen.getByRole("button", { name: "Save" }));
 

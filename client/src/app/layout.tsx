@@ -28,7 +28,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${plusJakartaSans.variable} ${dmMono.variable} bg-app text-slate-950 antialiased`}
+        className={`${plusJakartaSans.variable} ${dmMono.variable} bg-app text-[var(--color-text)] antialiased`}
       >
         <AppProviders>{children}</AppProviders>
       </body>

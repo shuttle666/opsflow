@@ -72,18 +72,18 @@ function RegisterPageContent() {
         <section className={`${strongSurfaceClassName} w-full max-w-[28rem] p-8 sm:p-10`}>
           <div className="space-y-3 text-center">
             <div className="flex items-center justify-center gap-3">
-              <BrandMark className="h-11 w-11 drop-shadow-[0_16px_28px_-18px_rgba(8,145,178,0.8)]" />
-              <span className="text-[2rem] font-semibold tracking-tight text-slate-950">
+              <BrandMark className="h-11 w-11 drop-shadow-[0_16px_28px_-18px_var(--color-brand-glow)]" />
+              <span className="text-[2rem] font-semibold text-[var(--color-text)]">
                 OpsFlow
               </span>
             </div>
-            <p className="pt-4 text-xs font-semibold uppercase tracking-[0.28em] text-cyan-700">
+            <p className="pt-4 text-xs font-semibold uppercase text-[var(--color-brand)]">
               Register
             </p>
-            <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
+            <h1 className="text-3xl font-semibold text-[var(--color-text)]">
               Create your workspace
             </h1>
-            <p className="text-sm leading-6 text-slate-500">
+            <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
               Create the first account for your tenant and continue straight into
               the workspace.
             </p>
@@ -91,7 +91,7 @@ function RegisterPageContent() {
 
           <form className="mt-8 space-y-5" onSubmit={handleSubmit(onSubmit)}>
             <label className="block space-y-2">
-              <span className="text-sm font-medium text-slate-700">Email</span>
+              <span className="text-sm font-medium text-[var(--color-text-secondary)]">Email</span>
               <input
                 {...register("email")}
                 className={`${inputClassName} mt-1`}
@@ -103,7 +103,7 @@ function RegisterPageContent() {
             </label>
 
             <label className="block space-y-2">
-              <span className="text-sm font-medium text-slate-700">Password</span>
+              <span className="text-sm font-medium text-[var(--color-text-secondary)]">Password</span>
               <input
                 {...register("password")}
                 type="password"
@@ -116,7 +116,7 @@ function RegisterPageContent() {
             </label>
 
             <label className="block space-y-2">
-              <span className="text-sm font-medium text-slate-700">Display Name</span>
+              <span className="text-sm font-medium text-[var(--color-text-secondary)]">Display Name</span>
               <input
                 {...register("displayName")}
                 className={`${inputClassName} mt-1`}
@@ -128,7 +128,7 @@ function RegisterPageContent() {
             </label>
 
             <label className="block space-y-2">
-              <span className="text-sm font-medium text-slate-700">
+              <span className="text-sm font-medium text-[var(--color-text-secondary)]">
                 Tenant Name (optional)
               </span>
               <input
@@ -151,11 +151,11 @@ function RegisterPageContent() {
               <p className="text-sm text-center text-rose-600">{submitError}</p>
             ) : null}
 
-            <p className="text-center text-sm text-slate-500">
+            <p className="text-center text-sm text-[var(--color-text-secondary)]">
               Already have an account?{" "}
               <Link
                 href={`/login?next=${encodeURIComponent(nextPath)}`}
-                className="font-semibold text-cyan-600 transition hover:text-cyan-700"
+                className="font-semibold text-[var(--color-brand)] transition hover:text-[var(--color-brand-strong)]"
               >
                 Sign in
               </Link>

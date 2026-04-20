@@ -68,37 +68,6 @@
   --shadow-floating: 0 22px 52px -24px rgba(0, 0, 0, 0.55);
 }
 
-/* Compatibility layer for pages that still carry pre-V2 Tailwind color utilities. */
-:root[data-theme="dark"] :is(.text-slate-950, .text-slate-900, .text-slate-800) {
-  color: var(--color-text) !important;
-}
-
-:root[data-theme="dark"] :is(.text-slate-700, .text-slate-600) {
-  color: var(--color-text-secondary) !important;
-}
-
-:root[data-theme="dark"] :is(.text-slate-500, .text-slate-400) {
-  color: var(--color-text-muted) !important;
-}
-
-:root[data-theme="dark"] :is(.text-cyan-700, .text-cyan-600, .text-sky-700, .text-sky-600, .text-sky-500) {
-  color: var(--color-brand) !important;
-}
-
-:root[data-theme="dark"] :is(.bg-white, .bg-slate-50, .bg-slate-100) {
-  background-color: var(--color-app-panel) !important;
-}
-
-:root[data-theme="dark"] [class*="bg-white/"],
-:root[data-theme="dark"] [class*="bg-slate-50/"] {
-  background-color: var(--color-app-panel) !important;
-}
-
-:root[data-theme="dark"] [class*="border-white"],
-:root[data-theme="dark"] :is(.border-slate-100, .border-slate-200, .border-sky-100, .border-cyan-100) {
-  border-color: var(--color-app-border) !important;
-}
-
 /* Agent chat markdown */
 .agent-markdown {
   line-height: 1.65;

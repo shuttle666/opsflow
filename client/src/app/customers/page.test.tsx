@@ -86,19 +86,37 @@ describe("customers page", () => {
           createdAt: "2026-03-20T00:00:00.000Z",
           updatedAt: "2026-03-20T00:00:00.000Z",
         },
+        {
+          id: "customer-2",
+          name: "Riley Missing",
+          phone: null,
+          email: null,
+          address: null,
+          notes: null,
+          createdAt: "2026-03-21T00:00:00.000Z",
+          updatedAt: "2026-03-21T00:00:00.000Z",
+        },
       ],
       pagination: {
         page: 1,
         pageSize: 10,
-        total: 1,
+        total: 2,
         totalPages: 1,
       },
     });
 
+    const user = userEvent.setup();
     render(<CustomersPage />);
 
     expect(await screen.findByText("Noah Thompson")).toBeInTheDocument();
+    expect(screen.getByText("Riley Missing")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Add Customer" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Sort customers")).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Contact filter"), "missing_contact");
+
+    expect(screen.queryByText("Noah Thompson")).not.toBeInTheDocument();
+    expect(screen.getByText("Riley Missing")).toBeInTheDocument();
   });
 
   it("applies search and hides create button for staff", async () => {

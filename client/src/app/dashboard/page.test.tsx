@@ -76,6 +76,7 @@ describe("dashboard page", () => {
           scheduledEndAt: "2026-03-20T02:30:00.000Z",
           createdAt: "2026-03-20T00:30:00.000Z",
           updatedAt: "2026-03-20T00:30:00.000Z",
+          assignedToName: "Ivy Dispatcher",
           customer: {
             id: "customer-1",
             name: "Noah Thompson",

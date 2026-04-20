@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { AppShell } from "@/components/ui/app-shell";
 import { DataTableCard } from "@/components/ui/data-table-card";
@@ -21,6 +21,8 @@ import { listCustomersRequest } from "@/features/customer/customer-api";
 import { useAuthStore } from "@/store/auth-store";
 import type { CustomerListItem, PaginationMeta } from "@/types/customer";
 
+type ContactFilter = "all" | "has_contact" | "missing_contact";
+
 function canManageCustomers(role: string | undefined) {
   return role === "OWNER" || role === "MANAGER";
 }
@@ -34,11 +36,11 @@ function initialsFor(name: string) {
 }
 
 const avatarColors = [
-  "bg-sky-100 text-sky-700",
-  "bg-cyan-100 text-cyan-700",
-  "bg-indigo-100 text-indigo-700",
-  "bg-amber-100 text-amber-700",
-  "bg-emerald-100 text-emerald-700",
+  "bg-[var(--color-brand-soft)] text-[var(--color-brand)]",
+  "bg-[var(--color-success-soft)] text-[var(--color-success)]",
+  "bg-[var(--color-warning-soft)] text-[var(--color-warning)]",
+  "bg-[var(--color-brand-surface)] text-[var(--color-brand)]",
+  "bg-[var(--color-app-panel-muted)] text-[var(--color-text-secondary)]",
 ];
 
 function avatarColor(name: string) {
@@ -55,6 +57,7 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState<CustomerListItem[]>([]);
   const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState("");
+  const [contactFilter, setContactFilter] = useState<ContactFilter>("all");
   const [sort, setSort] = useState<
     "createdAt_desc" | "createdAt_asc" | "name_asc" | "name_desc"
   >("createdAt_desc");
@@ -110,6 +113,17 @@ export default function CustomersPage() {
   }, [page, query, sort, withAccessTokenRetry]);
 
   const allowManage = canManageCustomers(currentTenant?.role);
+  const visibleCustomers = useMemo(() => {
+    if (contactFilter === "has_contact") {
+      return customers.filter((customer) => customer.phone || customer.email);
+    }
+
+    if (contactFilter === "missing_contact") {
+      return customers.filter((customer) => !customer.phone && !customer.email);
+    }
+
+    return customers;
+  }, [contactFilter, customers]);
 
   return (
     <AppShell
@@ -142,6 +156,20 @@ export default function CustomersPage() {
                 />
               </form>
               <select
+                aria-label="Contact filter"
+                value={contactFilter}
+                onChange={(event) => {
+                  setPage(1);
+                  setContactFilter(event.target.value as ContactFilter);
+                }}
+                className={selectClassName}
+              >
+                <option value="all">All contacts</option>
+                <option value="has_contact">Has contact</option>
+                <option value="missing_contact">Missing contact</option>
+              </select>
+              <select
+                aria-label="Sort customers"
                 value={sort}
                 onChange={(event) => {
                   setPage(1);
@@ -196,13 +224,17 @@ export default function CustomersPage() {
             <div className="p-4">
               <LoadingPanel label="Loading customers..." />
             </div>
-          ) : customers.length === 0 ? (
+          ) : visibleCustomers.length === 0 ? (
             <div className="p-4">
               <EmptyStatePanel
-                title="No customers found"
-                description="Adjust the current search or create the first customer profile for this tenant."
-                actionLabel={allowManage ? "Create customer" : undefined}
-                actionHref={allowManage ? "/customers/new" : undefined}
+                title={customers.length === 0 ? "No customers found" : "No customers match this filter"}
+                description={
+                  customers.length === 0
+                    ? "Adjust the current search or create the first customer profile for this tenant."
+                    : "Try a different contact filter or adjust the current search."
+                }
+                actionLabel={customers.length === 0 && allowManage ? "Create customer" : undefined}
+                actionHref={customers.length === 0 && allowManage ? "/customers/new" : undefined}
               />
             </div>
           ) : (
@@ -218,7 +250,7 @@ export default function CustomersPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--color-app-border)] text-[var(--color-text-secondary)]">
-                  {customers.map((customer) => (
+                  {visibleCustomers.map((customer) => (
                     <tr
                       key={customer.id}
                       className="group transition hover:bg-[var(--color-app-panel-muted)]"

@@ -13,6 +13,7 @@ export type ScheduleItem = {
   jobType: string;
   status: string;
   time: string;
+  assignee?: string;
 };
 
 const statusBadgeClassName: Record<string, string> = {
@@ -47,13 +48,18 @@ type TodaysScheduleCardProps = {
 
 export function TodaysScheduleCard({ items, loading = false }: TodaysScheduleCardProps) {
   return (
-    <div className={`${surfaceClassName} flex flex-1 flex-col p-6`}>
-      <div className="mb-6 flex items-center justify-between">
+    <div className={`${surfaceClassName} flex flex-1 flex-col overflow-hidden p-0`}>
+      <div className="flex items-center justify-between border-b border-[var(--color-app-border)] px-4 py-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--color-brand-soft)] text-[var(--color-brand)]">
-            <Calendar className="h-5 w-5" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-brand-soft)] text-[var(--color-brand)]">
+            <Calendar className="h-[18px] w-[18px]" />
           </div>
-          <h2 className="text-lg font-bold text-[var(--color-text)]">Today&apos;s Schedule</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-[15px] font-bold text-[var(--color-text)]">Today&apos;s Schedule</h2>
+            <span className={cn(badgeBaseClassName, "border-[var(--color-app-border)] bg-[var(--color-brand-soft)] text-[var(--color-brand)]")}>
+              {items.length}
+            </span>
+          </div>
         </div>
         <Link
           href="/jobs"
@@ -64,35 +70,36 @@ export function TodaysScheduleCard({ items, loading = false }: TodaysScheduleCar
       </div>
 
       {loading ? (
-        <div className="flex flex-1 items-center justify-center py-12">
+        <div className="flex flex-1 items-center justify-center px-4 py-12">
           <p className="text-sm text-[var(--color-text-muted)]">Loading schedule...</p>
         </div>
       ) : items.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center py-12">
+        <div className="flex flex-1 items-center justify-center px-4 py-12">
           <p className="text-sm text-[var(--color-text-muted)]">No jobs scheduled for today</p>
         </div>
       ) : (
         <div className="w-full overflow-x-auto">
-          <table className="w-full border-separate border-spacing-y-3 text-left text-sm">
-            <thead>
+          <table className="w-full border-collapse text-left text-sm">
+            <thead className="border-b border-[var(--color-app-border)]">
               <tr className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
                 <th className="min-w-[200px] px-4 py-2.5">Customer</th>
                 <th className="min-w-[160px] px-4 py-2.5">Job Type</th>
                 <th className="w-32 px-4 py-2.5">Status</th>
+                <th className="min-w-[130px] px-4 py-2.5">Crew</th>
                 <th className="w-24 px-4 py-2.5 text-right">Time</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-[var(--color-app-border)]">
               {items.map((item) => (
                 <tr
                   key={item.id}
-                  className="group cursor-pointer rounded-lg bg-[var(--color-app-panel)] shadow-sm transition hover:bg-[var(--color-app-panel-muted)] hover:shadow-[var(--shadow-panel-hover)]"
+                  className="group bg-[var(--color-app-panel)] transition hover:bg-[var(--color-app-panel-muted)]"
                 >
-                  <td className="rounded-l-lg border-y border-l border-[var(--color-app-border)] px-4 py-3">
+                  <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       <div
                         className={cn(
-                          "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold",
+                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold",
                           avatarColor(item.customerName),
                         )}
                       >
@@ -106,10 +113,15 @@ export function TodaysScheduleCard({ items, loading = false }: TodaysScheduleCar
                       </div>
                     </div>
                   </td>
-                  <td className="border-y border-[var(--color-app-border)] px-4 py-3">
-                    <span className="font-medium text-[var(--color-text-secondary)]">{item.jobType}</span>
+                  <td className="px-4 py-3">
+                    <Link
+                      href={`/jobs/${item.id}`}
+                      className="font-medium text-[var(--color-text-secondary)] transition hover:text-[var(--color-brand)]"
+                    >
+                      {item.jobType}
+                    </Link>
                   </td>
-                  <td className="border-y border-[var(--color-app-border)] px-4 py-3">
+                  <td className="px-4 py-3">
                     <span
                       className={cn(
                         badgeBaseClassName,
@@ -120,7 +132,19 @@ export function TodaysScheduleCard({ items, loading = false }: TodaysScheduleCar
                       {formatBadgeLabel(item.status)}
                     </span>
                   </td>
-                  <td className="rounded-r-lg border-y border-r border-[var(--color-app-border)] px-4 py-3 text-right">
+                  <td className="px-4 py-3">
+                    <span
+                      className={cn(
+                        "text-sm font-medium",
+                        item.assignee
+                          ? "text-[var(--color-text-secondary)]"
+                          : "text-[var(--color-warning)]",
+                      )}
+                    >
+                      {item.assignee ?? "Unassigned"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right">
                     <span className="font-mono text-sm font-medium text-[var(--color-text-secondary)]">{item.time}</span>
                   </td>
                 </tr>

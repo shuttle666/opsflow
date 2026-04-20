@@ -114,7 +114,7 @@ export default function ActivityPage() {
               <ActivityLogCard items={items} loading={isLoading} />
             )}
 
-            <div className="flex flex-col gap-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 text-sm text-[var(--color-text-secondary)] sm:flex-row sm:items-center sm:justify-between">
               <p>
                 Page {pagination.page} of {pagination.totalPages} | Total {pagination.total}
               </p>

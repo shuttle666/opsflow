@@ -1,16 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { InvitationCreateCard } from "@/components/auth/invitation-create-card";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { AppShell } from "@/components/ui/app-shell";
 import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
 import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
 import { LoadingPanel } from "@/components/ui/loading-panel";
-import { SummaryCard } from "@/components/ui/info-cards";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { UserPlus } from "@/components/ui/icons";
 import {
   inputClassName,
   primaryButtonClassName,
@@ -90,6 +87,7 @@ export default function TeamPage() {
   const [actingId, setActingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
 
   const allowReview = canReviewTeam(currentTenant?.role);
   const allowManage = canManageTeam(currentTenant?.role);
@@ -172,9 +170,13 @@ export default function TeamPage() {
       title="Team Members"
       actions={
         allowManage ? (
-          <Link href="/invitations/accept" className={primaryButtonClassName}>
+          <button
+            type="button"
+            onClick={() => setIsInviteOpen(true)}
+            className={primaryButtonClassName}
+          >
             Invite Member
-          </Link>
+          </button>
         ) : undefined
       }
     >
@@ -442,17 +444,6 @@ export default function TeamPage() {
                   );
                 })}
 
-                {allowManage ? (
-                  <Link
-                    href="/invitations/accept"
-                    className="flex min-h-[190px] flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-6 text-center transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand)]"
-                  >
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--color-brand-soft)] text-[var(--color-brand)]">
-                      <UserPlus className="h-5 w-5" />
-                    </div>
-                    <span className="text-sm font-semibold text-[var(--color-brand)]">Add New Member</span>
-                  </Link>
-                ) : null}
               </section>
             )}
 
@@ -483,21 +474,27 @@ export default function TeamPage() {
               </div>
             </div>
 
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-              <SummaryCard
-                eyebrow="Permissions"
-                title="Role guidance"
-                description="Keep access changes understandable as the team grows."
+            {isInviteOpen ? (
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="Invite member"
+                className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/55 px-4 py-8 backdrop-blur-sm"
               >
-                <div className="space-y-2 text-sm leading-6 text-[var(--color-text-secondary)]">
-                  <p>OWNER: full membership management and role changes.</p>
-                  <p>MANAGER: review and operational visibility without owner elevation.</p>
-                  <p>STAFF: no access to tenant-wide team management.</p>
+                <div className="w-full max-w-3xl space-y-3">
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setIsInviteOpen(false)}
+                      className={subtleButtonClassName}
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <InvitationCreateCard />
                 </div>
-              </SummaryCard>
-
-              <InvitationCreateCard />
-            </div>
+              </div>
+            ) : null}
           </div>
         )}
       </AuthGuard>

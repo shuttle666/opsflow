@@ -7,9 +7,7 @@ import { History, Send, Sparkles } from "@/components/ui/icons";
 import { LoadingPanel } from "@/components/ui/loading-panel";
 import {
   cn,
-  inputClassName,
   primaryButtonClassName,
-  subtleButtonClassName,
   surfaceClassName,
 } from "@/components/ui/styles";
 import { confirmProposalRequest, consumeMessageStream, createConversationRequest, getConversationRequest, listConversationsRequest, openMessageStreamRequest } from "@/features/agent";
@@ -40,6 +38,21 @@ const TOOL_LABELS: Record<string, string> = {
   save_dispatch_proposal: "Saving dispatch plan",
 };
 
+const PLANNER_SUGGESTIONS = [
+  "Optimize tomorrow's schedule",
+  "Reassign unassigned jobs",
+  "Show crew workload",
+];
+
+const agentGhostButtonClassName =
+  "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-2.5 text-[12px] font-semibold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-soft)] disabled:cursor-not-allowed disabled:opacity-50";
+
+const composerInputClassName =
+  "h-10 min-w-0 flex-1 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3.5 text-[13px] text-[var(--color-text)] outline-none transition placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-brand)] focus:ring-[3px] focus:ring-[var(--color-brand-soft)] disabled:cursor-not-allowed disabled:opacity-60";
+
+const composerSendButtonClassName =
+  "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--color-brand)] text-white shadow-[0_4px_16px_-10px_var(--color-brand-glow)] transition hover:bg-[var(--color-brand-strong)] disabled:cursor-not-allowed disabled:opacity-50";
+
 function canUsePlanner(role: string | undefined) {
   return role === "OWNER" || role === "MANAGER";
 }
@@ -69,11 +82,19 @@ function formatRelativeTime(dateString: string): string {
   return new Date(dateString).toLocaleDateString();
 }
 
+function AiAvatar() {
+  return (
+    <div className="mt-0.5 flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-[image:var(--gradient-brand)] text-[11px] font-extrabold text-white shadow-[0_2px_8px_var(--color-brand-glow)]">
+      AI
+    </div>
+  );
+}
+
 function MessageBubble({ message }: { message: ChatMessage }) {
   if (message.role === "user") {
     return (
-      <div className="flex justify-end pl-12">
-        <div className="max-w-[88%] rounded-[14px] rounded-br px-4 py-3 text-[13px] leading-relaxed text-white shadow-[0_8px_22px_-16px_var(--color-brand-glow)] sm:max-w-[80%] lg:max-w-[75%]" style={{ background: "var(--color-brand)" }}>
+      <div className="flex flex-row-reverse gap-2.5 pl-12">
+        <div className="max-w-[88%] rounded-[14px] rounded-br px-4 py-3 text-[13px] leading-relaxed text-white shadow-[0_2px_8px_var(--color-brand-glow)] sm:max-w-[80%] lg:max-w-[72%]" style={{ background: "var(--color-brand)" }}>
           {message.content}
         </div>
       </div>
@@ -81,8 +102,9 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   }
 
   return (
-    <div className="flex justify-start pr-12">
-      <div className="max-w-[88%] rounded-[14px] rounded-bl border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-4 py-3 text-[13px] leading-relaxed text-[var(--color-text)] sm:max-w-[80%] lg:max-w-[75%]">
+    <div className="flex gap-2.5 pr-12">
+      <AiAvatar />
+      <div className="max-w-[88%] rounded-[14px] rounded-bl bg-[var(--color-app-panel-muted)] px-4 py-3 text-[13px] leading-relaxed text-[var(--color-text)] sm:max-w-[80%] lg:max-w-[72%]">
         <div className="agent-markdown">
           <Markdown>{message.content}</Markdown>
         </div>
@@ -268,32 +290,30 @@ function ProposalCard({
   );
 }
 
-function EmptyState() {
+function EmptyState({ onSuggestion }: { onSuggestion?: (suggestion: string) => void }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-5 px-6 text-center">
-      <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-[image:var(--gradient-brand)] text-white shadow-[0_16px_34px_-24px_var(--color-brand-glow)]">
-        <Sparkles className="h-6 w-6" />
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
+      <div className="flex gap-2.5 pr-12">
+        <AiAvatar />
+        <div className="max-w-[88%] rounded-[14px] rounded-bl bg-[var(--color-app-panel-muted)] px-4 py-3 text-[13px] leading-relaxed text-[var(--color-text)] sm:max-w-[80%] lg:max-w-[72%]">
+          <p>Hi! I&apos;m the OpsFlow AI Planner. I can help optimize scheduling, assign crew, and plan routes.</p>
+          <p className="mt-3">What would you like help with?</p>
+        </div>
       </div>
-      <div className="space-y-1.5">
-        <h3 className="text-xl font-bold text-[var(--color-text)]">Dispatch Planner</h3>
-        <p className="max-w-md text-sm leading-relaxed text-[var(--color-text-secondary)]">
-          Describe the work in natural language, let AI draft the schedule and assignee, then confirm before anything is created.
-        </p>
-      </div>
-      <div className="mt-1 flex flex-wrap justify-center gap-2">
-        {[
-          "Schedule an AC inspection for Mr. Wang next Tuesday afternoon, preferably with Technician Li",
-          "Create a plumbing visit for Jordan tomorrow morning",
-          "Check whether Mia already has overlapping work at 2pm",
-        ].map((suggestion) => (
-          <span
-            key={suggestion}
-            className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-3.5 py-1.5 text-[12px] text-[var(--color-text-secondary)]"
-          >
-            {suggestion}
-          </span>
-        ))}
-      </div>
+      {onSuggestion ? (
+        <div className="flex flex-wrap gap-2 pl-10">
+          {PLANNER_SUGGESTIONS.map((suggestion) => (
+            <button
+              key={suggestion}
+              type="button"
+              onClick={() => onSuggestion(suggestion)}
+              className="h-8 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3.5 text-[12px] font-medium text-[var(--color-text-secondary)] transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-soft)] hover:text-[var(--color-brand)]"
+            >
+              {suggestion}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -527,17 +547,17 @@ export function AgentChat() {
   }
 
   return (
-    <div className={`${surfaceClassName} relative flex h-[calc(100vh-180px)] min-w-0 overflow-hidden`}>
+    <div className={`${surfaceClassName} relative flex h-[calc(100vh-150px)] min-w-0 overflow-hidden`}>
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center justify-between border-b border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-5 py-3">
+        <div className="flex items-center justify-between border-b border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-4 py-3">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[image:var(--gradient-brand)] shadow-[0_12px_24px_-18px_var(--color-brand-glow)]">
               <Sparkles className="h-4 w-4 text-white" />
             </div>
             <div>
-              <p className="text-[13px] font-semibold text-[var(--color-text)]">Dispatch Planner</p>
+              <p className="text-[13px] font-semibold text-[var(--color-text)]">AI Planner</p>
               <p className="text-[11px] text-[var(--color-text-muted)]">
-                Draft schedules and assignments first, then confirm before execution.
+                Optimize schedules, assign crew, and plan routes.
               </p>
             </div>
           </div>
@@ -549,14 +569,14 @@ export function AgentChat() {
                 resetComposerState();
                 setIsHistoryOpen(false);
               }}
-              className={cn(subtleButtonClassName, "h-8 gap-1.5 px-3 text-[12px]")}
+              className={agentGhostButtonClassName}
             >
               New
             </button>
             <button
               type="button"
               onClick={() => setIsHistoryOpen((current) => !current)}
-              className={cn(subtleButtonClassName, "h-8 gap-1.5 px-3 text-[12px]")}
+              className={agentGhostButtonClassName}
               aria-expanded={isHistoryOpen}
               aria-controls="planner-history-panel"
             >
@@ -566,11 +586,11 @@ export function AgentChat() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8">
+        <div className="flex-1 overflow-y-auto px-5 py-5">
           {messages.length === 0 && !isStreaming ? (
-            <EmptyState />
+            <EmptyState onSuggestion={setInput} />
           ) : (
-            <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
+            <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
               {messages.map((message) => (
                 <MessageBubble key={message.id} message={message} />
               ))}
@@ -587,8 +607,9 @@ export function AgentChat() {
               ) : null}
 
               {streamingText ? (
-                <div className="flex justify-start pr-12">
-                  <div className="max-w-[88%] rounded-[14px] rounded-bl border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-4 py-3 text-[13px] leading-relaxed text-[var(--color-text)] sm:max-w-[80%] lg:max-w-[75%]">
+                <div className="flex gap-2.5 pr-12">
+                  <AiAvatar />
+                  <div className="max-w-[88%] rounded-[14px] rounded-bl bg-[var(--color-app-panel-muted)] px-4 py-3 text-[13px] leading-relaxed text-[var(--color-text)] sm:max-w-[80%] lg:max-w-[72%]">
                     <div className="agent-markdown">
                       <Markdown>{streamingText}</Markdown>
                     </div>
@@ -609,7 +630,7 @@ export function AgentChat() {
 
         {pendingProposal ? (
           <div className="border-t border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-4 py-4 sm:px-6 lg:px-8">
-            <div className="mx-auto w-full max-w-5xl">
+            <div className="mx-auto w-full max-w-4xl">
               <ProposalCard
                 proposal={pendingProposal}
                 onConfirm={handleConfirmProposal}
@@ -622,7 +643,7 @@ export function AgentChat() {
 
         {!pendingProposal && confirmResult ? (
           <div className="border-t border-[var(--color-app-border)] bg-[var(--color-success-soft)] px-4 py-4 sm:px-6 lg:px-8">
-            <div className="mx-auto w-full max-w-5xl rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-5 py-4 text-sm text-[var(--color-success)] shadow-sm">
+            <div className="mx-auto w-full max-w-4xl rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-5 py-4 text-sm text-[var(--color-success)] shadow-sm">
               {confirmResult.entityType === "customer" ? (
                 <>
                   {confirmResult.usedExistingCustomer ? "Reused" : "Created"}{" "}
@@ -649,26 +670,27 @@ export function AgentChat() {
           </div>
         ) : null}
 
-        <div className="border-t border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-4 py-4 sm:px-6 lg:px-8">
-          <form onSubmit={handleSubmit} className="mx-auto flex w-full max-w-5xl items-center gap-3">
+        <div className="border-t border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-4 py-3">
+          <form onSubmit={handleSubmit} className="mx-auto flex w-full max-w-4xl items-center gap-2">
             <input
               value={input}
               onChange={(event) => setInput(event.target.value)}
               placeholder={
                 isStreaming
                   ? "Planner is working..."
-                  : "Describe the customer, work, preferred time, and assignee..."
+                  : "Ask the AI Planner..."
               }
               disabled={isStreaming}
-              className={inputClassName}
+              className={composerInputClassName}
             />
             <button
               type="submit"
               disabled={!input.trim() || isStreaming}
-              className={cn(primaryButtonClassName, "h-9 gap-2 px-4")}
+              className={composerSendButtonClassName}
+              aria-label="Send"
+              title={isStreaming ? "Sending..." : "Send"}
             >
               <Send className="h-4 w-4" />
-              {isStreaming ? "Sending..." : "Send"}
             </button>
           </form>
         </div>

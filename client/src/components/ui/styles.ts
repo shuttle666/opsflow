@@ -24,6 +24,12 @@ export const primaryButtonClassName =
 export const secondaryButtonClassName =
   "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3.5 text-[13px] font-semibold text-[var(--color-text)] shadow-sm transition hover:border-[var(--color-app-border-strong)] hover:bg-[var(--color-app-panel-muted)] disabled:cursor-not-allowed disabled:opacity-60";
 
+export const darkSurfacePrimaryButtonClassName =
+  "inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-white/20 bg-white px-3.5 text-[13px] font-semibold text-[#6b4fe0] shadow-sm transition hover:bg-white/90 hover:text-[#523cc5] disabled:cursor-not-allowed disabled:opacity-60";
+
+export const darkSurfaceSecondaryButtonClassName =
+  "inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-3.5 text-[13px] font-semibold !text-white transition hover:bg-white/15 hover:!text-white disabled:cursor-not-allowed disabled:opacity-60";
+
 export const subtleButtonClassName =
   "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-app-border)] bg-transparent px-3 text-[13px] font-medium text-[var(--color-text-secondary)] transition hover:bg-[var(--color-app-panel-muted)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50";
 
@@ -31,4 +37,4 @@ export const badgeBaseClassName =
   "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-semibold";
 
 export const darkButtonClassName =
-  "inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-slate-950 px-3.5 text-[13px] font-semibold text-white shadow-lg shadow-slate-950/20 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none";
+  "inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-zinc-950 px-3.5 text-[13px] font-semibold text-white shadow-lg shadow-zinc-950/20 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400 disabled:shadow-none";

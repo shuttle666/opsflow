@@ -235,9 +235,9 @@ function DetailCard({
   className?: string;
 }) {
   return (
-    <section className={cn(surfaceClassName, "p-5", className)}>
+    <section className={cn(surfaceClassName, className?.includes("p-0") ? "p-0" : "p-4", className)}>
       {eyebrow || title ? (
-        <div className="mb-4 space-y-1">
+        <div className="mb-3 space-y-1">
           {eyebrow ? (
             <p className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
               {eyebrow}
@@ -263,7 +263,7 @@ function InfoRow({
   mono?: boolean;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-[var(--color-app-border)] py-2 last:border-b-0">
+    <div className="flex items-start justify-between gap-4 border-b border-[var(--color-app-border)] py-1.5 last:border-b-0">
       <span className="text-sm text-[var(--color-text-secondary)]">{label}</span>
       <span
         className={cn(
@@ -287,7 +287,7 @@ function OverviewMetric({
   meta?: string;
 }) {
   return (
-    <div className={`${surfaceClassName} p-4`}>
+    <div className={`${surfaceClassName} p-3.5`}>
       <p className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
         {label}
       </p>
@@ -619,11 +619,11 @@ export default function JobDetailPage() {
         {error ? <InlineErrorBanner message={error} /> : null}
 
         {job ? (
-          <div className="space-y-5">
-            <section className={`${strongSurfaceClassName} p-5`}>
+          <div className="space-y-4">
+            <section className={`${strongSurfaceClassName} p-4`}>
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex min-w-0 gap-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-soft)] text-sm font-bold text-[var(--color-brand)]">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--color-brand-soft)] text-sm font-bold text-[var(--color-brand)]">
                     {initialsFor(job.customer.name)}
                   </div>
                   <div className="min-w-0">
@@ -673,8 +673,8 @@ export default function JobDetailPage() {
               />
             </section>
 
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
-              <div className="min-w-0 space-y-5">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+              <div className="min-w-0 space-y-4">
                 <DetailCard eyebrow="Description" title="Work summary">
                   <p className="text-sm leading-7 text-[var(--color-text-secondary)]">
                     {job.description ?? "No job description has been captured yet."}
@@ -701,7 +701,7 @@ export default function JobDetailPage() {
                         Customer
                       </p>
                       <div className="mb-2 flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-brand-soft)] text-xs font-bold text-[var(--color-brand)]">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-brand-soft)] text-xs font-bold text-[var(--color-brand)]">
                           {initialsFor(job.customer.name)}
                         </div>
                         <div className="min-w-0">
@@ -764,7 +764,7 @@ export default function JobDetailPage() {
                 />
               </div>
 
-              <aside className="space-y-5">
+              <aside className="space-y-4">
                 <JobAssignmentCard job={job} onJobChange={setJob} />
                 <JobEvidencePanel
                   items={evidence}

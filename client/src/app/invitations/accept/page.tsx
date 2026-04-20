@@ -56,20 +56,20 @@ function AcceptInvitationPageContent() {
         <div className="flex min-h-[calc(100vh-7rem)] items-center justify-center py-6">
           <section className={`${strongSurfaceClassName} w-full max-w-[28rem] p-8 sm:p-10`}>
             <div className="space-y-3 text-center">
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-700">
+              <p className="text-xs font-semibold uppercase text-[var(--color-brand)]">
                 Invitation
               </p>
-              <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
+              <h1 className="text-3xl font-semibold text-[var(--color-text)]">
                 Accept workspace invite
               </h1>
-              <p className="text-sm leading-6 text-slate-500">
+              <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
                 Use this compatibility page when you arrive from a legacy invite link.
               </p>
             </div>
 
             <form className="space-y-4" onSubmit={onSubmit}>
               <label className="mt-8 block space-y-2">
-                <span className="text-sm font-medium text-slate-700">Invitation token</span>
+                <span className="text-sm font-medium text-[var(--color-text-secondary)]">Invitation token</span>
                 <input
                   value={token}
                   onChange={(event) => setToken(event.target.value)}
@@ -88,7 +88,7 @@ function AcceptInvitationPageContent() {
             {error ? <p className="mt-4 text-sm text-center text-rose-600">{error}</p> : null}
 
             {result ? (
-              <div className="mt-4 space-y-2 rounded-[28px] border border-emerald-200 bg-emerald-50/90 p-4 text-sm text-emerald-800">
+              <div className="mt-4 space-y-2 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-success-soft)] p-4 text-sm text-[var(--color-success)]">
                 <p className="font-semibold">Invitation accepted successfully.</p>
                 <p>Tenant ID: {result.tenantId}</p>
                 <p>Role: {result.role}</p>

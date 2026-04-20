@@ -51,6 +51,7 @@ type ScheduleJobWithLane = ScheduleDayJobItem & {
 
 const weekDayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const hourHeight = 54;
+const weekHourHeight = 88;
 const dayHours = Array.from({ length: 24 }, (_, hour) => hour);
 
 function canManageSchedule(role: string | undefined) {
@@ -306,9 +307,10 @@ function getTimelineBlockMetrics(
   day: Date,
   startHour: number,
   endHour: number,
+  rowHeight = hourHeight,
 ) {
   if (!job.scheduledStartAt || !job.scheduledEndAt) {
-    return { top: 0, height: hourHeight };
+    return { top: 0, height: rowHeight };
   }
 
   const windowStart = new Date(day);
@@ -323,8 +325,8 @@ function getTimelineBlockMetrics(
   const endMinutes = (visibleEnd.getTime() - windowStart.getTime()) / 60_000;
 
   return {
-    top: Math.max(0, (startMinutes / 60) * hourHeight),
-    height: Math.max(((endMinutes - startMinutes) / 60) * hourHeight, 42),
+    top: Math.max(0, (startMinutes / 60) * rowHeight),
+    height: Math.max(((endMinutes - startMinutes) / 60) * rowHeight, 42),
   };
 }
 
@@ -358,6 +360,58 @@ function jobAccent(job: ScheduleDayJobItem) {
     border: "var(--color-brand)",
     text: "var(--color-brand)",
   };
+}
+
+const calendarEventPalette = [
+  {
+    background: "rgba(124, 92, 252, 0.08)",
+    border: "#7c5cfc",
+    text: "#7c5cfc",
+  },
+  {
+    background: "rgba(245, 158, 11, 0.08)",
+    border: "#f59e0b",
+    text: "#d97706",
+  },
+  {
+    background: "rgba(22, 163, 74, 0.08)",
+    border: "#16a34a",
+    text: "#16a34a",
+  },
+  {
+    background: "rgba(14, 165, 233, 0.08)",
+    border: "#0ea5e9",
+    text: "#0284c7",
+  },
+  {
+    background: "rgba(239, 68, 68, 0.08)",
+    border: "#ef4444",
+    text: "#dc2626",
+  },
+];
+
+function getStablePaletteIndex(value: string) {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = value.charCodeAt(index) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash) % calendarEventPalette.length;
+}
+
+function calendarEventAccent(job: ScheduleDayJobItem) {
+  if (job.hasConflict) {
+    return calendarEventPalette[4];
+  }
+
+  if (job.status === "IN_PROGRESS") {
+    return calendarEventPalette[1];
+  }
+
+  if (job.status === "COMPLETED") {
+    return calendarEventPalette[2];
+  }
+
+  return calendarEventPalette[getStablePaletteIndex(job.id || job.title)];
 }
 
 function DayJobBlock({
@@ -534,29 +588,31 @@ function WeekView({
   const today = todayLocalDate();
   const { startHour, endHour } = getTimelineWindow(jobs, days);
   const hours = Array.from({ length: endHour - startHour }, (_, index) => startHour + index);
-  const timelineHeight = hours.length * hourHeight;
+  const timelineHeight = hours.length * weekHourHeight;
 
   return (
     <section className={embedded ? "overflow-hidden p-0" : `${surfaceClassName} overflow-hidden p-0`}>
-      <div className="overflow-x-auto">
-        <div className="min-w-[980px]">
-          <div className="grid border-b border-[var(--color-app-border)]" style={{ gridTemplateColumns: "52px repeat(7, minmax(120px, 1fr))" }}>
-            <div className="bg-[var(--color-app-panel-muted)]" />
+      <div className="overflow-x-auto bg-[var(--color-app-panel)]">
+        <div className="min-w-[1120px]">
+          <div
+            className="grid border-b border-[var(--color-app-border)]"
+            style={{ gridTemplateColumns: "70px repeat(7, minmax(150px, 1fr))" }}
+          >
+            <div className="bg-[var(--color-app-panel)]" />
             {days.map((day) => {
-              const dayJobs = jobsForDay(jobs, day);
               const isToday = isSameLocalDate(day, today);
 
               return (
                 <div
                   key={`header-${day.toISOString()}`}
-                  className="border-l border-[var(--color-app-border)] px-2 py-2 text-center"
+                  className="h-24 border-l border-[var(--color-app-border)] px-2 py-4 text-center"
                 >
-                  <p className={cn("text-[11px] font-semibold uppercase", isToday ? "text-[var(--color-brand)]" : "text-[var(--color-text-muted)]")}>
+                  <p className={cn("text-[13px] font-semibold uppercase", isToday ? "text-[var(--color-brand)]" : "text-[var(--color-text-muted)]")}>
                     {weekDayLabels[(day.getDay() + 6) % 7]}
                   </p>
                   <div
                     className={cn(
-                      "mx-auto mt-1 flex h-7 w-7 items-center justify-center rounded-lg text-sm font-bold",
+                      "mx-auto mt-3 flex h-9 w-9 items-center justify-center rounded-lg text-lg font-bold",
                       isToday
                         ? "bg-[var(--color-brand)] text-white"
                         : "text-[var(--color-text)]",
@@ -564,87 +620,83 @@ function WeekView({
                   >
                     {day.getDate()}
                   </div>
-                  <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">
-                    {dayJobs.length} job{dayJobs.length === 1 ? "" : "s"}
-                  </p>
                 </div>
               );
             })}
           </div>
 
-          <div className="grid bg-[var(--color-app-panel)]" style={{ gridTemplateColumns: "52px repeat(7, minmax(120px, 1fr))" }}>
+          <div
+            className="grid bg-[var(--color-app-panel)]"
+            style={{ gridTemplateColumns: "70px repeat(7, minmax(150px, 1fr))" }}
+          >
             <div className="border-r border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)]" style={{ height: timelineHeight }}>
               {hours.map((hour) => (
                 <div
                   key={hour}
-                  className="flex justify-end border-b border-[var(--color-app-border)] pr-2 pt-1 font-mono text-[10px] text-[var(--color-text-muted)]"
-                  style={{ height: hourHeight }}
+                  className="flex justify-end border-b border-[var(--color-app-border)] bg-[var(--color-app-panel)] pr-3 pt-2 font-mono text-[12px] text-[var(--color-text-muted)]"
+                  style={{ height: weekHourHeight }}
                 >
                   {formatHourLabel(hour)}
                 </div>
               ))}
             </div>
 
-          {days.map((day) => {
-            const dayJobs = jobsForDay(jobs, day);
+            {days.map((day) => {
+              const dayJobs = jobsForDay(jobs, day);
 
-            return (
-              <div
-                key={day.toISOString()}
-                className="relative border-r border-[var(--color-app-border)] last:border-r-0"
-                style={{ height: timelineHeight }}
-              >
-                {hours.map((hour) => (
-                  <div
-                    key={`${day.toISOString()}-${hour}`}
-                    className="absolute inset-x-0 border-b border-[var(--color-app-border)]"
-                    style={{ top: (hour - startHour) * hourHeight, height: hourHeight }}
-                  />
-                ))}
+              return (
+                <div
+                  key={day.toISOString()}
+                  className="relative border-r border-[var(--color-app-border)] last:border-r-0"
+                  style={{ height: timelineHeight }}
+                >
+                  {hours.map((hour) => (
+                    <div
+                      key={`${day.toISOString()}-${hour}`}
+                      className="absolute inset-x-0 border-b border-[var(--color-app-border)]"
+                      style={{ top: (hour - startHour) * weekHourHeight, height: weekHourHeight }}
+                    />
+                  ))}
 
-                  {dayJobs.length > 0 ? (
-                    dayJobs.map((job) => {
-                      const metrics = getTimelineBlockMetrics(job, day, startHour, endHour);
-                      const accent = jobAccent(job);
-                      return (
-                        <Link
-                          key={`${day.toISOString()}-${job.id}`}
-                          href={`/jobs/${job.id}`}
-                          className="absolute left-1 right-1 z-10 overflow-hidden rounded-lg border border-[var(--color-app-border)] px-2 py-1.5 text-left shadow-sm transition hover:shadow-[var(--shadow-panel-hover)]"
-                          style={{
-                            top: `${metrics.top + 2}px`,
-                            minHeight: `${metrics.height - 4}px`,
-                            background: accent.background,
-                            borderLeft: `3px solid ${accent.border}`,
-                          }}
-                        >
-                          <p className="truncate text-[11px] font-bold" style={{ color: accent.text }}>
-                            {job.title}
+                  {dayJobs.map((job) => {
+                    const metrics = getTimelineBlockMetrics(
+                      job,
+                      day,
+                      startHour,
+                      endHour,
+                      weekHourHeight,
+                    );
+                    const accent = calendarEventAccent(job);
+
+                    return (
+                      <Link
+                        key={`${day.toISOString()}-${job.id}`}
+                        href={`/jobs/${job.id}`}
+                        className="absolute left-1.5 right-1.5 z-10 overflow-hidden rounded-lg px-3 py-2 text-left transition hover:shadow-[var(--shadow-panel-hover)]"
+                        style={{
+                          top: `${metrics.top + 4}px`,
+                          minHeight: `${Math.max(metrics.height - 8, 52)}px`,
+                          background: accent.background,
+                          borderLeft: `4px solid ${accent.border}`,
+                        }}
+                      >
+                        <p className="truncate text-sm font-bold" style={{ color: accent.text }}>
+                          {job.title}
+                        </p>
+                        <p className="mt-1 truncate text-xs text-[var(--color-text-muted)]">
+                          {jobAssigneeLabel(job)}
+                        </p>
+                        {job.hasConflict ? (
+                          <p className="mt-2 text-[10px] font-semibold uppercase text-[var(--color-danger)]">
+                            Conflict
                           </p>
-                          <p className="mt-0.5 truncate text-[10px] text-[var(--color-text-secondary)]">
-                            {job.customer.name}
-                          </p>
-                          {metrics.height >= 54 ? (
-                            <p className="mt-1 truncate font-mono text-[10px] text-[var(--color-text-muted)]">
-                              {formatTimeRange(job.scheduledStartAt, job.scheduledEndAt)}
-                            </p>
-                          ) : null}
-                          {job.hasConflict ? (
-                            <p className="mt-1 text-[10px] font-semibold uppercase text-[var(--color-danger)]">
-                              Conflict
-                            </p>
-                          ) : null}
-                        </Link>
-                      );
-                    })
-                  ) : (
-                    <p className="absolute left-2 right-2 top-3 rounded-lg border border-dashed border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-3 py-4 text-center text-xs text-[var(--color-text-muted)]">
-                      No jobs
-                    </p>
-                  )}
-              </div>
-            );
-          })}
+                        ) : null}
+                      </Link>
+                    );
+                  })}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -846,7 +898,7 @@ function CalendarToolbar({
     <section className="grid gap-3 p-3 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] p-1">
-          {(["week", "day", "month"] as ViewMode[]).map((mode) => (
+          {(["day", "week", "month"] as ViewMode[]).map((mode) => (
             <button
               key={mode}
               type="button"
@@ -871,12 +923,11 @@ function CalendarToolbar({
               onClick={() => setIsAssigneeMenuOpen((open) => !open)}
               disabled={isLoadingMembers}
               className={cn(
-                subtleButtonClassName,
-                "h-9 w-9 px-0",
-                selectedAssigneeId && "!border-[var(--color-brand)] !bg-[var(--color-brand-soft)] !text-[var(--color-brand)]",
+                "flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] text-[var(--color-text-secondary)] shadow-sm transition hover:bg-[var(--color-app-panel-muted)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50",
+                selectedAssigneeId && "border-[var(--color-brand)] bg-[var(--color-brand-soft)] text-[var(--color-brand)]",
               )}
             >
-              <Users className="h-4 w-4" />
+              <Users className="h-5 w-5" />
             </button>
 
             {isAssigneeMenuOpen ? (

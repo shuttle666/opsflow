@@ -35,6 +35,64 @@ export function ArrowRight(props: IconProps) {
   );
 }
 
+export function ChevronLeft(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="m15 18-6-6 6-6" />
+    </IconBase>
+  );
+}
+
+export function ChevronRight(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="m9 18 6-6-6-6" />
+    </IconBase>
+  );
+}
+
+export function ChevronDown(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="m6 9 6 6 6-6" />
+    </IconBase>
+  );
+}
+
+export function Monitor(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect x="3" y="4" width="18" height="13" rx="2" />
+      <path d="M8 21h8" />
+      <path d="M12 17v4" />
+    </IconBase>
+  );
+}
+
+export function Moon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5 8.6 8.6 0 1 0 20.5 14.5Z" />
+    </IconBase>
+  );
+}
+
+export function Sun(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2" />
+      <path d="M12 20v2" />
+      <path d="m4.93 4.93 1.41 1.41" />
+      <path d="m17.66 17.66 1.41 1.41" />
+      <path d="M2 12h2" />
+      <path d="M20 12h2" />
+      <path d="m6.34 17.66-1.41 1.41" />
+      <path d="m19.07 4.93-1.41 1.41" />
+    </IconBase>
+  );
+}
+
 export function Briefcase(props: IconProps) {
   return (
     <IconBase {...props}>

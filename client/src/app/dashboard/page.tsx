@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AuthGuard } from "@/components/auth/auth-guard";
-import { ActivityLogCard } from "@/components/activity/activity-log-card";
 import {
   TodaysScheduleCard,
   type ScheduleItem,
@@ -11,17 +10,22 @@ import {
 import {
   Briefcase,
   Calendar,
-  CreditCard,
+  CheckCircle2,
   Sparkles,
   Users,
 } from "@/components/ui/icons";
 import { AppShell } from "@/components/ui/app-shell";
 import { StatCard } from "@/components/ui/info-cards";
-import { primaryButtonClassName, secondaryButtonClassName, strongSurfaceClassName } from "@/components/ui/styles";
-import { listActivityFeedRequest } from "@/features/activity/activity-api";
+import { StatusBadge } from "@/components/ui/status-badge";
+import {
+  badgeBaseClassName,
+  cn,
+  secondaryButtonClassName,
+  surfaceClassName,
+} from "@/components/ui/styles";
 import { formatTimeRange, listJobsRequest } from "@/features/job";
 import { useAuthStore } from "@/store/auth-store";
-import type { ActivityFeedItem } from "@/types/activity";
+import type { JobStatus } from "@/types/job";
 
 function initialsFor(name: string) {
   return name
@@ -45,13 +49,19 @@ export default function DashboardPage() {
   const user = useAuthStore((state) => state.user);
 
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
-  const [activityItems, setActivityItems] = useState<ActivityFeedItem[]>([]);
+  const [greeting, setGreeting] = useState("Good day");
   const [isScheduleLoading, setIsScheduleLoading] = useState(true);
-  const [isActivityLoading, setIsActivityLoading] = useState(true);
   const [jobCount, setJobCount] = useState(0);
+  const [attentionItems, setAttentionItems] = useState<
+    Array<{ id: string; title: string; customer: string; status: JobStatus; assignee?: string }>
+  >([]);
   const allowPlanner = currentTenant?.role === "OWNER" || currentTenant?.role === "MANAGER";
 
-  // Load today's schedule
+  useEffect(() => {
+    const hour = new Date().getHours();
+    setGreeting(hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening");
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -79,14 +89,33 @@ export default function DashboardPage() {
               jobType: job.title,
               status: job.status,
               time: formatTimeRange(job.scheduledStartAt, job.scheduledEndAt),
+              assignee: job.assignedToName ?? undefined,
             })),
           );
           setJobCount(result.pagination.total);
+          setAttentionItems(
+            result.items
+              .filter(
+                (job) =>
+                  job.status === "PENDING_REVIEW" ||
+                  job.status === "NEW" ||
+                  !job.assignedToName,
+              )
+              .slice(0, 4)
+              .map((job) => ({
+                id: job.id,
+                title: job.title,
+                customer: job.customer.name,
+                status: job.status,
+                assignee: job.assignedToName ?? undefined,
+              })),
+          );
         }
       } catch {
         if (!cancelled) {
           setScheduleItems([]);
           setJobCount(0);
+          setAttentionItems([]);
         }
       } finally {
         if (!cancelled) {
@@ -100,125 +129,135 @@ export default function DashboardPage() {
     };
   }, [withAccessTokenRetry]);
 
-  useEffect(() => {
-    let cancelled = false;
+  const dashboardStats = useMemo(() => {
+    const pendingReviewCount = scheduleItems.filter(
+      (item) => item.status === "PENDING_REVIEW",
+    ).length;
+    const unassignedCount = scheduleItems.filter((item) => !item.assignee).length;
+    const activeCrewCount = new Set(
+      scheduleItems.map((item) => item.assignee).filter(Boolean),
+    ).size;
+    const assignedCount = scheduleItems.filter((item) => item.assignee).length;
 
-    if (!allowPlanner) {
-      setActivityItems([]);
-      setIsActivityLoading(false);
-      return;
-    }
-
-    void (async () => {
-      setIsActivityLoading(true);
-
-      try {
-        const result = await withAccessTokenRetry((accessToken) =>
-          listActivityFeedRequest(accessToken, { page: 1, pageSize: 5 }),
-        );
-
-        if (!cancelled) {
-          setActivityItems(
-            result.items.map((item) => ({
-              ...item,
-              timestamp: new Date(item.timestamp).toLocaleString(),
-            })),
-          );
-        }
-      } catch {
-        if (!cancelled) {
-          setActivityItems([]);
-        }
-      } finally {
-        if (!cancelled) {
-          setIsActivityLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
+    return {
+      assignedCount,
+      pendingReviewCount,
+      unassignedCount,
+      activeCrewCount,
     };
-  }, [allowPlanner, withAccessTokenRetry]);
+  }, [scheduleItems]);
 
   return (
     <AppShell
       title="Dashboard"
-      description="Live dispatch context, schedule movement, and workspace activity."
+      description="Daily dispatch context, schedule movement, and AI-assisted planning."
     >
       <AuthGuard>
-        <section className={`${strongSurfaceClassName} overflow-hidden p-6`}>
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-            <div>
-              <p className="text-sm font-semibold text-[var(--color-brand)]">
-                Good day{user?.displayName ? `, ${user.displayName.split(" ")[0]}` : ""}
-              </p>
-              <h2 className="mt-2 text-2xl font-extrabold text-[var(--color-text)]">
-                {jobCount} jobs are visible on today&apos;s board
-              </h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--color-text-secondary)]">
-                Keep the crew moving with current schedules, recent activity, and AI-assisted dispatch planning.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {allowPlanner ? (
-                <Link href="/agent" className={primaryButtonClassName}>
-                  <Sparkles className="h-4 w-4" />
-                  Plan with AI
-                </Link>
-              ) : null}
-              <Link href="/schedule" className={secondaryButtonClassName}>
-                <Calendar className="h-4 w-4" />
-                Open schedule
-              </Link>
-            </div>
+        <section className="relative overflow-hidden rounded-lg bg-[image:var(--gradient-brand)] px-7 py-6 text-white shadow-[0_18px_44px_-28px_var(--color-brand-glow)] sm:px-8">
+          <div className="pointer-events-none absolute -right-7 -top-8 h-[128px] w-[128px] rounded-full bg-white/10" />
+          <div className="pointer-events-none absolute -bottom-12 right-24 h-[92px] w-[92px] rounded-full bg-white/10 opacity-60" />
+          <div className="pointer-events-none absolute right-0 top-0 h-full w-1/3 bg-[linear-gradient(115deg,transparent_0%,rgba(255,255,255,0.12)_100%)]" />
+          <div className="relative">
+            <p className="text-sm font-medium text-white/80">
+              {greeting}{user?.displayName ? `, ${user.displayName.split(" ")[0]}` : ""}
+            </p>
+            <h2 className="mt-1 text-[22px] font-extrabold leading-tight text-white sm:text-2xl">
+              You have {jobCount} {jobCount === 1 ? "job" : "jobs"} scheduled today
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/75">
+              {dashboardStats.assignedCount} assigned · {dashboardStats.pendingReviewCount} pending review · {dashboardStats.unassignedCount === 0 ? "All crew on track" : `${dashboardStats.unassignedCount} unassigned`}
+            </p>
           </div>
         </section>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            label="New Jobs"
+            label="Today Jobs"
             value={String(jobCount)}
             icon={<Briefcase className="h-[18px] w-[18px]" />}
             tone="brand"
-            trend={12}
-            trendLabel="+12% from last week"
+            meta="Visible on board"
           />
           <StatCard
-            label="Revenue This Month"
-            value="$48,200"
-            icon={<CreditCard className="h-[18px] w-[18px]" />}
-            tone="success"
-            trend={8}
-            trendLabel="+8% vs target"
-          />
-          <StatCard
-            label="Today"
+            label="Scheduled Rows"
             value={String(scheduleItems.length)}
             icon={<Calendar className="h-[18px] w-[18px]" />}
+            tone="indigo"
+            meta="Loaded for today"
+          />
+          <StatCard
+            label="Pending Review"
+            value={String(dashboardStats.pendingReviewCount)}
+            icon={<CheckCircle2 className="h-[18px] w-[18px]" />}
             tone="warning"
-            meta="Scheduled visits"
+            meta="Needs manager action"
           />
           <StatCard
             label="Active Crew"
-            value="12"
+            value={String(dashboardStats.activeCrewCount)}
             icon={<Users className="h-[18px] w-[18px]" />}
-            tone="indigo"
-            meta="All teams deployed"
+            tone="success"
+            meta={`${dashboardStats.unassignedCount} unassigned`}
           />
         </section>
 
         <div className="grid min-h-0 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
           <TodaysScheduleCard items={scheduleItems} loading={isScheduleLoading} />
-          {allowPlanner ? (
-            <ActivityLogCard
-              title="Activity"
-              items={activityItems}
-              loading={isActivityLoading}
-              emptyTitle="No recent activity"
-              emptyDescription="Workspace activity will appear here."
-            />
-          ) : null}
+          <section className={`${surfaceClassName} overflow-hidden p-0`}>
+            <div className="border-b border-[var(--color-app-border)] px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-[15px] font-bold text-[var(--color-text)]">Needs attention</h2>
+                <span
+                  className={cn(
+                    badgeBaseClassName,
+                    "border-[var(--color-app-border)] bg-[var(--color-warning-soft)] text-[var(--color-warning)]",
+                  )}
+                >
+                  {attentionItems.length}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-1 p-2">
+              {isScheduleLoading ? (
+                <p className="px-3 py-6 text-sm text-[var(--color-text-muted)]">Checking today&apos;s board...</p>
+              ) : attentionItems.length === 0 ? (
+                <div className="px-3 py-6 text-sm text-[var(--color-text-secondary)]">
+                  <p className="font-semibold text-[var(--color-text)]">All clear</p>
+                  <p className="mt-1 leading-6">No pending review, new, or unassigned jobs in today&apos;s loaded board.</p>
+                </div>
+              ) : (
+                attentionItems.map((item) => (
+                  <Link
+                    key={item.id}
+                    href={`/jobs/${item.id}`}
+                    className="block rounded-lg px-3 py-3 transition hover:bg-[var(--color-app-panel-muted)]"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-[var(--color-text)]">
+                          {item.title}
+                        </p>
+                        <p className="mt-1 truncate text-xs text-[var(--color-text-muted)]">
+                          {item.customer} · {item.assignee ?? "Unassigned"}
+                        </p>
+                      </div>
+                      <StatusBadge kind="job" value={item.status} />
+                    </div>
+                  </Link>
+                ))
+              )}
+            </div>
+
+            {allowPlanner ? (
+              <div className="border-t border-[var(--color-app-border)] p-3">
+                <Link href="/agent" className={`${secondaryButtonClassName} w-full justify-center`}>
+                  <Sparkles className="h-4 w-4" />
+                  Plan with AI
+                </Link>
+              </div>
+            ) : null}
+          </section>
         </div>
       </AuthGuard>
     </AppShell>

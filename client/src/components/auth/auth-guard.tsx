@@ -25,7 +25,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
   if (status === "loading") {
     return (
-      <div className="rounded-2xl border border-app-border bg-app-panel p-6 text-sm text-slate-600">
+      <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] p-4 text-sm text-[var(--color-text-secondary)] shadow-[var(--shadow-panel)]">
         Loading session...
       </div>
     );

@@ -78,7 +78,7 @@ describe("AgentChat", () => {
     expect(screen.getByRole("button", { name: "History" })).toHaveAttribute("aria-expanded", "false");
 
     await user.type(
-      screen.getByPlaceholderText("Describe the customer, work, preferred time, and assignee..."),
+      screen.getByPlaceholderText("Ask the AI Planner..."),
       "hello",
     );
     await user.click(screen.getByRole("button", { name: "Send" }));

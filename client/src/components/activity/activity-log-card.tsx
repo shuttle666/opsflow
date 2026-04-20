@@ -46,41 +46,47 @@ export function ActivityLogCard({
   emptyDescription = "Tenant events will appear here as work progresses.",
 }: ActivityLogCardProps) {
   return (
-    <div className={cn(surfaceClassName, "flex flex-col p-6")}>
-      <div className="mb-6 flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--color-brand-soft)] text-[var(--color-brand)]">
-          <History className="h-5 w-5" />
+    <div className={cn(surfaceClassName, "flex flex-col overflow-hidden p-0")}>
+      <div className="flex items-center gap-3 border-b border-[var(--color-app-border)] px-4 py-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-brand-soft)] text-[var(--color-brand)]">
+          <History className="h-[18px] w-[18px]" />
         </div>
-        <h2 className="text-lg font-bold text-[var(--color-text)]">{title}</h2>
+        <h2 className="text-[15px] font-bold text-[var(--color-text)]">{title}</h2>
       </div>
 
-      {loading ? <LoadingPanel label="Loading activity log..." compact /> : null}
+      {loading ? (
+        <div className="p-4">
+          <LoadingPanel label="Loading activity log..." compact />
+        </div>
+      ) : null}
 
       {!loading && items.length === 0 ? (
-        <EmptyStatePanel
-          compact
-          title={emptyTitle}
-          description={emptyDescription}
-        />
+        <div className="p-4">
+          <EmptyStatePanel
+            compact
+            title={emptyTitle}
+            description={emptyDescription}
+          />
+        </div>
       ) : null}
 
       {!loading && items.length > 0 ? (
-        <div className="flex flex-col gap-4 overflow-y-auto pr-2">
+        <div className="flex flex-col divide-y divide-[var(--color-app-border)] overflow-y-auto">
           {items.map((item) => {
             const Icon = iconForTone(item.tone);
 
             return (
               <div
                 key={item.id}
-                className="flex gap-4 rounded-lg border border-transparent p-4 transition-colors hover:border-[var(--color-app-border)] hover:bg-[var(--color-app-panel-muted)]"
+                className="flex gap-3 px-4 py-3 transition-colors hover:bg-[var(--color-app-panel-muted)]"
               >
                 <div
                   className={cn(
-                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-sm",
+                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-sm",
                     toneClassName(item.tone),
                   )}
                 >
-                  <Icon className="h-[18px] w-[18px]" />
+                  <Icon className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <span className="text-sm font-semibold text-[var(--color-text)]">{item.title}</span>

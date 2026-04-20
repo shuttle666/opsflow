@@ -10,10 +10,16 @@ import { BrandMark } from "@/components/ui/brand-mark";
 import {
   Briefcase,
   Calendar,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Home,
   LogOut,
+  Monitor,
+  Moon,
   Search,
   Sparkles,
+  Sun,
   UserPlus,
   Users,
   type IconComponent,
@@ -53,6 +59,8 @@ const publicNavigation = [
   { href: "/register", label: "Register" },
 ];
 
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "opsflow-sidebar-collapsed";
+
 type WorkspaceNavItem = {
   href: string;
   label: string;
@@ -84,6 +92,30 @@ function isActiveNav(pathname: string, href: string) {
   return pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
 }
 
+function readStoredSidebarCollapsed() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function writeStoredSidebarCollapsed(collapsed: boolean) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(collapsed));
+  } catch {
+    // The UI state should still update even if storage is unavailable.
+  }
+}
+
 function initialsFor(name: string | undefined) {
   if (!name) {
     return "OF";
@@ -97,10 +129,12 @@ function SidebarNav({
   items,
   pathname,
   compact = false,
+  collapsed = false,
 }: {
   items: WorkspaceNavItem[];
   pathname: string;
   compact?: boolean;
+  collapsed?: boolean;
 }) {
   return (
     <nav className={cn("flex flex-col", compact ? "gap-1" : "gap-1.5")}>
@@ -112,6 +146,7 @@ function SidebarNav({
           <Link
             key={item.href}
             href={item.href}
+            title={collapsed ? item.label : undefined}
             style={
               compact
                 ? undefined
@@ -122,7 +157,8 @@ function SidebarNav({
                   }
             }
             className={cn(
-              "relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition",
+              "relative flex items-center rounded-lg text-sm font-medium transition",
+              collapsed ? "justify-center px-2.5 py-2.5" : "gap-3 px-3 py-2.5",
               compact
                 ? active
                   ? "bg-[var(--color-brand-soft)] text-[var(--color-brand)]"
@@ -133,10 +169,10 @@ function SidebarNav({
             )}
           >
             {!compact && active ? (
-              <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r bg-sky-400" />
+              <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r bg-[var(--color-sidebar-accent)] shadow-[0_0_8px_rgba(167,139,250,0.45)]" />
             ) : null}
-            <Icon className="h-5 w-5 shrink-0" />
-            <span className="truncate">{item.label}</span>
+            <Icon className="h-[19px] w-[19px] shrink-0" />
+            {collapsed ? null : <span className="truncate">{item.label}</span>}
           </Link>
         );
       })}
@@ -182,15 +218,13 @@ function ThemeToggle() {
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
-        className={cn(subtleButtonClassName, "h-9 px-3 text-xs")}
+        className="flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] text-[var(--color-text-secondary)] shadow-sm transition hover:bg-[var(--color-app-panel-muted)] hover:text-[var(--color-text)]"
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-label={`Theme mode: ${label}`}
         title={`Theme: ${label}`}
       >
-        <span className="h-2 w-2 rounded-full bg-[var(--color-brand)]" />
-        {label}
-        <span className="text-[10px] text-[var(--color-text-muted)]">▾</span>
+        {themeModeIcon(mode)}
       </button>
 
       {isOpen ? (
@@ -212,14 +246,14 @@ function ThemeToggle() {
                   setIsOpen(false);
                 }}
                 className={cn(
-                  "flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm font-medium transition",
+                  "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium transition",
                   active
                     ? "bg-[var(--color-brand-soft)] text-[var(--color-brand)]"
                     : "text-[var(--color-text-secondary)] hover:bg-[var(--color-app-panel-muted)] hover:text-[var(--color-text)]",
                 )}
               >
-                <span>{themeModeLabel(option)}</span>
-                {active ? <span className="text-xs">Active</span> : null}
+                {themeModeIcon(option)}
+                {themeModeLabel(option)}
               </button>
             );
           })}
@@ -227,6 +261,17 @@ function ThemeToggle() {
       ) : null}
     </div>
   );
+}
+
+function themeModeIcon(mode: ThemeMode) {
+  switch (mode) {
+    case "light":
+      return <Sun className="h-5 w-5" />;
+    case "dark":
+      return <Moon className="h-5 w-5" />;
+    default:
+      return <Monitor className="h-5 w-5" />;
+  }
 }
 
 function themeModeLabel(mode: ThemeMode) {
@@ -293,6 +338,7 @@ export function WorkspaceShell({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [actionError, setActionError] = useState<string | null>(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(readStoredSidebarCollapsed);
   const user = useAuthStore((state) => state.user);
   const currentTenant = useAuthStore((state) => state.currentTenant);
   const availableTenants = useAuthStore((state) => state.availableTenants);
@@ -321,91 +367,152 @@ export function WorkspaceShell({
     });
   };
 
+  const handleToggleSidebar = () => {
+    setIsSidebarCollapsed((current) => {
+      const next = !current;
+      writeStoredSidebarCollapsed(next);
+      return next;
+    });
+  };
+
   return (
     <div className="min-h-screen bg-[var(--color-app)] text-[var(--color-text)]">
-      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[230px] flex-col overflow-hidden border-r border-white/10 bg-[linear-gradient(180deg,#020617_0%,#030712_100%)] text-white shadow-[var(--shadow-panel)] xl:flex">
-        <Link href="/dashboard" className="flex h-16 items-center gap-3 px-5">
+      <aside
+        className={cn(
+          "fixed left-0 top-0 z-40 hidden h-screen flex-col overflow-hidden border-r border-white/10 bg-[linear-gradient(180deg,#020617_0%,#030712_100%)] text-white shadow-[var(--shadow-panel)] transition-[width] duration-200 xl:flex",
+          isSidebarCollapsed ? "w-16" : "w-[230px]",
+        )}
+      >
+        <Link
+          href="/dashboard"
+          className={cn(
+            "flex h-[60px] items-center gap-3",
+            isSidebarCollapsed ? "justify-center px-3" : "px-5",
+          )}
+        >
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[image:var(--gradient-brand)] text-sm font-extrabold text-white shadow-[0_10px_24px_-16px_var(--color-brand-glow)]">
             O
           </span>
-          <span className="text-lg font-extrabold text-white">OpsFlow</span>
+          {isSidebarCollapsed ? null : (
+            <span className="text-[17px] font-extrabold text-white">OpsFlow</span>
+          )}
         </Link>
 
-        <div className="flex-1 px-3 py-3">
-          <SidebarNav items={navigation} pathname={pathname} />
+        <div className={cn("flex-1 py-3", isSidebarCollapsed ? "px-2" : "px-3")}>
+          <SidebarNav
+            items={navigation}
+            pathname={pathname}
+            collapsed={isSidebarCollapsed}
+          />
         </div>
 
-        <div className="space-y-4 border-t border-white/10 p-4">
-          {availableTenants.length > 0 ? (
+        <div className={cn("border-t border-white/10", isSidebarCollapsed ? "space-y-3 p-3" : "space-y-4 p-4")}>
+          <button
+            type="button"
+            onClick={handleToggleSidebar}
+            className={cn(
+              "flex h-8 w-full items-center rounded-lg text-xs font-medium text-white/35 transition hover:bg-white/10 hover:text-white/70",
+              isSidebarCollapsed ? "justify-center px-0" : "justify-start gap-2 px-3",
+            )}
+          >
+            {isSidebarCollapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <>
+                <ChevronLeft className="h-4 w-4" />
+                Collapse
+              </>
+            )}
+          </button>
+
+          {!isSidebarCollapsed && availableTenants.length > 0 ? (
             <label className="block space-y-2">
               <span className="text-[11px] font-semibold uppercase text-white/45">
                 Workspace
               </span>
-              <select
-                value={currentTenant?.tenantId ?? ""}
-                onChange={(event) => handleSwitchTenant(event.target.value)}
-                disabled={isPending || !currentTenant}
-                className="h-9 w-full rounded-lg border border-white/10 bg-white/10 px-3 text-xs font-medium text-white outline-none transition focus:border-sky-300"
-              >
-                {availableTenants.map((tenant) => (
-                  <option key={tenant.tenantId} value={tenant.tenantId}>
-                    {tenant.tenantName} ({tenant.role})
-                  </option>
-                ))}
-              </select>
+              <span className="relative block min-w-0">
+                <select
+                  value={currentTenant?.tenantId ?? ""}
+                  onChange={(event) => handleSwitchTenant(event.target.value)}
+                  disabled={isPending || !currentTenant}
+                  title={currentTenant ? `${currentTenant.tenantName} (${currentTenant.role})` : undefined}
+                  className="block h-9 w-full min-w-0 appearance-none truncate rounded-lg border border-white/10 bg-white/10 px-3 pr-9 text-left text-xs font-medium text-white outline-none transition focus:border-[var(--color-sidebar-accent)] disabled:opacity-60 [&>option]:bg-zinc-50 [&>option]:text-zinc-950"
+                >
+                  {availableTenants.map((tenant) => (
+                    <option key={tenant.tenantId} value={tenant.tenantId}>
+                      {tenant.tenantName} ({tenant.role})
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/75" />
+              </span>
             </label>
           ) : null}
 
           {actionError ? <p className="text-xs text-[var(--color-danger)]">{actionError}</p> : null}
 
           {user && currentTenant ? (
-            <div className="flex items-center gap-3">
+            <div
+              className={cn(
+                "flex items-center",
+                isSidebarCollapsed ? "justify-center" : "gap-3",
+              )}
+            >
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-bold text-white/85">
                 {initialsFor(user.displayName)}
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-semibold text-white/90">
-                  {user.displayName}
-                </p>
-                <p className="truncate text-[11px] font-medium text-white/45">
-                  {currentTenant.role}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleLogout}
-                disabled={isPending}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/45 transition hover:bg-white/10 hover:text-white"
-                aria-label="Logout"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
+              {isSidebarCollapsed ? null : (
+                <>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-semibold text-white/90">
+                      {user.displayName}
+                    </p>
+                    <p className="truncate text-[11px] font-medium text-white/45">
+                      {currentTenant.role}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    disabled={isPending}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/45 transition hover:bg-white/10 hover:text-white"
+                    aria-label="Logout"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </button>
+                </>
+              )}
             </div>
           ) : null}
         </div>
       </aside>
 
-      <div className="min-h-screen xl:ml-[230px]">
+      <div
+        className={cn(
+          "min-h-screen transition-[margin-left] duration-200",
+          isSidebarCollapsed ? "xl:ml-16" : "xl:ml-[230px]",
+        )}
+      >
         <div className="flex min-h-screen flex-col">
-          <header className="sticky top-0 z-30 border-b border-[var(--color-app-border)] bg-[var(--color-app)]/95 px-4 py-3 sm:px-6 xl:px-7">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <header className="sticky top-0 z-30 bg-[var(--color-app)]/95 px-4 py-2.5 backdrop-blur sm:px-6 xl:px-7">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="min-w-0">
                 <div className="flex items-center gap-3 xl:hidden">
                   <BrandMark className="h-8 w-8" />
                   <span className="text-lg font-bold text-[var(--color-text)]">OpsFlow</span>
                 </div>
-                <h1 className="mt-3 text-2xl font-extrabold text-[var(--color-text)] xl:mt-0">
+                <h1 className="mt-3 text-xl font-extrabold leading-tight text-[var(--color-text)] xl:mt-0">
                   {title}
                 </h1>
                 {description ? (
-                  <p className="mt-1 max-w-2xl text-sm leading-6 text-[var(--color-text-secondary)]">
+                  <p className="mt-0.5 max-w-2xl text-xs leading-5 text-[var(--color-text-secondary)]">
                     {description}
                   </p>
                 ) : null}
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <div className="hidden h-9 items-center gap-2 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3 text-sm text-[var(--color-text-muted)] shadow-sm lg:flex">
+                <div className="hidden h-9 w-[200px] items-center gap-2 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3 text-sm text-[var(--color-text-muted)] shadow-sm lg:flex">
                   <Search className="h-4 w-4" />
                   <span>Search...</span>
                 </div>
@@ -421,18 +528,22 @@ export function WorkspaceShell({
 
                 {currentTenant ? (
                   <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-                    <select
-                      value={currentTenant.tenantId}
-                      onChange={(event) => handleSwitchTenant(event.target.value)}
-                      disabled={isPending}
-                      className={selectClassName}
-                    >
-                      {availableTenants.map((tenant) => (
-                        <option key={tenant.tenantId} value={tenant.tenantId}>
-                          {tenant.tenantName} ({tenant.role})
-                        </option>
-                      ))}
-                    </select>
+                    <span className="relative block min-w-0">
+                      <select
+                        value={currentTenant.tenantId}
+                        onChange={(event) => handleSwitchTenant(event.target.value)}
+                        disabled={isPending}
+                        title={`${currentTenant.tenantName} (${currentTenant.role})`}
+                        className={cn(selectClassName, "block min-w-0 appearance-none truncate pr-9")}
+                      >
+                        {availableTenants.map((tenant) => (
+                          <option key={tenant.tenantId} value={tenant.tenantId}>
+                            {tenant.tenantName} ({tenant.role})
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
+                    </span>
 
                     <button
                       type="button"
@@ -451,7 +562,7 @@ export function WorkspaceShell({
             </div>
           </header>
 
-          <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 xl:px-7">
+          <main className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-1 sm:px-6 xl:px-7">
             <div className="mx-auto max-w-[1220px] space-y-5">{children}</div>
           </main>
         </div>

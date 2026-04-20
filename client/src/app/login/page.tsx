@@ -83,24 +83,24 @@ function LoginPageContent() {
         <div className="mx-auto flex min-h-[calc(100vh-12rem)] w-full max-w-[26rem] items-center">
           <section className={`${strongSurfaceClassName} w-full p-8 sm:p-10`}>
             <div className="flex items-center justify-center gap-3">
-              <BrandMark className="h-11 w-11 drop-shadow-[0_16px_28px_-18px_rgba(8,145,178,0.8)]" />
-              <span className="text-[2rem] font-semibold tracking-tight text-slate-950">
+              <BrandMark className="h-11 w-11 drop-shadow-[0_16px_28px_-18px_var(--color-brand-glow)]" />
+              <span className="text-[2rem] font-semibold text-[var(--color-text)]">
                 OpsFlow
               </span>
             </div>
 
             <div className="mt-8 text-center">
-              <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
+              <h1 className="text-3xl font-semibold text-[var(--color-text)]">
                 Welcome back
               </h1>
-              <p className="mt-2 text-sm text-slate-500">
+              <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
                 Sign in to your workspace
               </p>
             </div>
 
             <form className="mt-8 space-y-5" onSubmit={handleSubmit(onSubmit)}>
               <label className="block">
-                <span className="text-sm font-medium text-slate-700">Email</span>
+                <span className="text-sm font-medium text-[var(--color-text-secondary)]">Email</span>
                 <input
                   {...register("email")}
                   className={`${inputClassName} mt-1`}
@@ -113,7 +113,7 @@ function LoginPageContent() {
               </label>
 
               <label className="block">
-                <span className="text-sm font-medium text-slate-700">Password</span>
+                <span className="text-sm font-medium text-[var(--color-text-secondary)]">Password</span>
                 <input
                   {...register("password")}
                   type="password"
@@ -139,11 +139,11 @@ function LoginPageContent() {
                 <p className="text-sm text-center text-rose-600">{submitError}</p>
               ) : null}
 
-              <p className="text-center text-sm text-slate-500">
+              <p className="text-center text-sm text-[var(--color-text-secondary)]">
                 Don&apos;t have an account?{" "}
                 <Link
                   href={`/register?next=${encodeURIComponent(nextPath)}`}
-                  className="font-semibold text-cyan-600 transition hover:text-cyan-700"
+                  className="font-semibold text-[var(--color-brand)] transition hover:text-[var(--color-brand-strong)]"
                 >
                   Register
                 </Link>
@@ -154,19 +154,19 @@ function LoginPageContent() {
 
         <details
           open
-          className={`${surfaceClassName} mx-auto mt-4 w-full max-w-[26rem] px-5 py-4 text-sm text-slate-600`}
+          className={`${surfaceClassName} mx-auto mt-4 w-full max-w-[26rem] px-5 py-4 text-sm text-[var(--color-text-secondary)]`}
         >
-          <summary className="cursor-pointer list-none font-semibold text-slate-700">
+          <summary className="cursor-pointer list-none font-semibold text-[var(--color-text)]">
             Test accounts
           </summary>
           <ul className="mt-4 space-y-3">
             {seededAccounts.map((account) => (
               <li
                 key={account.email}
-                className="flex items-center justify-between gap-4 rounded-[1rem] border border-white/80 bg-white/80 px-4 py-3"
+                className="flex items-center justify-between gap-4 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-4 py-3"
               >
                 <div>
-                  <p className="font-semibold text-slate-950">{account.label}</p>
+                  <p className="font-semibold text-[var(--color-text)]">{account.label}</p>
                   <p className="mt-1">
                     Email: <span className="font-mono text-[13px]">{account.email}</span>
                   </p>
@@ -177,7 +177,7 @@ function LoginPageContent() {
                 </div>
                 <button
                   type="button"
-                  className="inline-flex h-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-cyan-200 hover:text-cyan-700"
+                  className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3 text-xs font-semibold text-[var(--color-text-secondary)] shadow-sm transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand)]"
                   onClick={() => {
                     setSubmitError(null);
                     setValue("email", account.email, {

@@ -264,6 +264,7 @@ export type DemoSeedProfile = {
 export type DemoSeedData = {
   profile: DemoSeedProfile;
   baseDate: Date;
+  tenantId: string;
   tenant: Prisma.TenantCreateInput;
   users: BuiltUser[];
   memberships: Prisma.MembershipCreateManyInput[];
@@ -346,27 +347,37 @@ export function assertProductionDemoSeedConfirmation() {
   }
 }
 
-export function buildDemoSeedData(profile: DemoSeedProfile, baseDate = resolveBaseDate()): DemoSeedData {
+export function buildDemoSeedData(
+  profile: DemoSeedProfile,
+  options: {
+    baseDate?: Date;
+    tenantId?: string;
+  } = {},
+): DemoSeedData {
+  const baseDate = options.baseDate ?? resolveBaseDate();
+  const tenantId = options.tenantId ?? demoTenant.id;
   const staffProfiles = allStaffProfiles.slice(0, profile.staffCount);
   const tenant: Prisma.TenantCreateInput = {
-    id: demoTenant.id,
+    id: tenantId,
     name: demoTenant.name,
     slug: demoTenant.slug,
     status: TenantStatus.ACTIVE,
     deletedAt: null,
   };
-  const { users, memberships } = buildUsers(staffProfiles);
-  const customers = buildCustomers(profile, baseDate);
+  const { users, memberships } = buildUsers(staffProfiles, tenantId);
+  const customers = buildCustomers(profile, baseDate, tenantId);
   const { jobs, statusHistory, completionReviews, auditLogs } = buildJobData({
     baseDate,
     customers,
     profile,
     staffProfiles,
+    tenantId,
   });
 
   return {
     profile,
     baseDate,
+    tenantId,
     tenant,
     users,
     memberships,
@@ -424,6 +435,49 @@ export function getExpectedDemoUserIdentityById(data: DemoSeedData) {
   return new Map(data.users.map((user) => [user.id, user]));
 }
 
+export function remapDemoSeedUserIds(data: DemoSeedData, idReplacements: Map<string, string>) {
+  if (idReplacements.size === 0) {
+    return data;
+  }
+
+  function replaceUserId(value: string | null | undefined) {
+    return value ? (idReplacements.get(value) ?? value) : value;
+  }
+
+  for (const user of data.users) {
+    user.id = replaceUserId(user.id) ?? user.id;
+  }
+
+  for (const membership of data.memberships) {
+    membership.userId = replaceUserId(membership.userId) ?? membership.userId;
+  }
+
+  for (const customer of data.customers) {
+    customer.createdById = replaceUserId(customer.createdById) ?? customer.createdById;
+  }
+
+  for (const job of data.jobs) {
+    job.createdById = replaceUserId(job.createdById) ?? job.createdById;
+    job.assignedToId = replaceUserId(job.assignedToId) ?? job.assignedToId;
+  }
+
+  for (const history of data.statusHistory) {
+    history.changedById = replaceUserId(history.changedById) ?? history.changedById;
+  }
+
+  for (const review of data.completionReviews) {
+    review.submittedById = replaceUserId(review.submittedById) ?? review.submittedById;
+    review.reviewedById = replaceUserId(review.reviewedById) ?? review.reviewedById;
+  }
+
+  for (const auditLog of data.auditLogs) {
+    auditLog.userId = replaceUserId(auditLog.userId) ?? auditLog.userId;
+    auditLog.metadata = replaceAssigneeIdInMetadata(auditLog.metadata, idReplacements);
+  }
+
+  return data;
+}
+
 function parseBaseDateOverride(value: string) {
   const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
 
@@ -466,7 +520,25 @@ function buildPhone(index: number) {
   return `04${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5)}`;
 }
 
-function buildUsers(staffProfiles: DemoSeedData["staffProfiles"]) {
+function replaceAssigneeIdInMetadata(
+  metadata: Prisma.AuditLogCreateManyInput["metadata"],
+  idReplacements: Map<string, string>,
+): Prisma.AuditLogCreateManyInput["metadata"] {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return metadata;
+  }
+
+  if (!("assigneeId" in metadata) || typeof metadata.assigneeId !== "string") {
+    return metadata;
+  }
+
+  return {
+    ...metadata,
+    assigneeId: idReplacements.get(metadata.assigneeId) ?? metadata.assigneeId,
+  } as Prisma.AuditLogCreateManyInput["metadata"];
+}
+
+function buildUsers(staffProfiles: DemoSeedData["staffProfiles"], tenantId: string) {
   const ownerPasswordHash = bcrypt.hashSync("owner-password-123", 10);
   const managerPasswordHash = bcrypt.hashSync("manager-password-123", 10);
   const staffPasswordHash = bcrypt.hashSync("staff-password-123", 10);
@@ -495,19 +567,19 @@ function buildUsers(staffProfiles: DemoSeedData["staffProfiles"]) {
   const memberships: Prisma.MembershipCreateManyInput[] = [
     {
       userId: ownerId,
-      tenantId: demoTenant.id,
+      tenantId,
       role: MembershipRole.OWNER,
       status: MembershipStatus.ACTIVE,
     },
     {
       userId: managerId,
-      tenantId: demoTenant.id,
+      tenantId,
       role: MembershipRole.MANAGER,
       status: MembershipStatus.ACTIVE,
     },
     ...staffProfiles.map((staff) => ({
       userId: staff.id,
-      tenantId: demoTenant.id,
+      tenantId,
       role: MembershipRole.STAFF,
       status: MembershipStatus.ACTIVE,
     })),
@@ -516,7 +588,7 @@ function buildUsers(staffProfiles: DemoSeedData["staffProfiles"]) {
   return { users, memberships };
 }
 
-function buildCustomers(profile: DemoSeedProfile, baseDate: Date) {
+function buildCustomers(profile: DemoSeedProfile, baseDate: Date, tenantId: string) {
   const firstArchivedIndex = profile.customerCount - profile.archivedCustomerCount;
 
   return Array.from({ length: profile.customerCount }, (_, index): BuiltCustomer => {
@@ -528,7 +600,7 @@ function buildCustomers(profile: DemoSeedProfile, baseDate: Date) {
 
     return {
       id: demoId("30000000", oneBasedIndex),
-      tenantId: demoTenant.id,
+      tenantId,
       name: `${firstName} ${lastName}`,
       phone: buildPhone(oneBasedIndex),
       email: `${firstName}.${lastName}.${oneBasedIndex}@example.com`.toLowerCase(),
@@ -550,8 +622,9 @@ function buildJobData(input: {
   customers: BuiltCustomer[];
   profile: DemoSeedProfile;
   staffProfiles: DemoSeedData["staffProfiles"];
+  tenantId: string;
 }) {
-  const { baseDate, customers, profile, staffProfiles } = input;
+  const { baseDate, customers, profile, staffProfiles, tenantId } = input;
   const activeCustomerIds = customers
     .filter((customer) => !customer.archivedAt)
     .map((customer) => customer.id);
@@ -585,7 +658,7 @@ function buildJobData(input: {
 
   function pushAuditLog(log: Prisma.AuditLogCreateManyInput) {
     auditLogs.push({
-      tenantId: demoTenant.id,
+      tenantId,
       createdAt: addDays(baseDate, -120, auditLogs.length % 24, (auditLogs.length * 7) % 60),
       ...log,
     });
@@ -600,7 +673,7 @@ function buildJobData(input: {
     changedAt: Date;
   }) {
     statusHistory.push({
-      tenantId: demoTenant.id,
+      tenantId,
       jobId: transition.job.id,
       fromStatus: transition.fromStatus,
       toStatus: transition.toStatus,
@@ -638,7 +711,7 @@ function buildJobData(input: {
 
     completionReviews.push({
       id: reviewId,
-      tenantId: demoTenant.id,
+      tenantId,
       jobId: reviewInput.job.id,
       submittedById: reviewInput.submittedById,
       submittedAt: reviewInput.submittedAt,
@@ -726,7 +799,7 @@ function buildJobData(input: {
       const startAt = buildScheduleStart(baseDate, status, statusIndex, jobNumber);
       const job: BuiltJob = {
         id: demoId("40000000", jobNumber),
-        tenantId: demoTenant.id,
+        tenantId,
         customerId: pickCustomerForStatus(status, statusIndex),
         title: `${template.title} - ${suburb}`,
         description: template.description,

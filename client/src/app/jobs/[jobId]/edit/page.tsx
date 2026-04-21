@@ -70,6 +70,7 @@ export default function EditJobPage() {
               email: selected.email ?? null,
               address: selected.address ?? null,
               notes: selected.notes ?? null,
+              archivedAt: selected.archivedAt,
               createdAt: selected.createdAt,
               updatedAt: selected.updatedAt,
             },

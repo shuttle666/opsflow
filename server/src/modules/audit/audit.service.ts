@@ -180,6 +180,26 @@ function mapAuditToFeedItem(log: {
         ...(log.targetType ? { targetType: log.targetType } : {}),
         ...(log.targetId ? { targetId: log.targetId } : {}),
       };
+    case AuditAction.CUSTOMER_ARCHIVED:
+      return {
+        id: log.id,
+        title: "Customer archived",
+        description: `${actor} archived ${(metadata.customerName as string | undefined) ?? "a customer"}.`,
+        timestamp: log.createdAt,
+        tone: "warning",
+        ...(log.targetType ? { targetType: log.targetType } : {}),
+        ...(log.targetId ? { targetId: log.targetId } : {}),
+      };
+    case AuditAction.CUSTOMER_RESTORED:
+      return {
+        id: log.id,
+        title: "Customer restored",
+        description: `${actor} restored ${(metadata.customerName as string | undefined) ?? "a customer"}.`,
+        timestamp: log.createdAt,
+        tone: "success",
+        ...(log.targetType ? { targetType: log.targetType } : {}),
+        ...(log.targetId ? { targetId: log.targetId } : {}),
+      };
     case AuditAction.TENANT_INVITATION_CREATED:
       return {
         id: log.id,

@@ -78,6 +78,8 @@ enum AuditAction {
   MEMBERSHIP_UPDATED
   JOB_EVIDENCE_UPLOADED
   JOB_EVIDENCE_DELETED
+  CUSTOMER_ARCHIVED
+  CUSTOMER_RESTORED
 }
 
 enum NotificationType {
@@ -161,6 +163,7 @@ model Customer {
   email       String?
   address     String?
   notes       String?
+  archivedAt  DateTime? @map("archived_at")
   createdById String   @map("created_by_id") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -171,6 +174,7 @@ model Customer {
   @@unique([id, tenantId])
   @@index([tenantId])
   @@index([tenantId, createdAt])
+  @@index([tenantId, archivedAt])
   @@map("customers")
 }
 

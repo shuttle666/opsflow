@@ -1,4 +1,5 @@
 import type { RequestHandler } from "express";
+import { getRequestMetadata } from "../auth/request-metadata";
 import { ApiError } from "../../utils/api-error";
 import { sendSuccess } from "../../utils/api-response";
 import { asyncHandler } from "../../utils/async-handler";
@@ -9,9 +10,11 @@ import {
   updateCustomerSchema,
 } from "./customer-schemas";
 import {
+  archiveCustomer,
   createCustomer,
   getCustomerDetail,
   listCustomers,
+  restoreCustomer,
   updateCustomer,
 } from "./customer.service";
 
@@ -72,6 +75,34 @@ export const updateCustomerHandler: RequestHandler = asyncHandler(async (req, re
 
   sendSuccess(res, {
     message: "Customer updated.",
+    data: result,
+  });
+});
+
+export const archiveCustomerHandler: RequestHandler = asyncHandler(async (req, res) => {
+  if (!req.auth) {
+    throw new ApiError(401, "Authentication is required.");
+  }
+
+  const { customerId } = customerIdParamSchema.parse(req.params);
+  const result = await archiveCustomer(req.auth, customerId, getRequestMetadata(req));
+
+  sendSuccess(res, {
+    message: "Customer archived.",
+    data: result,
+  });
+});
+
+export const restoreCustomerHandler: RequestHandler = asyncHandler(async (req, res) => {
+  if (!req.auth) {
+    throw new ApiError(401, "Authentication is required.");
+  }
+
+  const { customerId } = customerIdParamSchema.parse(req.params);
+  const result = await restoreCustomer(req.auth, customerId, getRequestMetadata(req));
+
+  sendSuccess(res, {
+    message: "Customer restored.",
     data: result,
   });
 });

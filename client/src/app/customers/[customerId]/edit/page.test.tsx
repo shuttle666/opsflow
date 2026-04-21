@@ -70,6 +70,7 @@ describe("edit customer page", () => {
       email: "noah@example.com",
       address: "12 Glenview Rd",
       notes: null,
+      archivedAt: null,
       createdAt: "2026-03-20T00:00:00.000Z",
       updatedAt: "2026-03-20T00:00:00.000Z",
       createdBy: {
@@ -86,6 +87,7 @@ describe("edit customer page", () => {
       email: "noah.updated@example.com",
       address: "14 Glenview Rd",
       notes: null,
+      archivedAt: null,
       createdAt: "2026-03-20T00:00:00.000Z",
       updatedAt: "2026-03-20T01:00:00.000Z",
     });

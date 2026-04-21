@@ -243,6 +243,84 @@ describeIfDb("job service integration", () => {
     expect(unassigned.assignedTo).toBeUndefined();
   });
 
+  it("blocks archived customers for new job linkage while preserving existing history", async () => {
+    const { auth, user } = await seedTenantUser({
+      email: "manager@job-archived-customer.test",
+      displayName: "Manager",
+      role: MembershipRole.MANAGER,
+      tenantName: "Archived Customer Job Tenant",
+      tenantSlug: "archived-customer-job-tenant",
+    });
+
+    const activeCustomer = await seedCustomer(auth, "Active Customer");
+    const archivedCustomer = await prisma.customer.update({
+      where: {
+        id: (await seedCustomer(auth, "Archived Customer")).id,
+      },
+      data: {
+        archivedAt: new Date("2026-04-01T00:00:00.000Z"),
+      },
+    });
+
+    await expect(
+      createJob(auth, {
+        customerId: archivedCustomer.id,
+        title: "New archived customer job",
+        description: "",
+        scheduledStartAt: undefined,
+        scheduledEndAt: undefined,
+      }),
+    ).rejects.toMatchObject({
+      statusCode: 404,
+    });
+
+    const activeJob = await createJob(auth, {
+      customerId: activeCustomer.id,
+      title: "Active customer job",
+      description: "",
+      scheduledStartAt: undefined,
+      scheduledEndAt: undefined,
+    });
+
+    await expect(
+      updateJob(auth, activeJob.id, {
+        customerId: archivedCustomer.id,
+        title: "Move to archived customer",
+        description: "",
+        scheduledStartAt: undefined,
+        scheduledEndAt: undefined,
+      }),
+    ).rejects.toMatchObject({
+      statusCode: 404,
+    });
+
+    const historicalJob = await prisma.job.create({
+      data: {
+        tenantId: auth.tenantId,
+        customerId: archivedCustomer.id,
+        title: "Historical archived customer job",
+        status: JobStatus.COMPLETED,
+        createdById: user.id,
+      },
+    });
+
+    await expect(
+      updateJob(auth, historicalJob.id, {
+        customerId: archivedCustomer.id,
+        title: "Historical archived customer job updated",
+        description: "",
+        scheduledStartAt: undefined,
+        scheduledEndAt: undefined,
+      }),
+    ).resolves.toMatchObject({
+      id: historicalJob.id,
+      title: "Historical archived customer job updated",
+      customer: {
+        id: archivedCustomer.id,
+      },
+    });
+  });
+
   it("blocks cross-tenant job and customer access", async () => {
     const primary = await seedTenantUser({
       email: "owner@primary-job.test",

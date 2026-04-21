@@ -319,6 +319,7 @@ async function findExistingCustomerMatch(
   const matches = await prisma.customer.findMany({
     where: {
       tenantId: auth.tenantId,
+      archivedAt: null,
       OR: [
         ...(email ? [{ email }] : []),
         ...(phone ? [{ phone }] : []),

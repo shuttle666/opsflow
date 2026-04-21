@@ -443,11 +443,16 @@ function applyConflictFlags(
   };
 }
 
-async function getTenantCustomerOrThrow(auth: AuthContext, customerId: string) {
+async function getTenantCustomerOrThrow(
+  auth: AuthContext,
+  customerId: string,
+  options: { allowArchived?: boolean } = {},
+) {
   const customer = await prisma.customer.findFirst({
     where: {
       id: customerId,
       tenantId: auth.tenantId,
+      ...(options.allowArchived ? {} : { archivedAt: null }),
     },
     select: {
       id: true,
@@ -659,8 +664,10 @@ export async function updateJob(
   jobId: string,
   input: UpdateJobInput,
 ): Promise<JobListItem> {
-  await getJobOrThrow(auth, jobId);
-  const customer = await getTenantCustomerOrThrow(auth, input.customerId);
+  const currentJob = await getJobOrThrow(auth, jobId);
+  const customer = await getTenantCustomerOrThrow(auth, input.customerId, {
+    allowArchived: input.customerId === currentJob.customerId,
+  });
   const scheduling = normalizeScheduledRange(input);
 
   const job = await prisma.job.update({

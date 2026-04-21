@@ -4,6 +4,7 @@ export type CustomerListQuery = {
   q?: string;
   page?: number;
   pageSize?: number;
+  status?: "active" | "archived" | "all";
   sort?: "createdAt_desc" | "createdAt_asc" | "name_asc" | "name_desc";
 };
 
@@ -14,6 +15,7 @@ export type CustomerListItem = {
   email: string | null;
   address: string | null;
   notes: string | null;
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };

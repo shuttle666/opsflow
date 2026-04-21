@@ -16,7 +16,11 @@ import {
   surfaceClassName,
   strongSurfaceClassName,
 } from "@/components/ui/styles";
-import { getCustomerDetailRequest } from "@/features/customer/customer-api";
+import {
+  archiveCustomerRequest,
+  getCustomerDetailRequest,
+  restoreCustomerRequest,
+} from "@/features/customer/customer-api";
 import { formatDateTime, formatScheduleRange } from "@/features/job";
 import { useAuthStore } from "@/store/auth-store";
 import type { CustomerDetail, CustomerJobSummary } from "@/types/customer";
@@ -25,6 +29,9 @@ import type { JobStatus } from "@/types/job";
 function canManageCustomers(role: string | undefined) {
   return role === "OWNER" || role === "MANAGER";
 }
+
+const dangerButtonClassName =
+  "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-danger)] bg-transparent px-3.5 text-[13px] font-semibold text-[var(--color-danger)] shadow-sm transition hover:bg-[var(--color-danger-soft)] disabled:cursor-not-allowed disabled:opacity-60";
 
 function initialsFor(name: string | undefined | null) {
   if (!name) {
@@ -204,6 +211,9 @@ export default function CustomerDetailPage() {
   const [customer, setCustomer] = useState<CustomerDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -246,6 +256,65 @@ export default function CustomerDetailPage() {
     };
   }, [customerId, withAccessTokenRetry]);
 
+  const allowManage = canManageCustomers(currentTenant?.role);
+  const isArchived = Boolean(customer?.archivedAt);
+
+  async function handleArchiveCustomer() {
+    if (!customer) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Delete this customer? The customer will be hidden from active lists, but historical jobs will keep their customer details.",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsArchiving(true);
+    setActionError(null);
+
+    try {
+      const archived = await withAccessTokenRetry((accessToken) =>
+        archiveCustomerRequest(accessToken, customer.id),
+      );
+      setCustomer({ ...customer, ...archived });
+    } catch (archiveError) {
+      setActionError(
+        archiveError instanceof Error
+          ? archiveError.message
+          : "Failed to delete customer.",
+      );
+    } finally {
+      setIsArchiving(false);
+    }
+  }
+
+  async function handleRestoreCustomer() {
+    if (!customer) {
+      return;
+    }
+
+    setIsRestoring(true);
+    setActionError(null);
+
+    try {
+      const restored = await withAccessTokenRetry((accessToken) =>
+        restoreCustomerRequest(accessToken, customer.id),
+      );
+      setCustomer({ ...customer, ...restored });
+    } catch (restoreError) {
+      setActionError(
+        restoreError instanceof Error
+          ? restoreError.message
+          : "Failed to restore customer.",
+      );
+    } finally {
+      setIsRestoring(false);
+    }
+  }
+
   return (
     <AppShell title="Customer detail">
       <AuthGuard>
@@ -273,24 +342,58 @@ export default function CustomerDetailPage() {
                   </div>
                 </div>
 
-                {canManageCustomers(currentTenant?.role) ? (
+                {allowManage ? (
                   <div className="flex flex-wrap gap-2">
-                    <Link
-                      href={`/jobs/new?customerId=${customer.id}`}
-                      className={secondaryButtonClassName}
-                    >
-                      Create job
-                    </Link>
-                    <Link
-                      href={`/customers/${customer.id}/edit`}
-                      className={primaryButtonClassName}
-                    >
-                      Edit customer
-                    </Link>
+                    {isArchived ? (
+                      <button
+                        type="button"
+                        disabled={isRestoring}
+                        onClick={() => void handleRestoreCustomer()}
+                        className={primaryButtonClassName}
+                      >
+                        {isRestoring ? "Restoring..." : "Restore customer"}
+                      </button>
+                    ) : (
+                      <>
+                        <Link
+                          href={`/jobs/new?customerId=${customer.id}`}
+                          className={secondaryButtonClassName}
+                        >
+                          Create job
+                        </Link>
+                        <Link
+                          href={`/customers/${customer.id}/edit`}
+                          className={primaryButtonClassName}
+                        >
+                          Edit customer
+                        </Link>
+                        <button
+                          type="button"
+                          disabled={isArchiving}
+                          onClick={() => void handleArchiveCustomer()}
+                          className={dangerButtonClassName}
+                        >
+                          {isArchiving ? "Deleting..." : "Delete customer"}
+                        </button>
+                      </>
+                    )}
                   </div>
                 ) : null}
               </div>
             </section>
+
+            {actionError ? <InlineErrorBanner message={actionError} /> : null}
+
+            {isArchived ? (
+              <section className={`${surfaceClassName} p-4`}>
+                <p className="text-sm font-semibold text-[var(--color-text)]">
+                  This customer is archived.
+                </p>
+                <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">
+                  Historical jobs keep this customer context. Restore the customer before creating new jobs.
+                </p>
+              </section>
+            ) : null}
 
             <section className="grid gap-4 md:grid-cols-3">
               <OverviewMetric
@@ -322,6 +425,9 @@ export default function CustomerDetailPage() {
                   <InfoRow label="Phone" value={customer.phone ?? "-"} />
                   <InfoRow label="Email" value={customer.email ?? "-"} />
                   <InfoRow label="Address" value={customer.address ?? "-"} />
+                  {customer.archivedAt ? (
+                    <InfoRow label="Archived" value={formatDateTime(customer.archivedAt)} mono />
+                  ) : null}
                   <InfoRow label="Updated" value={formatDateTime(customer.updatedAt)} mono />
                 </DetailCard>
 

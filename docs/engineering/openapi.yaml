@@ -243,6 +243,12 @@ paths:
           schema:
             type: string
             enum: [createdAt_desc, createdAt_asc, name_asc, name_desc]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, archived, all]
+            default: active
       responses:
         "200":
           $ref: "#/components/responses/PaginatedListSuccess"
@@ -280,6 +286,32 @@ paths:
           $ref: "#/components/responses/Success"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Customer]
+      operationId: archiveCustomer
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/customers/{customerId}/restore:
+    parameters:
+      - $ref: "#/components/parameters/CustomerId"
+    post:
+      tags: [Customer]
+      operationId: restoreCustomer
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":

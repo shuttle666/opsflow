@@ -129,6 +129,7 @@ toolMap.set("list_customers", {
         q: input.q as string | undefined,
         page: (input.page as number) ?? 1,
         pageSize: (input.pageSize as number) ?? 10,
+        status: "active",
         sort: "createdAt_desc",
       }),
     ),

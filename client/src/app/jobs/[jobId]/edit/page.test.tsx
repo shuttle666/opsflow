@@ -78,6 +78,7 @@ describe("edit job page", () => {
           email: null,
           address: null,
           notes: null,
+          archivedAt: null,
           createdAt: "2026-03-20T00:00:00.000Z",
           updatedAt: "2026-03-20T00:00:00.000Z",
         },

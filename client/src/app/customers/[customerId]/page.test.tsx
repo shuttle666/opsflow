@@ -4,7 +4,9 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import CustomerDetailPage from "@/app/customers/[customerId]/page";
 import {
+  archiveCustomerRequest,
   getCustomerDetailRequest,
+  restoreCustomerRequest,
   updateCustomerRequest,
 } from "@/features/customer/customer-api";
 import { useAuthStore } from "@/store/auth-store";
@@ -17,6 +19,7 @@ const baseCustomer: CustomerDetail = {
   email: "noah@example.com",
   address: "12 Glenview Rd",
   notes: "Prefers morning appointments.",
+  archivedAt: null,
   createdAt: "2026-03-20T00:00:00.000Z",
   updatedAt: "2026-03-21T00:00:00.000Z",
   createdBy: {
@@ -75,7 +78,9 @@ vi.mock("@/components/auth/auth-guard", () => ({
 }));
 
 vi.mock("@/features/customer/customer-api", () => ({
+  archiveCustomerRequest: vi.fn(),
   getCustomerDetailRequest: vi.fn(),
+  restoreCustomerRequest: vi.fn(),
   updateCustomerRequest: vi.fn(),
 }));
 
@@ -83,6 +88,28 @@ describe("customer detail page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getCustomerDetailRequest).mockResolvedValue(baseCustomer);
+    vi.mocked(archiveCustomerRequest).mockResolvedValue({
+      id: "customer-1",
+      name: "Noah Thompson",
+      phone: "0412 000 001",
+      email: "noah@example.com",
+      address: "12 Glenview Rd",
+      notes: "Prefers morning appointments.",
+      archivedAt: "2026-04-01T00:00:00.000Z",
+      createdAt: "2026-03-20T00:00:00.000Z",
+      updatedAt: "2026-04-01T00:00:00.000Z",
+    });
+    vi.mocked(restoreCustomerRequest).mockResolvedValue({
+      id: "customer-1",
+      name: "Noah Thompson",
+      phone: "0412 000 001",
+      email: "noah@example.com",
+      address: "12 Glenview Rd",
+      notes: "Prefers morning appointments.",
+      archivedAt: null,
+      createdAt: "2026-03-20T00:00:00.000Z",
+      updatedAt: "2026-04-01T00:00:00.000Z",
+    });
     vi.mocked(updateCustomerRequest).mockResolvedValue(baseCustomer);
     useAuthStore.setState({
       status: "authenticated",
@@ -122,6 +149,47 @@ describe("customer detail page", () => {
     expect(screen.getByRole("link", { name: "Edit customer" })).toHaveAttribute(
       "href",
       "/customers/customer-1/edit",
+    );
+    expect(screen.getByRole("button", { name: "Delete customer" })).toBeInTheDocument();
+  });
+
+  it("archives an active customer after confirmation", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const user = userEvent.setup();
+    render(<CustomerDetailPage />);
+
+    await user.click(await screen.findByRole("button", { name: "Delete customer" }));
+
+    await waitFor(() => {
+      expect(archiveCustomerRequest).toHaveBeenCalledWith("access-token", "customer-1");
+    });
+    expect(await screen.findByText("This customer is archived.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Restore customer" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Create job" })).not.toBeInTheDocument();
+
+    confirmSpy.mockRestore();
+  });
+
+  it("restores an archived customer and returns active actions", async () => {
+    vi.mocked(getCustomerDetailRequest).mockResolvedValue({
+      ...baseCustomer,
+      archivedAt: "2026-04-01T00:00:00.000Z",
+      updatedAt: "2026-04-01T00:00:00.000Z",
+    });
+    const user = userEvent.setup();
+    render(<CustomerDetailPage />);
+
+    expect(await screen.findByText("This customer is archived.")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Create job" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Restore customer" }));
+
+    await waitFor(() => {
+      expect(restoreCustomerRequest).toHaveBeenCalledWith("access-token", "customer-1");
+    });
+    expect(await screen.findByRole("link", { name: "Create job" })).toHaveAttribute(
+      "href",
+      "/jobs/new?customerId=customer-1",
     );
   });
 

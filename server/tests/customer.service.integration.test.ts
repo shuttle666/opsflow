@@ -1,10 +1,12 @@
-import { JobStatus, MembershipRole, MembershipStatus } from "@prisma/client";
+import { AuditAction, JobStatus, MembershipRole, MembershipStatus } from "@prisma/client";
 import { prisma } from "../src/lib/prisma";
 import type { AuthContext } from "../src/types/auth";
 import {
   createCustomer,
+  archiveCustomer,
   getCustomerDetail,
   listCustomers,
+  restoreCustomer,
   updateCustomer,
 } from "../src/modules/customer/customer.service";
 import { hashPassword } from "../src/modules/auth/auth-password";
@@ -95,6 +97,7 @@ describeIfDb("customer service integration", () => {
       page: 1,
       pageSize: 1,
       q: undefined,
+      status: "active",
       sort: "name_asc",
     });
 
@@ -107,11 +110,135 @@ describeIfDb("customer service integration", () => {
       page: 1,
       pageSize: 10,
       q: "0412 000 002",
+      status: "active",
       sort: "createdAt_desc",
     });
 
     expect(searched.items).toHaveLength(1);
     expect(searched.items[0]?.name).toBe("Olivia Davis");
+  });
+
+  it("filters, archives, and restores customers", async () => {
+    const { auth } = await seedTenantUser({
+      email: "owner@customer-archive.test",
+      displayName: "Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Archive Tenant",
+      tenantSlug: "archive-tenant",
+    });
+
+    const activeCustomer = await createCustomer(auth, {
+      name: "Active Customer",
+    });
+    const customer = await createCustomer(auth, {
+      name: "Archived Customer",
+      email: "archived@example.com",
+    });
+
+    const archived = await archiveCustomer(auth, customer.id);
+    expect(archived.archivedAt).toBeTruthy();
+
+    const activeList = await listCustomers(auth, {
+      page: 1,
+      pageSize: 10,
+      q: undefined,
+      status: "active",
+      sort: "name_asc",
+    });
+    expect(activeList.items.map((item) => item.id)).toEqual([activeCustomer.id]);
+
+    const archivedList = await listCustomers(auth, {
+      page: 1,
+      pageSize: 10,
+      q: undefined,
+      status: "archived",
+      sort: "name_asc",
+    });
+    expect(archivedList.items.map((item) => item.id)).toEqual([customer.id]);
+
+    const allList = await listCustomers(auth, {
+      page: 1,
+      pageSize: 10,
+      q: undefined,
+      status: "all",
+      sort: "name_asc",
+    });
+    expect(allList.items).toHaveLength(2);
+
+    await archiveCustomer(auth, customer.id);
+    expect(
+      await prisma.auditLog.count({
+        where: {
+          action: AuditAction.CUSTOMER_ARCHIVED,
+          targetId: customer.id,
+        },
+      }),
+    ).toBe(1);
+
+    const restored = await restoreCustomer(auth, customer.id);
+    expect(restored.archivedAt).toBeNull();
+    expect(
+      await prisma.auditLog.count({
+        where: {
+          action: AuditAction.CUSTOMER_RESTORED,
+          targetId: customer.id,
+        },
+      }),
+    ).toBe(1);
+  });
+
+  it("blocks archiving customers with open jobs but allows closed job history", async () => {
+    const { auth, user } = await seedTenantUser({
+      email: "owner@customer-archive-jobs.test",
+      displayName: "Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Archive Jobs Tenant",
+      tenantSlug: "archive-jobs-tenant",
+    });
+
+    const openCustomer = await createCustomer(auth, {
+      name: "Open Job Customer",
+    });
+    await prisma.job.create({
+      data: {
+        tenantId: auth.tenantId,
+        customerId: openCustomer.id,
+        title: "Open work",
+        status: JobStatus.NEW,
+        createdById: user.id,
+      },
+    });
+
+    await expect(archiveCustomer(auth, openCustomer.id)).rejects.toMatchObject({
+      statusCode: 409,
+    });
+
+    const closedCustomer = await createCustomer(auth, {
+      name: "Closed Job Customer",
+    });
+    await prisma.job.createMany({
+      data: [
+        {
+          tenantId: auth.tenantId,
+          customerId: closedCustomer.id,
+          title: "Completed work",
+          status: JobStatus.COMPLETED,
+          createdById: user.id,
+        },
+        {
+          tenantId: auth.tenantId,
+          customerId: closedCustomer.id,
+          title: "Cancelled work",
+          status: JobStatus.CANCELLED,
+          createdById: user.id,
+        },
+      ],
+    });
+
+    await expect(archiveCustomer(auth, closedCustomer.id)).resolves.toMatchObject({
+      id: closedCustomer.id,
+      archivedAt: expect.any(Date),
+    });
   });
 
   it("loads customer detail with recent job summaries", async () => {

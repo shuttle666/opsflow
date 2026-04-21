@@ -1,6 +1,6 @@
-import { type Prisma } from "@prisma/client";
+import { AuditAction, JobStatus, type Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
-import type { AuthContext } from "../../types/auth";
+import type { AuthContext, RequestMetadata } from "../../types/auth";
 import { ApiError } from "../../utils/api-error";
 import type {
   CreateCustomerInput,
@@ -15,6 +15,7 @@ type CustomerListItem = {
   email: string | null;
   address: string | null;
   notes: string | null;
+  archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -52,11 +53,23 @@ function normalizeOptionalString(value?: string) {
   return trimmed ? trimmed : null;
 }
 
+const openJobStatuses = [
+  JobStatus.NEW,
+  JobStatus.SCHEDULED,
+  JobStatus.IN_PROGRESS,
+  JobStatus.PENDING_REVIEW,
+];
+
 function buildCustomerSearchWhere(auth: AuthContext, query: CustomerListQueryInput) {
   const normalizedQuery = query.q?.trim();
 
   return {
     tenantId: auth.tenantId,
+    ...(query.status === "archived"
+      ? { archivedAt: { not: null } }
+      : query.status === "all"
+        ? {}
+        : { archivedAt: null }),
     ...(normalizedQuery
       ? {
           OR: [
@@ -106,6 +119,14 @@ async function getCustomerOrThrow(auth: AuthContext, customerId: string) {
     },
     select: {
       id: true,
+      name: true,
+      phone: true,
+      email: true,
+      address: true,
+      notes: true,
+      archivedAt: true,
+      createdAt: true,
+      updatedAt: true,
     },
   });
 
@@ -138,6 +159,7 @@ export async function listCustomers(
         email: true,
         address: true,
         notes: true,
+        archivedAt: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -176,6 +198,7 @@ export async function createCustomer(
       email: true,
       address: true,
       notes: true,
+      archivedAt: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -198,6 +221,7 @@ export async function getCustomerDetail(
       email: true,
       address: true,
       notes: true,
+      archivedAt: true,
       createdAt: true,
       updatedAt: true,
       createdBy: {
@@ -239,6 +263,7 @@ export async function getCustomerDetail(
     email: customer.email,
     address: customer.address,
     notes: customer.notes,
+    archivedAt: customer.archivedAt,
     createdAt: customer.createdAt,
     updatedAt: customer.updatedAt,
     createdBy: customer.createdBy,
@@ -280,8 +305,172 @@ export async function updateCustomer(
       email: true,
       address: true,
       notes: true,
+      archivedAt: true,
       createdAt: true,
       updatedAt: true,
     },
+  });
+}
+
+export async function archiveCustomer(
+  auth: AuthContext,
+  customerId: string,
+  metadata?: RequestMetadata,
+): Promise<CustomerListItem> {
+  return prisma.$transaction(async (tx) => {
+    const customer = await tx.customer.findFirst({
+      where: {
+        id: customerId,
+        tenantId: auth.tenantId,
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        address: true,
+        notes: true,
+        archivedAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!customer) {
+      throw new ApiError(404, "Customer not found.");
+    }
+
+    if (customer.archivedAt) {
+      return customer;
+    }
+
+    const openJobCount = await tx.job.count({
+      where: {
+        tenantId: auth.tenantId,
+        customerId: customer.id,
+        status: {
+          in: openJobStatuses,
+        },
+      },
+    });
+
+    if (openJobCount > 0) {
+      throw new ApiError(
+        409,
+        "Complete or cancel this customer's open jobs before deleting the customer.",
+      );
+    }
+
+    const archived = await tx.customer.update({
+      where: {
+        id: customer.id,
+      },
+      data: {
+        archivedAt: new Date(),
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        address: true,
+        notes: true,
+        archivedAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        action: AuditAction.CUSTOMER_ARCHIVED,
+        tenantId: auth.tenantId,
+        userId: auth.userId,
+        targetType: "customer",
+        targetId: customer.id,
+        ipAddress: metadata?.ipAddress,
+        userAgent: metadata?.userAgent,
+        metadata: {
+          customerName: customer.name,
+          customerEmail: customer.email,
+          customerPhone: customer.phone,
+        },
+      },
+    });
+
+    return archived;
+  });
+}
+
+export async function restoreCustomer(
+  auth: AuthContext,
+  customerId: string,
+  metadata?: RequestMetadata,
+): Promise<CustomerListItem> {
+  return prisma.$transaction(async (tx) => {
+    const customer = await tx.customer.findFirst({
+      where: {
+        id: customerId,
+        tenantId: auth.tenantId,
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        address: true,
+        notes: true,
+        archivedAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!customer) {
+      throw new ApiError(404, "Customer not found.");
+    }
+
+    if (!customer.archivedAt) {
+      return customer;
+    }
+
+    const restored = await tx.customer.update({
+      where: {
+        id: customer.id,
+      },
+      data: {
+        archivedAt: null,
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        address: true,
+        notes: true,
+        archivedAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        action: AuditAction.CUSTOMER_RESTORED,
+        tenantId: auth.tenantId,
+        userId: auth.userId,
+        targetType: "customer",
+        targetId: customer.id,
+        ipAddress: metadata?.ipAddress,
+        userAgent: metadata?.userAgent,
+        metadata: {
+          customerName: customer.name,
+          customerEmail: customer.email,
+          customerPhone: customer.phone,
+        },
+      },
+    });
+
+    return restored;
   });
 }

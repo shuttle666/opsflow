@@ -17,13 +17,20 @@ import {
   subtleButtonClassName,
 } from "@/components/ui/styles";
 import { listCustomersRequest } from "@/features/customer/customer-api";
+import {
+  DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
+  useAdaptivePageSize,
+} from "@/hooks/use-adaptive-page-size";
 import { useAuthStore } from "@/store/auth-store";
 import type { CustomerListItem, PaginationMeta } from "@/types/customer";
 
 type ContactFilter = "all" | "has_contact" | "missing_contact";
+type CustomerStatusFilter = "active" | "archived" | "all";
 
 const toolbarSelectClassName =
   "h-9 w-full rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3 pr-8 text-[13px] text-[var(--color-text)] shadow-sm outline-none transition focus:border-[var(--color-brand)] focus:ring-[3px] focus:ring-[var(--color-brand-soft)] sm:w-[160px]";
+
+const CUSTOMER_ROW_HEIGHT_PX = 57;
 
 function canManageCustomers(role: string | undefined) {
   return role === "OWNER" || role === "MANAGER";
@@ -60,20 +67,48 @@ export default function CustomersPage() {
   const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState("");
   const [contactFilter, setContactFilter] = useState<ContactFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<CustomerStatusFilter>("active");
   const [sort, setSort] = useState<
     "createdAt_desc" | "createdAt_asc" | "name_asc" | "name_desc"
   >("createdAt_desc");
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState<PaginationMeta>({
     page: 1,
-    pageSize: 10,
+    pageSize: DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
     total: 0,
     totalPages: 1,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const allowManage = canManageCustomers(currentTenant?.role);
+  const visibleCustomers = useMemo(() => {
+    if (contactFilter === "has_contact") {
+      return customers.filter((customer) => customer.phone || customer.email);
+    }
+
+    if (contactFilter === "missing_contact") {
+      return customers.filter((customer) => !customer.phone && !customer.email);
+    }
+
+    return customers;
+  }, [contactFilter, customers]);
+
+  const {
+    containerRef: customerTableAreaRef,
+    hasMeasured: hasMeasuredPageSize,
+    itemAreaRef: customerTableBodyRef,
+    pageSize: adaptivePageSize,
+  } = useAdaptivePageSize<HTMLDivElement, HTMLTableSectionElement>({
+    itemHeight: CUSTOMER_ROW_HEIGHT_PX,
+    dependencies: [error, isLoading, visibleCustomers.length],
+  });
+
   useEffect(() => {
+    if (!hasMeasuredPageSize) {
+      return;
+    }
+
     let cancelled = false;
 
     void (async () => {
@@ -85,7 +120,8 @@ export default function CustomersPage() {
           listCustomersRequest(accessToken, {
             q: query,
             page,
-            pageSize: 10,
+            pageSize: adaptivePageSize,
+            status: statusFilter,
             sort,
           }),
         );
@@ -93,6 +129,11 @@ export default function CustomersPage() {
         if (!cancelled) {
           setCustomers(result.items);
           setPagination(result.pagination);
+          setPage((current) =>
+            current > result.pagination.totalPages
+              ? result.pagination.totalPages
+              : current,
+          );
         }
       } catch (loadError) {
         if (!cancelled) {
@@ -112,20 +153,15 @@ export default function CustomersPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, query, sort, withAccessTokenRetry]);
-
-  const allowManage = canManageCustomers(currentTenant?.role);
-  const visibleCustomers = useMemo(() => {
-    if (contactFilter === "has_contact") {
-      return customers.filter((customer) => customer.phone || customer.email);
-    }
-
-    if (contactFilter === "missing_contact") {
-      return customers.filter((customer) => !customer.phone && !customer.email);
-    }
-
-    return customers;
-  }, [contactFilter, customers]);
+  }, [
+    adaptivePageSize,
+    hasMeasuredPageSize,
+    page,
+    query,
+    sort,
+    statusFilter,
+    withAccessTokenRetry,
+  ]);
 
   return (
     <AppShell
@@ -171,6 +207,19 @@ export default function CustomersPage() {
                   <option value="all">All contacts</option>
                   <option value="has_contact">Has contact</option>
                   <option value="missing_contact">Missing contact</option>
+                </select>
+                <select
+                  aria-label="Customer status"
+                  value={statusFilter}
+                  onChange={(event) => {
+                    setPage(1);
+                    setStatusFilter(event.target.value as CustomerStatusFilter);
+                  }}
+                  className={toolbarSelectClassName}
+                >
+                  <option value="active">Active</option>
+                  <option value="archived">Archived</option>
+                  <option value="all">All statuses</option>
                 </select>
                 <select
                   aria-label="Sort customers"
@@ -228,83 +277,105 @@ export default function CustomersPage() {
             </div>
           }
         >
-          {isLoading ? (
-            <div className="p-4">
-              <LoadingPanel label="Loading customers..." />
-            </div>
-          ) : visibleCustomers.length === 0 ? (
-            <div className="p-4">
-              <EmptyStatePanel
-                title={customers.length === 0 ? "No customers found" : "No customers match this filter"}
-                description={
-                  customers.length === 0
-                    ? "Adjust the current search or create the first customer profile for this tenant."
-                    : "Try a different contact filter or adjust the current search."
-                }
-                actionLabel={customers.length === 0 && allowManage ? "Create customer" : undefined}
-                actionHref={customers.length === 0 && allowManage ? "/customers/new" : undefined}
-              />
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full border-collapse text-sm">
-                <thead className="border-b border-[var(--color-app-border)] text-left text-[11px] uppercase text-[var(--color-text-muted)]">
-                  <tr>
-                    <th className="px-4 py-2.5 font-semibold">Name</th>
-                    <th className="px-4 py-2.5 font-semibold">Email</th>
-                    <th className="px-4 py-2.5 font-semibold">Phone</th>
-                    <th className="px-4 py-2.5 font-semibold">Status</th>
-                    <th className="px-4 py-2.5 font-semibold">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--color-app-border)] text-[var(--color-text-secondary)]">
-                  {visibleCustomers.map((customer) => (
-                    <tr
-                      key={customer.id}
-                      className="group transition hover:bg-[var(--color-app-panel-muted)]"
-                    >
-                      <td className="px-4 py-3">
-                        <Link
-                          href={`/customers/${customer.id}`}
-                          className="flex items-center gap-3 transition hover:text-[var(--color-brand)]"
-                        >
-                          <div
+          <div ref={customerTableAreaRef}>
+            {isLoading ? (
+              <div className="p-4">
+                <LoadingPanel label="Loading customers..." />
+              </div>
+            ) : visibleCustomers.length === 0 ? (
+              <div className="p-4">
+                <EmptyStatePanel
+                  title={customers.length === 0 ? "No customers found" : "No customers match this filter"}
+                  description={
+                    customers.length === 0
+                      ? statusFilter === "archived"
+                        ? "No archived customers match the current search."
+                        : "Adjust the current search or create the first customer profile for this tenant."
+                      : "Try a different contact filter or adjust the current search."
+                  }
+                  actionLabel={
+                    customers.length === 0 && allowManage && statusFilter !== "archived"
+                      ? "Create customer"
+                      : undefined
+                  }
+                  actionHref={
+                    customers.length === 0 && allowManage && statusFilter !== "archived"
+                      ? "/customers/new"
+                      : undefined
+                  }
+                />
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full border-collapse text-sm">
+                  <thead className="border-b border-[var(--color-app-border)] text-left text-[11px] uppercase text-[var(--color-text-muted)]">
+                    <tr>
+                      <th className="px-4 py-2.5 font-semibold">Name</th>
+                      <th className="px-4 py-2.5 font-semibold">Email</th>
+                      <th className="px-4 py-2.5 font-semibold">Phone</th>
+                      <th className="px-4 py-2.5 font-semibold">Status</th>
+                      <th className="px-4 py-2.5 font-semibold">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody
+                    ref={customerTableBodyRef}
+                    className="divide-y divide-[var(--color-app-border)] text-[var(--color-text-secondary)]"
+                  >
+                    {visibleCustomers.map((customer) => (
+                      <tr
+                        key={customer.id}
+                        className="group transition hover:bg-[var(--color-app-panel-muted)]"
+                      >
+                        <td className="px-4 py-3">
+                          <Link
+                            href={`/customers/${customer.id}`}
+                            className="flex items-center gap-3 transition hover:text-[var(--color-brand)]"
+                          >
+                            <div
+                              className={cn(
+                                "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold",
+                                avatarColor(customer.name),
+                              )}
+                            >
+                              {initialsFor(customer.name)}
+                            </div>
+                            <span className="font-semibold text-[var(--color-text)]">{customer.name}</span>
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3">
+                          {customer.email ?? "-"}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs">
+                          {customer.phone ?? "-"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
                             className={cn(
-                              "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold",
-                              avatarColor(customer.name),
+                              badgeBaseClassName,
+                              customer.archivedAt
+                                ? "border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] text-[var(--color-text-secondary)]"
+                                : "border-[var(--color-app-border)] bg-[var(--color-success-soft)] text-[var(--color-success)]",
                             )}
                           >
-                            {initialsFor(customer.name)}
-                          </div>
-                          <span className="font-semibold text-[var(--color-text)]">{customer.name}</span>
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3">
-                        {customer.email ?? "-"}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs">
-                        {customer.phone ?? "-"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={cn(badgeBaseClassName, "border-[var(--color-app-border)] bg-[var(--color-success-soft)] text-[var(--color-success)]")}>
-                          <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
-                          Active
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Link
-                          href={`/customers/${customer.id}`}
-                          className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--color-text-muted)] transition hover:bg-[var(--color-app-panel-muted)] hover:text-[var(--color-text)]"
-                        >
-                          <MoreHorizontal className="h-5 w-5" />
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
+                            {customer.archivedAt ? "Archived" : "Active"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Link
+                            href={`/customers/${customer.id}`}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--color-text-muted)] transition hover:bg-[var(--color-app-panel-muted)] hover:text-[var(--color-text)]"
+                          >
+                            <MoreHorizontal className="h-5 w-5" />
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </DataTableCard>
       </AuthGuard>
     </AppShell>

@@ -35,8 +35,11 @@ This document is aligned with the Express routers under `server/src/routes` and 
 - `POST /customers` - owner/manager
 - `GET /customers/:customerId`
 - `PATCH /customers/:customerId` - owner/manager
+- `DELETE /customers/:customerId` - owner/manager, archives customer
+- `POST /customers/:customerId/restore` - owner/manager
 
-Customer fields include `name`, `phone`, `email`, `address`, and `notes`.
+Customer fields include `name`, `phone`, `email`, `address`, `notes`, and `archivedAt`.
+Customer list accepts `status=active|archived|all` and defaults to `active`.
 
 ## Jobs
 - `GET /jobs` - owner/manager

@@ -64,6 +64,11 @@ function NewJobPageContent() {
           const selected = await withAccessTokenRetry((accessToken) =>
             getCustomerDetailRequest(accessToken, selectedCustomerId),
           );
+
+          if (selected.archivedAt) {
+            throw new Error("Archived customers cannot be used for new jobs.");
+          }
+
           items = [
             ...items,
             {
@@ -73,6 +78,7 @@ function NewJobPageContent() {
               email: selected.email ?? null,
               address: selected.address ?? null,
               notes: selected.notes ?? null,
+              archivedAt: selected.archivedAt,
               createdAt: selected.createdAt,
               updatedAt: selected.updatedAt,
             },

@@ -194,6 +194,97 @@ describeIfDb("customer api integration", () => {
       });
 
     expect(patchRes.status).toBe(403);
+
+    const deleteRes = await request(app)
+      .delete(`/api/customers/${customer.id}`)
+      .set("Authorization", `Bearer ${staffSession.accessToken}`);
+
+    expect(deleteRes.status).toBe(403);
+
+    const restoreRes = await request(app)
+      .post(`/api/customers/${customer.id}/restore`)
+      .set("Authorization", `Bearer ${staffSession.accessToken}`);
+
+    expect(restoreRes.status).toBe(403);
+  });
+
+  it("archives, filters, restores, and blocks customers with open jobs", async () => {
+    const { tenant, user, accessToken } = await seedTenantUser({
+      email: "owner@customer-archive-api.test",
+      displayName: "Owner Archive API",
+      role: MembershipRole.OWNER,
+      tenantName: "Customer Archive API Tenant",
+      tenantSlug: "customer-archive-api-tenant",
+    });
+
+    const activeCustomer = await prisma.customer.create({
+      data: {
+        tenantId: tenant.id,
+        createdById: user.id,
+        name: "Active API Customer",
+      },
+    });
+    const archivableCustomer = await prisma.customer.create({
+      data: {
+        tenantId: tenant.id,
+        createdById: user.id,
+        name: "Archivable API Customer",
+      },
+    });
+    const openJobCustomer = await prisma.customer.create({
+      data: {
+        tenantId: tenant.id,
+        createdById: user.id,
+        name: "Open Job API Customer",
+      },
+    });
+    await prisma.job.create({
+      data: {
+        tenantId: tenant.id,
+        customerId: openJobCustomer.id,
+        title: "Open job",
+        status: JobStatus.IN_PROGRESS,
+        createdById: user.id,
+      },
+    });
+
+    const blocked = await request(app)
+      .delete(`/api/customers/${openJobCustomer.id}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(blocked.status).toBe(409);
+
+    const archived = await request(app)
+      .delete(`/api/customers/${archivableCustomer.id}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(archived.status).toBe(200);
+    expect(archived.body.data.archivedAt).toBeTruthy();
+
+    const activeList = await request(app)
+      .get("/api/customers?status=active&page=1&pageSize=10&sort=name_asc")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(activeList.status).toBe(200);
+    expect(activeList.body.data.map((item: { id: string }) => item.id)).toContain(activeCustomer.id);
+    expect(activeList.body.data.map((item: { id: string }) => item.id)).not.toContain(archivableCustomer.id);
+
+    const archivedList = await request(app)
+      .get("/api/customers?status=archived&page=1&pageSize=10&sort=name_asc")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(archivedList.status).toBe(200);
+    expect(archivedList.body.data.map((item: { id: string }) => item.id)).toEqual([
+      archivableCustomer.id,
+    ]);
+
+    const allList = await request(app)
+      .get("/api/customers?status=all&page=1&pageSize=10&sort=name_asc")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(allList.status).toBe(200);
+    expect(allList.body.data).toHaveLength(3);
+
+    const restored = await request(app)
+      .post(`/api/customers/${archivableCustomer.id}/restore`)
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(restored.status).toBe(200);
+    expect(restored.body.data.archivedAt).toBeNull();
   });
 
   it("returns 404 when accessing a customer from another tenant", async () => {
@@ -230,7 +321,17 @@ describeIfDb("customer api integration", () => {
       .set("Authorization", `Bearer ${secondary.accessToken}`)
       .send({
         name: "Should Fail",
-      });
+    });
     expect(update.status).toBe(404);
+
+    const archive = await request(app)
+      .delete(`/api/customers/${customer.id}`)
+      .set("Authorization", `Bearer ${secondary.accessToken}`);
+    expect(archive.status).toBe(404);
+
+    const restore = await request(app)
+      .post(`/api/customers/${customer.id}/restore`)
+      .set("Authorization", `Bearer ${secondary.accessToken}`);
+    expect(restore.status).toBe(404);
   });
 });

@@ -34,6 +34,9 @@ function buildCustomerQuery(query: CustomerListQuery) {
   if (query.pageSize) {
     params.set("pageSize", String(query.pageSize));
   }
+  if (query.status) {
+    params.set("status", query.status);
+  }
   if (query.sort) {
     params.set("sort", query.sort);
   }
@@ -108,4 +111,33 @@ export async function updateCustomerRequest(
   );
 
   return requireData(response, "Update customer response is missing payload.");
+}
+
+export async function archiveCustomerRequest(
+  accessToken: string,
+  customerId: string,
+) {
+  const response = await apiClient.delete<ApiSuccessResponse<CustomerListItem>>(
+    `/customers/${customerId}`,
+    {
+      headers: authHeader(accessToken),
+    },
+  );
+
+  return requireData(response, "Archive customer response is missing payload.");
+}
+
+export async function restoreCustomerRequest(
+  accessToken: string,
+  customerId: string,
+) {
+  const response = await apiClient.post<ApiSuccessResponse<CustomerListItem>>(
+    `/customers/${customerId}/restore`,
+    undefined,
+    {
+      headers: authHeader(accessToken),
+    },
+  );
+
+  return requireData(response, "Restore customer response is missing payload.");
 }

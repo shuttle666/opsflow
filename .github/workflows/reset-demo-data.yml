@@ -1,0 +1,72 @@
+name: Reset Demo Data
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 16 * * *"
+
+concurrency:
+  group: reset-demo-data
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  reset-demo-data:
+    name: reset-demo-data
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      EC2_HOST: ${{ secrets.EC2_HOST }}
+      EC2_PORT: ${{ secrets.EC2_PORT }}
+      EC2_USER: ${{ secrets.EC2_USER }}
+      EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      API_HEALTH_URL: ${{ secrets.API_HEALTH_URL }}
+      APP_URL: ${{ secrets.APP_URL }}
+
+    steps:
+      - name: Validate reset configuration
+        run: |
+          set -euo pipefail
+          : "${EC2_HOST:?EC2_HOST secret is required}"
+          : "${EC2_USER:?EC2_USER secret is required}"
+          : "${EC2_SSH_KEY:?EC2_SSH_KEY secret is required}"
+          : "${DEPLOY_PATH:?DEPLOY_PATH secret is required}"
+
+          if [ -z "${EC2_PORT:-}" ]; then
+            echo "EC2_PORT is not set; defaulting to 22."
+            echo "EC2_PORT=22" >> "$GITHUB_ENV"
+          fi
+
+      - name: Checkout reset script
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/opsflow_demo_reset_key
+          chmod 600 ~/.ssh/opsflow_demo_reset_key
+          ssh-keyscan -p "$EC2_PORT" "$EC2_HOST" >> ~/.ssh/known_hosts
+
+      - name: Upload reset script
+        run: |
+          set -euo pipefail
+          scp \
+            -i ~/.ssh/opsflow_demo_reset_key \
+            -P "$EC2_PORT" \
+            infra/scripts/reset-demo-data.sh \
+            "$EC2_USER@$EC2_HOST:/tmp/opsflow-reset-demo-data.sh"
+
+      - name: Reset demo data on EC2
+        run: |
+          set -euo pipefail
+          remote_env="$(printf "DEPLOY_PATH=%q API_HEALTH_URL=%q APP_URL=%q" "$DEPLOY_PATH" "${API_HEALTH_URL:-}" "${APP_URL:-}")"
+
+          ssh \
+            -i ~/.ssh/opsflow_demo_reset_key \
+            -p "$EC2_PORT" \
+            "$EC2_USER@$EC2_HOST" \
+            "$remote_env bash /tmp/opsflow-reset-demo-data.sh"

@@ -11,6 +11,7 @@ OpsFlow is a multi-tenant operations platform for field service teams, covering 
 - Owner: `owner@acme.example` / `owner-password-123`
 - Manager: `manager@acme.example` / `manager-password-123`
 - Staff: `staff@acme.example` / `staff-password-123`
+- Additional local staff: `staff02@acme.example` through `staff10@acme.example` / `staff-password-123`
 
 ## Key Features
 
@@ -55,6 +56,18 @@ The project is currently deployed on AWS:
 - containerized services managed with Docker Compose
 - HTTPS served through Nginx and Certbot
 
+### Production Demo Data
+
+The public demo uses the same core login accounts as local development, but it resets to a smaller data set: about 6 team members, 10 customers, and 20 jobs. The reset is tenant-scoped to `Acme Home Services`, so visitor-created tenants are not deleted.
+
+GitHub Actions runs the reset workflow daily and it can also be triggered manually from the Actions tab. The workflow SSHs into EC2 and runs:
+
+```bash
+DEPLOY_PATH=/path/to/opsflow infra/scripts/reset-demo-data.sh
+```
+
+The production demo reset requires `DEMO_SEED_CONFIRM=reset-production-demo` internally and only refreshes the fixed demo tenant.
+
 ## Local Development
 
 ### Project Structure
@@ -91,6 +104,27 @@ cd client && pnpm test
 cd server && pnpm typecheck && pnpm build && pnpm test
 cd server && pnpm prisma:migrate:deploy && pnpm prisma:seed
 cd server && pnpm db:reset
+```
+
+### Development Seed Data
+
+The Prisma seed is development-only demo data for the Docker/local PostgreSQL database. It resets the database and creates one `Acme Home Services` tenant with demo accounts, around 80 customers, around 250 jobs, archived customers, cancelled jobs, status history, completion reviews, and audit activity.
+
+Job dates are generated relative to the day the seed runs, so scheduled and in-progress work stays current when you reseed later. To reproduce a specific date window, set `DEMO_SEED_BASE_DATE`:
+
+```bash
+docker compose -f docker-compose.dev.yml up --build -d
+cd server && pnpm db:reset
+DEMO_SEED_BASE_DATE=2026-04-21 pnpm prisma:seed
+```
+
+The seed refuses to run against non-default database URLs unless `ALLOW_NON_DEV_SEED=1` is set. Use that override only for a known safe development database.
+
+To test the production-sized demo seed against a safe local database:
+
+```bash
+cd server
+DEMO_SEED_CONFIRM=reset-production-demo pnpm demo:seed:production
 ```
 
 ### Local Ports

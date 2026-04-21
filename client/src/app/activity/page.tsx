@@ -9,9 +9,15 @@ import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
 import { SummaryCard } from "@/components/ui/info-cards";
 import { subtleButtonClassName } from "@/components/ui/styles";
 import { listActivityFeedRequest } from "@/features/activity/activity-api";
+import {
+  DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
+  useAdaptivePageSize,
+} from "@/hooks/use-adaptive-page-size";
 import { useAuthStore } from "@/store/auth-store";
 import type { MembershipRole } from "@/types/auth";
 import type { ActivityFeedItem, ActivityFeedPagination } from "@/types/activity";
+
+const ACTIVITY_ROW_HEIGHT_PX = 65;
 
 function canReviewActivity(role: MembershipRole | undefined) {
   return role === "OWNER" || role === "MANAGER";
@@ -30,7 +36,7 @@ export default function ActivityPage() {
   const [items, setItems] = useState<ActivityFeedItem[]>([]);
   const [pagination, setPagination] = useState<ActivityFeedPagination>({
     page: 1,
-    pageSize: 10,
+    pageSize: DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
     total: 0,
     totalPages: 1,
   });
@@ -39,18 +45,31 @@ export default function ActivityPage() {
   const [error, setError] = useState<string | null>(null);
 
   const allowReview = canReviewActivity(currentTenant?.role);
+  const {
+    containerRef: activityListAreaRef,
+    hasMeasured: hasMeasuredPageSize,
+    itemAreaRef: activityListContentRef,
+    pageSize: adaptivePageSize,
+  } = useAdaptivePageSize<HTMLDivElement, HTMLDivElement>({
+    itemHeight: ACTIVITY_ROW_HEIGHT_PX,
+    dependencies: [error, isLoading, items.length],
+  });
 
   useEffect(() => {
     if (!allowReview) {
       setItems([]);
       setPagination({
         page: 1,
-        pageSize: 10,
+        pageSize: DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
         total: 0,
         totalPages: 1,
       });
       setIsLoading(false);
       setError(null);
+      return;
+    }
+
+    if (!hasMeasuredPageSize) {
       return;
     }
 
@@ -62,12 +81,17 @@ export default function ActivityPage() {
 
       try {
         const result = await withAccessTokenRetry((accessToken) =>
-          listActivityFeedRequest(accessToken, { page, pageSize: 10 }),
+          listActivityFeedRequest(accessToken, { page, pageSize: adaptivePageSize }),
         );
 
         if (!cancelled) {
           setItems(mapItems(result.items));
           setPagination(result.pagination);
+          setPage((current) =>
+            current > result.pagination.totalPages
+              ? result.pagination.totalPages
+              : current,
+          );
         }
       } catch (loadError) {
         if (!cancelled) {
@@ -85,7 +109,13 @@ export default function ActivityPage() {
     return () => {
       cancelled = true;
     };
-  }, [allowReview, page, withAccessTokenRetry]);
+  }, [
+    adaptivePageSize,
+    allowReview,
+    hasMeasuredPageSize,
+    page,
+    withAccessTokenRetry,
+  ]);
 
   return (
     <AppShell title="Activity Log">
@@ -105,14 +135,20 @@ export default function ActivityPage() {
 
             {error ? <InlineErrorBanner message={error} /> : null}
 
-            {!error && !isLoading && items.length === 0 ? (
-              <EmptyStatePanel
-                title="No activity recorded"
-                description="System and workflow events will appear here once the workspace becomes active."
-              />
-            ) : (
-              <ActivityLogCard items={items} loading={isLoading} />
-            )}
+            <div ref={activityListAreaRef}>
+              {!error && !isLoading && items.length === 0 ? (
+                <EmptyStatePanel
+                  title="No activity recorded"
+                  description="System and workflow events will appear here once the workspace becomes active."
+                />
+              ) : (
+                <ActivityLogCard
+                  contentRef={activityListContentRef}
+                  items={items}
+                  loading={isLoading}
+                />
+              )}
+            </div>
 
             <div className="flex flex-col gap-3 text-sm text-[var(--color-text-secondary)] sm:flex-row sm:items-center sm:justify-between">
               <p>

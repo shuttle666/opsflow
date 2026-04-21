@@ -1,10 +1,14 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TeamPage from "@/app/team/page";
 import { listMembershipsRequest, updateMembershipRequest } from "@/features/membership";
 import { useAuthStore } from "@/store/auth-store";
+import {
+  mockAdaptivePageSizeViewport,
+  resetAdaptivePageSizeViewportMock,
+} from "@/test/adaptive-page-size";
 
 vi.mock("@/components/ui/app-shell", () => ({
   AppShell: ({
@@ -52,6 +56,7 @@ vi.mock("@/features/membership", () => ({
 describe("team page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAdaptivePageSizeViewport({ top: 300, innerHeight: 900 });
     useAuthStore.setState({
       status: "authenticated",
       user: {
@@ -71,6 +76,10 @@ describe("team page", () => {
       withAccessTokenRetry: async <T,>(request: (accessToken: string) => Promise<T>) =>
         request("access-token"),
     });
+  });
+
+  afterEach(() => {
+    resetAdaptivePageSizeViewportMock();
   });
 
   it("loads members and lets owner save membership changes", async () => {
@@ -118,6 +127,44 @@ describe("team page", () => {
         "access-token",
         "membership-1",
         { role: "MANAGER" },
+      );
+    });
+  });
+
+  it("requests more members based on visible grid rows and columns", async () => {
+    mockAdaptivePageSizeViewport({
+      top: 300,
+      innerHeight: 1500,
+      innerWidth: 1600,
+    });
+    vi.mocked(listMembershipsRequest).mockResolvedValue({
+      items: [],
+      pagination: { page: 1, pageSize: 18, total: 0, totalPages: 1 },
+    });
+
+    render(<TeamPage />);
+
+    await waitFor(() => {
+      expect(listMembershipsRequest).toHaveBeenCalledWith(
+        "access-token",
+        expect.objectContaining({ pageSize: 18 }),
+      );
+    });
+  });
+
+  it("keeps at least ten members per page on short viewports", async () => {
+    mockAdaptivePageSizeViewport({ top: 780, innerHeight: 800 });
+    vi.mocked(listMembershipsRequest).mockResolvedValue({
+      items: [],
+      pagination: { page: 1, pageSize: 10, total: 0, totalPages: 1 },
+    });
+
+    render(<TeamPage />);
+
+    await waitFor(() => {
+      expect(listMembershipsRequest).toHaveBeenCalledWith(
+        "access-token",
+        expect.objectContaining({ pageSize: 10 }),
       );
     });
   });

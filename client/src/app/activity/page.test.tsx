@@ -1,10 +1,14 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ActivityPage from "@/app/activity/page";
 import { listActivityFeedRequest } from "@/features/activity/activity-api";
 import { useAuthStore } from "@/store/auth-store";
+import {
+  mockAdaptivePageSizeViewport,
+  resetAdaptivePageSizeViewportMock,
+} from "@/test/adaptive-page-size";
 
 vi.mock("@/components/ui/app-shell", () => ({
   AppShell: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -21,6 +25,7 @@ vi.mock("@/features/activity/activity-api", () => ({
 describe("activity page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAdaptivePageSizeViewport({ top: 300, innerHeight: 900 });
     useAuthStore.setState({
       status: "authenticated",
       user: {
@@ -40,6 +45,10 @@ describe("activity page", () => {
       withAccessTokenRetry: async <T,>(request: (accessToken: string) => Promise<T>) =>
         request("access-token"),
     });
+  });
+
+  afterEach(() => {
+    resetAdaptivePageSizeViewportMock();
   });
 
   it("loads and renders the activity log for owner and manager roles", async () => {
@@ -84,6 +93,40 @@ describe("activity page", () => {
       });
     });
     expect(await screen.findByText("Evidence added")).toBeInTheDocument();
+  });
+
+  it("requests more activity rows when the viewport can fit more rows", async () => {
+    mockAdaptivePageSizeViewport({ top: 200, innerHeight: 1500 });
+    vi.mocked(listActivityFeedRequest).mockResolvedValue({
+      items: [],
+      pagination: { page: 1, pageSize: 19, total: 0, totalPages: 1 },
+    });
+
+    render(<ActivityPage />);
+
+    await waitFor(() => {
+      expect(listActivityFeedRequest).toHaveBeenCalledWith("access-token", {
+        page: 1,
+        pageSize: 19,
+      });
+    });
+  });
+
+  it("keeps at least ten activity rows per page on short viewports", async () => {
+    mockAdaptivePageSizeViewport({ top: 780, innerHeight: 800 });
+    vi.mocked(listActivityFeedRequest).mockResolvedValue({
+      items: [],
+      pagination: { page: 1, pageSize: 10, total: 0, totalPages: 1 },
+    });
+
+    render(<ActivityPage />);
+
+    await waitFor(() => {
+      expect(listActivityFeedRequest).toHaveBeenCalledWith("access-token", {
+        page: 1,
+        pageSize: 10,
+      });
+    });
   });
 
   it("blocks staff from activity log access", () => {

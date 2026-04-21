@@ -3,6 +3,7 @@ import { BellRing, CheckCircle2, FileClock, History } from "@/components/ui/icon
 import { LoadingPanel } from "@/components/ui/loading-panel";
 import { cn, surfaceClassName } from "@/components/ui/styles";
 import type { ActivityFeedItem } from "@/types/activity";
+import type { Ref } from "react";
 
 type ActivityLogCardProps = {
   items: ActivityFeedItem[];
@@ -10,6 +11,7 @@ type ActivityLogCardProps = {
   title?: string;
   emptyTitle?: string;
   emptyDescription?: string;
+  contentRef?: Ref<HTMLDivElement>;
 };
 
 function toneClassName(tone: ActivityFeedItem["tone"]) {
@@ -44,6 +46,7 @@ export function ActivityLogCard({
   title = "Activity Log",
   emptyTitle = "No activity yet",
   emptyDescription = "Tenant events will appear here as work progresses.",
+  contentRef,
 }: ActivityLogCardProps) {
   return (
     <div className={cn(surfaceClassName, "flex flex-col overflow-hidden p-0")}>
@@ -55,13 +58,13 @@ export function ActivityLogCard({
       </div>
 
       {loading ? (
-        <div className="p-4">
+        <div ref={contentRef} className="p-4">
           <LoadingPanel label="Loading activity log..." compact />
         </div>
       ) : null}
 
       {!loading && items.length === 0 ? (
-        <div className="p-4">
+        <div ref={contentRef} className="p-4">
           <EmptyStatePanel
             compact
             title={emptyTitle}
@@ -71,7 +74,7 @@ export function ActivityLogCard({
       ) : null}
 
       {!loading && items.length > 0 ? (
-        <div className="flex flex-col divide-y divide-[var(--color-app-border)] overflow-y-auto">
+        <div ref={contentRef} className="flex flex-col divide-y divide-[var(--color-app-border)] overflow-y-auto">
           {items.map((item) => {
             const Icon = iconForTone(item.tone);
 

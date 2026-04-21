@@ -1,9 +1,13 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import MyJobsPage from "@/app/jobs/my/page";
 import { listMyJobsRequest } from "@/features/job/job-api";
 import { useAuthStore } from "@/store/auth-store";
+import {
+  mockAdaptivePageSizeViewport,
+  resetAdaptivePageSizeViewportMock,
+} from "@/test/adaptive-page-size";
 
 vi.mock("next/link", () => ({
   default: ({
@@ -40,6 +44,7 @@ vi.mock("@/features/job/job-api", () => ({
 describe("my jobs page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAdaptivePageSizeViewport({ top: 300, innerHeight: 900 });
     useAuthStore.setState({
       status: "authenticated",
       user: {
@@ -59,6 +64,10 @@ describe("my jobs page", () => {
       withAccessTokenRetry: async <T,>(request: (accessToken: string) => Promise<T>) =>
         request("access-token"),
     });
+  });
+
+  afterEach(() => {
+    resetAdaptivePageSizeViewportMock();
   });
 
   it("loads assigned jobs", async () => {
@@ -85,5 +94,39 @@ describe("my jobs page", () => {
 
     expect(await screen.findByText("Assigned visit")).toBeInTheDocument();
     expect(screen.getByText("Noah Thompson")).toBeInTheDocument();
+  });
+
+  it("requests more assigned jobs when the viewport can fit more rows", async () => {
+    mockAdaptivePageSizeViewport({ top: 180, innerHeight: 1500 });
+    vi.mocked(listMyJobsRequest).mockResolvedValue({
+      items: [],
+      pagination: { page: 1, pageSize: 22, total: 0, totalPages: 1 },
+    });
+
+    render(<MyJobsPage />);
+
+    await waitFor(() => {
+      expect(listMyJobsRequest).toHaveBeenCalledWith(
+        "access-token",
+        expect.objectContaining({ pageSize: 22 }),
+      );
+    });
+  });
+
+  it("keeps at least ten assigned jobs per page on short viewports", async () => {
+    mockAdaptivePageSizeViewport({ top: 780, innerHeight: 800 });
+    vi.mocked(listMyJobsRequest).mockResolvedValue({
+      items: [],
+      pagination: { page: 1, pageSize: 10, total: 0, totalPages: 1 },
+    });
+
+    render(<MyJobsPage />);
+
+    await waitFor(() => {
+      expect(listMyJobsRequest).toHaveBeenCalledWith(
+        "access-token",
+        expect.objectContaining({ pageSize: 10 }),
+      );
+    });
   });
 });

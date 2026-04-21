@@ -19,9 +19,15 @@ import {
 } from "@/components/ui/styles";
 import { listCustomersRequest } from "@/features/customer/customer-api";
 import { formatDateTime, formatScheduleRange, listJobsRequest } from "@/features/job";
+import {
+  DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
+  useAdaptivePageSize,
+} from "@/hooks/use-adaptive-page-size";
 import { useAuthStore } from "@/store/auth-store";
 import type { CustomerListItem, PaginationMeta } from "@/types/customer";
 import type { JobListItem, JobStatus } from "@/types/job";
+
+const JOB_ROW_HEIGHT_PX = 57;
 
 const jobStatuses: Array<{ value: JobStatus; label: string }> = [
   { value: "NEW", label: formatBadgeLabel("NEW") },
@@ -51,15 +57,25 @@ export default function JobsPage() {
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState<PaginationMeta>({
     page: 1,
-    pageSize: 10,
+    pageSize: DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
     total: 0,
     totalPages: 1,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const allowManage = canManageJobs(currentTenant?.role);
+  const {
+    containerRef: jobTableAreaRef,
+    hasMeasured: hasMeasuredPageSize,
+    itemAreaRef: jobTableBodyRef,
+    pageSize: adaptivePageSize,
+  } = useAdaptivePageSize<HTMLDivElement, HTMLTableSectionElement>({
+    itemHeight: JOB_ROW_HEIGHT_PX,
+    dependencies: [error, isLoading, jobs.length],
+  });
 
   useEffect(() => {
-    if (!canManageJobs(currentTenant?.role)) {
+    if (!allowManage) {
       setCustomers([]);
       return;
     }
@@ -89,19 +105,23 @@ export default function JobsPage() {
     return () => {
       cancelled = true;
     };
-  }, [currentTenant?.role, withAccessTokenRetry]);
+  }, [allowManage, withAccessTokenRetry]);
 
   useEffect(() => {
-    if (!canManageJobs(currentTenant?.role)) {
+    if (!allowManage) {
       setJobs([]);
       setPagination({
         page: 1,
-        pageSize: 10,
+        pageSize: DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
         total: 0,
         totalPages: 1,
       });
       setIsLoading(false);
       setError(null);
+      return;
+    }
+
+    if (!hasMeasuredPageSize) {
       return;
     }
 
@@ -118,7 +138,7 @@ export default function JobsPage() {
             status: statusFilter || undefined,
             customerId: customerFilter || undefined,
             page,
-            pageSize: 10,
+            pageSize: adaptivePageSize,
             sort,
           }),
         );
@@ -126,6 +146,11 @@ export default function JobsPage() {
         if (!cancelled) {
           setJobs(result.items);
           setPagination(result.pagination);
+          setPage((current) =>
+            current > result.pagination.totalPages
+              ? result.pagination.totalPages
+              : current,
+          );
         }
       } catch (loadError) {
         if (!cancelled) {
@@ -143,9 +168,17 @@ export default function JobsPage() {
     return () => {
       cancelled = true;
     };
-  }, [currentTenant?.role, customerFilter, page, query, sort, statusFilter, withAccessTokenRetry]);
-
-  const allowManage = canManageJobs(currentTenant?.role);
+  }, [
+    adaptivePageSize,
+    allowManage,
+    customerFilter,
+    hasMeasuredPageSize,
+    page,
+    query,
+    sort,
+    statusFilter,
+    withAccessTokenRetry,
+  ]);
 
   return (
     <AppShell
@@ -295,67 +328,72 @@ export default function JobsPage() {
               </div>
             }
           >
-            {isLoading ? (
-              <div className="p-4">
-                <LoadingPanel label="Loading jobs..." />
-              </div>
-            ) : jobs.length === 0 ? (
-              <div className="p-4">
-                <EmptyStatePanel
-                  title="No jobs found"
-                  description="Try different filters or create a new work order for one of your customers."
-                  actionLabel="Create job"
-                  actionHref="/jobs/new"
-                />
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full border-collapse text-sm">
-                  <thead className="border-b border-[var(--color-app-border)] text-left text-[11px] uppercase text-[var(--color-text-muted)]">
-                    <tr>
-                      <th className="px-4 py-2.5 font-semibold">Title</th>
-                      <th className="px-4 py-2.5 font-semibold">Customer</th>
-                      <th className="px-4 py-2.5 font-semibold">Status</th>
-                      <th className="px-4 py-2.5 font-semibold">Scheduled</th>
-                      <th className="px-4 py-2.5 font-semibold">Assigned</th>
-                      <th className="px-4 py-2.5 font-semibold">Updated</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--color-app-border)] text-[var(--color-text-secondary)]">
-                    {jobs.map((job) => (
-                      <tr
-                        key={job.id}
-                        className="group transition hover:bg-[var(--color-app-panel-muted)]"
-                      >
-                        <td className="px-4 py-3 font-semibold text-[var(--color-text)]">
-                          <Link
-                            href={`/jobs/${job.id}`}
-                            className="transition hover:text-[var(--color-brand)]"
-                          >
-                            {job.title}
-                          </Link>
-                        </td>
-                        <td className="px-4 py-3">
-                          {job.customer.name}
-                        </td>
-                        <td className="px-4 py-3">
-                          <StatusBadge kind="job" value={job.status} />
-                        </td>
-                        <td className="px-4 py-3 font-mono text-xs">
-                          {formatScheduleRange(job.scheduledStartAt, job.scheduledEndAt)}
-                        </td>
-                        <td className="px-4 py-3">
-                          {job.assignedToName ?? "-"}
-                        </td>
-                        <td className="px-4 py-3 font-mono text-xs">
-                          {formatDateTime(job.updatedAt)}
-                        </td>
+            <div ref={jobTableAreaRef}>
+              {isLoading ? (
+                <div className="p-4">
+                  <LoadingPanel label="Loading jobs..." />
+                </div>
+              ) : jobs.length === 0 ? (
+                <div className="p-4">
+                  <EmptyStatePanel
+                    title="No jobs found"
+                    description="Try different filters or create a new work order for one of your customers."
+                    actionLabel="Create job"
+                    actionHref="/jobs/new"
+                  />
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border-collapse text-sm">
+                    <thead className="border-b border-[var(--color-app-border)] text-left text-[11px] uppercase text-[var(--color-text-muted)]">
+                      <tr>
+                        <th className="px-4 py-2.5 font-semibold">Title</th>
+                        <th className="px-4 py-2.5 font-semibold">Customer</th>
+                        <th className="px-4 py-2.5 font-semibold">Status</th>
+                        <th className="px-4 py-2.5 font-semibold">Scheduled</th>
+                        <th className="px-4 py-2.5 font-semibold">Assigned</th>
+                        <th className="px-4 py-2.5 font-semibold">Updated</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                    </thead>
+                    <tbody
+                      ref={jobTableBodyRef}
+                      className="divide-y divide-[var(--color-app-border)] text-[var(--color-text-secondary)]"
+                    >
+                      {jobs.map((job) => (
+                        <tr
+                          key={job.id}
+                          className="group transition hover:bg-[var(--color-app-panel-muted)]"
+                        >
+                          <td className="px-4 py-3 font-semibold text-[var(--color-text)]">
+                            <Link
+                              href={`/jobs/${job.id}`}
+                              className="transition hover:text-[var(--color-brand)]"
+                            >
+                              {job.title}
+                            </Link>
+                          </td>
+                          <td className="px-4 py-3">
+                            {job.customer.name}
+                          </td>
+                          <td className="px-4 py-3">
+                            <StatusBadge kind="job" value={job.status} />
+                          </td>
+                          <td className="px-4 py-3 font-mono text-xs">
+                            {formatScheduleRange(job.scheduledStartAt, job.scheduledEndAt)}
+                          </td>
+                          <td className="px-4 py-3">
+                            {job.assignedToName ?? "-"}
+                          </td>
+                          <td className="px-4 py-3 font-mono text-xs">
+                            {formatDateTime(job.updatedAt)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </DataTableCard>
         )}
       </AuthGuard>

@@ -1,10 +1,14 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import JobsPage from "@/app/jobs/page";
 import { listCustomersRequest } from "@/features/customer/customer-api";
 import { listJobsRequest } from "@/features/job/job-api";
 import { useAuthStore } from "@/store/auth-store";
+import {
+  mockAdaptivePageSizeViewport,
+  resetAdaptivePageSizeViewportMock,
+} from "@/test/adaptive-page-size";
 
 vi.mock("next/link", () => ({
   default: ({
@@ -56,6 +60,7 @@ vi.mock("@/features/job/job-api", () => ({
 describe("jobs page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAdaptivePageSizeViewport({ top: 300, innerHeight: 900 });
     useAuthStore.setState({
       status: "authenticated",
       user: {
@@ -75,6 +80,10 @@ describe("jobs page", () => {
       withAccessTokenRetry: async <T,>(request: (accessToken: string) => Promise<T>) =>
         request("access-token"),
     });
+  });
+
+  afterEach(() => {
+    resetAdaptivePageSizeViewportMock();
   });
 
   it("loads and renders jobs table", async () => {
@@ -107,6 +116,48 @@ describe("jobs page", () => {
     expect(screen.getByRole("link", { name: "Create job" })).toBeInTheDocument();
   });
 
+  it("requests more jobs when the viewport can fit more rows", async () => {
+    mockAdaptivePageSizeViewport({ top: 180, innerHeight: 1500 });
+    vi.mocked(listCustomersRequest).mockResolvedValue({
+      items: [],
+      pagination: { page: 1, pageSize: 50, total: 0, totalPages: 1 },
+    });
+    vi.mocked(listJobsRequest).mockResolvedValue({
+      items: [],
+      pagination: { page: 1, pageSize: 22, total: 0, totalPages: 1 },
+    });
+
+    render(<JobsPage />);
+
+    await waitFor(() => {
+      expect(listJobsRequest).toHaveBeenCalledWith(
+        "access-token",
+        expect.objectContaining({ pageSize: 22 }),
+      );
+    });
+  });
+
+  it("keeps at least ten jobs per page on short viewports", async () => {
+    mockAdaptivePageSizeViewport({ top: 780, innerHeight: 800 });
+    vi.mocked(listCustomersRequest).mockResolvedValue({
+      items: [],
+      pagination: { page: 1, pageSize: 50, total: 0, totalPages: 1 },
+    });
+    vi.mocked(listJobsRequest).mockResolvedValue({
+      items: [],
+      pagination: { page: 1, pageSize: 10, total: 0, totalPages: 1 },
+    });
+
+    render(<JobsPage />);
+
+    await waitFor(() => {
+      expect(listJobsRequest).toHaveBeenCalledWith(
+        "access-token",
+        expect.objectContaining({ pageSize: 10 }),
+      );
+    });
+  });
+
   it("applies filters and hides create button for staff", async () => {
     vi.mocked(listCustomersRequest).mockResolvedValue({
       items: [
@@ -117,6 +168,7 @@ describe("jobs page", () => {
           email: null,
           address: null,
           notes: null,
+          archivedAt: null,
           createdAt: "2026-03-20T00:00:00.000Z",
           updatedAt: "2026-03-20T00:00:00.000Z",
         },

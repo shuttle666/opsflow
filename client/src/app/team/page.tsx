@@ -19,6 +19,10 @@ import {
   listMembershipsRequest,
   updateMembershipRequest,
 } from "@/features/membership";
+import {
+  DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
+  useAdaptivePageSize,
+} from "@/hooks/use-adaptive-page-size";
 import { useAuthStore } from "@/store/auth-store";
 import type { PaginationMeta } from "@/types/customer";
 import type { MembershipRole, MembershipStatus } from "@/types/auth";
@@ -33,6 +37,7 @@ const editableStatuses: Array<Extract<MembershipStatus, "ACTIVE" | "DISABLED">> 
   "ACTIVE",
   "DISABLED",
 ];
+const TEAM_CARD_HEIGHT_PX = 170;
 
 function canReviewTeam(role: string | undefined) {
   return role === "OWNER" || role === "MANAGER";
@@ -67,6 +72,33 @@ function membershipStatusColor(status: MembershipStatus) {
   }
 }
 
+function getTeamGridItemsPerRow(itemArea: Element | null) {
+  if (typeof window === "undefined") {
+    return 1;
+  }
+
+  if (itemArea) {
+    const gridTemplateColumns = window.getComputedStyle(itemArea).gridTemplateColumns;
+    const computedColumns = gridTemplateColumns
+      .split(" ")
+      .filter((value) => value && value !== "none").length;
+
+    if (computedColumns > 0) {
+      return computedColumns;
+    }
+  }
+
+  if (window.innerWidth >= 1536) {
+    return 3;
+  }
+
+  if (window.innerWidth >= 768) {
+    return 2;
+  }
+
+  return 1;
+}
+
 export default function TeamPage() {
   const currentTenant = useAuthStore((state) => state.currentTenant);
   const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
@@ -79,7 +111,7 @@ export default function TeamPage() {
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState<PaginationMeta>({
     page: 1,
-    pageSize: 10,
+    pageSize: DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
     total: 0,
     totalPages: 1,
   });
@@ -91,6 +123,16 @@ export default function TeamPage() {
 
   const allowReview = canReviewTeam(currentTenant?.role);
   const allowManage = canManageTeam(currentTenant?.role);
+  const {
+    containerRef: teamListAreaRef,
+    hasMeasured: hasMeasuredPageSize,
+    itemAreaRef: teamGridRef,
+    pageSize: adaptivePageSize,
+  } = useAdaptivePageSize<HTMLDivElement, HTMLElement>({
+    itemHeight: TEAM_CARD_HEIGHT_PX,
+    itemsPerRow: getTeamGridItemsPerRow,
+    dependencies: [error, isLoading, memberships.length, success],
+  });
   const teamStats = useMemo(
     () => [
       { label: "Total", value: String(pagination.total || memberships.length), color: "var(--color-text)" },
@@ -108,6 +150,10 @@ export default function TeamPage() {
       return;
     }
 
+    if (!hasMeasuredPageSize) {
+      return;
+    }
+
     let cancelled = false;
 
     void (async () => {
@@ -121,13 +167,18 @@ export default function TeamPage() {
             status: statusFilter || undefined,
             role: roleFilter || undefined,
             page,
-            pageSize: 10,
+            pageSize: adaptivePageSize,
           }),
         );
 
         if (!cancelled) {
           setMemberships(result.items);
           setPagination(result.pagination);
+          setPage((current) =>
+            current > result.pagination.totalPages
+              ? result.pagination.totalPages
+              : current,
+          );
           setDrafts(
             Object.fromEntries(
               result.items
@@ -161,7 +212,16 @@ export default function TeamPage() {
     return () => {
       cancelled = true;
     };
-  }, [allowReview, page, query, roleFilter, statusFilter, withAccessTokenRetry]);
+  }, [
+    adaptivePageSize,
+    allowReview,
+    hasMeasuredPageSize,
+    page,
+    query,
+    roleFilter,
+    statusFilter,
+    withAccessTokenRetry,
+  ]);
 
   const roleOptions = useMemo<MembershipRole[]>(() => ["OWNER", "MANAGER", "STAFF"], []);
 
@@ -263,21 +323,23 @@ export default function TeamPage() {
               </form>
             </section>
 
-            <div className="space-y-3">
+            <div ref={teamListAreaRef} className="space-y-3">
               {error ? <InlineErrorBanner message={error} /> : null}
               {success ? <p className="text-sm text-[var(--color-success)]">{success}</p> : null}
-            </div>
 
-            {isLoading ? (
-              <LoadingPanel label="Loading team members..." />
-            ) : memberships.length === 0 ? (
-              <EmptyStatePanel
-                title="No team members found"
-                description="Adjust the current search or invite new people into this workspace."
-              />
-            ) : (
-              <section className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-                {memberships.map((membership) => {
+              {isLoading ? (
+                <LoadingPanel label="Loading team members..." />
+              ) : memberships.length === 0 ? (
+                <EmptyStatePanel
+                  title="No team members found"
+                  description="Adjust the current search or invite new people into this workspace."
+                />
+              ) : (
+                <section
+                  ref={teamGridRef}
+                  className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3"
+                >
+                  {memberships.map((membership) => {
                   const draft = drafts[membership.id];
                   const canEdit =
                     allowManage && membership.status !== "INVITED" && !!draft;
@@ -442,10 +504,11 @@ export default function TeamPage() {
                       ) : null}
                     </article>
                   );
-                })}
+                  })}
 
-              </section>
-            )}
+                </section>
+              )}
+            </div>
 
             <div className="flex flex-col gap-3 text-sm text-[var(--color-text-secondary)] sm:flex-row sm:items-center sm:justify-between">
               <p>

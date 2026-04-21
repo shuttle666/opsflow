@@ -124,7 +124,7 @@ describe("jobs page", () => {
     });
     vi.mocked(listJobsRequest).mockResolvedValue({
       items: [],
-      pagination: { page: 1, pageSize: 22, total: 0, totalPages: 1 },
+      pagination: { page: 1, pageSize: 21, total: 0, totalPages: 1 },
     });
 
     render(<JobsPage />);
@@ -132,7 +132,7 @@ describe("jobs page", () => {
     await waitFor(() => {
       expect(listJobsRequest).toHaveBeenCalledWith(
         "access-token",
-        expect.objectContaining({ pageSize: 22 }),
+        expect.objectContaining({ pageSize: 21 }),
       );
     });
   });

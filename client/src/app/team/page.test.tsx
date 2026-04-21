@@ -139,7 +139,7 @@ describe("team page", () => {
     });
     vi.mocked(listMembershipsRequest).mockResolvedValue({
       items: [],
-      pagination: { page: 1, pageSize: 18, total: 0, totalPages: 1 },
+      pagination: { page: 1, pageSize: 12, total: 0, totalPages: 1 },
     });
 
     render(<TeamPage />);
@@ -147,16 +147,16 @@ describe("team page", () => {
     await waitFor(() => {
       expect(listMembershipsRequest).toHaveBeenCalledWith(
         "access-token",
-        expect.objectContaining({ pageSize: 18 }),
+        expect.objectContaining({ pageSize: 12 }),
       );
     });
   });
 
-  it("keeps at least ten members per page on short viewports", async () => {
+  it("keeps at least one visible grid row on short viewports", async () => {
     mockAdaptivePageSizeViewport({ top: 780, innerHeight: 800 });
     vi.mocked(listMembershipsRequest).mockResolvedValue({
       items: [],
-      pagination: { page: 1, pageSize: 10, total: 0, totalPages: 1 },
+      pagination: { page: 1, pageSize: 2, total: 0, totalPages: 1 },
     });
 
     render(<TeamPage />);
@@ -164,7 +164,7 @@ describe("team page", () => {
     await waitFor(() => {
       expect(listMembershipsRequest).toHaveBeenCalledWith(
         "access-token",
-        expect.objectContaining({ pageSize: 10 }),
+        expect.objectContaining({ pageSize: 2 }),
       );
     });
   });

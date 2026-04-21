@@ -20,7 +20,7 @@ import {
   updateMembershipRequest,
 } from "@/features/membership";
 import {
-  DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
+  PAGINATED_LIST_BOTTOM_GAP,
   useAdaptivePageSize,
 } from "@/hooks/use-adaptive-page-size";
 import { useAuthStore } from "@/store/auth-store";
@@ -37,7 +37,9 @@ const editableStatuses: Array<Extract<MembershipStatus, "ACTIVE" | "DISABLED">> 
   "ACTIVE",
   "DISABLED",
 ];
-const TEAM_CARD_HEIGHT_PX = 170;
+const TEAM_CARD_ROW_HEIGHT_PX = 230;
+const TEAM_GRID_ROW_GAP_PX = 12;
+const TEAM_MIN_PAGE_SIZE = 1;
 
 function canReviewTeam(role: string | undefined) {
   return role === "OWNER" || role === "MANAGER";
@@ -111,7 +113,7 @@ export default function TeamPage() {
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState<PaginationMeta>({
     page: 1,
-    pageSize: DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
+    pageSize: TEAM_MIN_PAGE_SIZE,
     total: 0,
     totalPages: 1,
   });
@@ -129,8 +131,12 @@ export default function TeamPage() {
     itemAreaRef: teamGridRef,
     pageSize: adaptivePageSize,
   } = useAdaptivePageSize<HTMLDivElement, HTMLElement>({
-    itemHeight: TEAM_CARD_HEIGHT_PX,
+    bottomGap: PAGINATED_LIST_BOTTOM_GAP,
+    itemHeight: TEAM_CARD_ROW_HEIGHT_PX,
     itemsPerRow: getTeamGridItemsPerRow,
+    min: TEAM_MIN_PAGE_SIZE,
+    minRows: 1,
+    rowGap: TEAM_GRID_ROW_GAP_PX,
     dependencies: [error, isLoading, memberships.length, success],
   });
   const teamStats = useMemo(
@@ -323,23 +329,24 @@ export default function TeamPage() {
               </form>
             </section>
 
-            <div ref={teamListAreaRef} className="space-y-3">
+            <div className="space-y-3">
               {error ? <InlineErrorBanner message={error} /> : null}
               {success ? <p className="text-sm text-[var(--color-success)]">{success}</p> : null}
 
-              {isLoading ? (
-                <LoadingPanel label="Loading team members..." />
-              ) : memberships.length === 0 ? (
-                <EmptyStatePanel
-                  title="No team members found"
-                  description="Adjust the current search or invite new people into this workspace."
-                />
-              ) : (
-                <section
-                  ref={teamGridRef}
-                  className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3"
-                >
-                  {memberships.map((membership) => {
+              <div ref={teamListAreaRef}>
+                {isLoading ? (
+                  <LoadingPanel label="Loading team members..." />
+                ) : memberships.length === 0 ? (
+                  <EmptyStatePanel
+                    title="No team members found"
+                    description="Adjust the current search or invite new people into this workspace."
+                  />
+                ) : (
+                  <section
+                    ref={teamGridRef}
+                    className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3"
+                  >
+                    {memberships.map((membership) => {
                   const draft = drafts[membership.id];
                   const canEdit =
                     allowManage && membership.status !== "INVITED" && !!draft;
@@ -504,10 +511,10 @@ export default function TeamPage() {
                       ) : null}
                     </article>
                   );
-                  })}
-
-                </section>
-              )}
+                    })}
+                  </section>
+                )}
+              </div>
             </div>
 
             <div className="flex flex-col gap-3 text-sm text-[var(--color-text-secondary)] sm:flex-row sm:items-center sm:justify-between">

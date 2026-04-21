@@ -11,6 +11,7 @@ import { subtleButtonClassName } from "@/components/ui/styles";
 import { listActivityFeedRequest } from "@/features/activity/activity-api";
 import {
   DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
+  PAGINATED_LIST_BOTTOM_GAP,
   useAdaptivePageSize,
 } from "@/hooks/use-adaptive-page-size";
 import { useAuthStore } from "@/store/auth-store";
@@ -51,6 +52,7 @@ export default function ActivityPage() {
     itemAreaRef: activityListContentRef,
     pageSize: adaptivePageSize,
   } = useAdaptivePageSize<HTMLDivElement, HTMLDivElement>({
+    bottomGap: PAGINATED_LIST_BOTTOM_GAP,
     itemHeight: ACTIVITY_ROW_HEIGHT_PX,
     dependencies: [error, isLoading, items.length],
   });

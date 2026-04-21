@@ -99,7 +99,7 @@ describe("activity page", () => {
     mockAdaptivePageSizeViewport({ top: 200, innerHeight: 1500 });
     vi.mocked(listActivityFeedRequest).mockResolvedValue({
       items: [],
-      pagination: { page: 1, pageSize: 19, total: 0, totalPages: 1 },
+      pagination: { page: 1, pageSize: 18, total: 0, totalPages: 1 },
     });
 
     render(<ActivityPage />);
@@ -107,7 +107,7 @@ describe("activity page", () => {
     await waitFor(() => {
       expect(listActivityFeedRequest).toHaveBeenCalledWith("access-token", {
         page: 1,
-        pageSize: 19,
+        pageSize: 18,
       });
     });
   });

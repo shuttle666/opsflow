@@ -11,6 +11,8 @@ import {
 export const DEFAULT_ADAPTIVE_PAGE_SIZE_MIN = 10;
 export const DEFAULT_ADAPTIVE_PAGE_SIZE_MAX = 50;
 export const DEFAULT_ADAPTIVE_PAGE_SIZE_BOTTOM_GAP = 24;
+export const PAGINATED_LIST_BOTTOM_GAP = 80;
+export const PAGINATED_TABLE_HEADER_OFFSET = 40;
 
 type ItemsPerRowResolver = (
   itemArea: Element | null,
@@ -22,6 +24,9 @@ type UseAdaptivePageSizeOptions = {
   min?: number;
   max?: number;
   bottomGap?: number;
+  minRows?: number;
+  rowGap?: number;
+  topGap?: number;
   itemsPerRow?: number | ItemsPerRowResolver;
   dependencies?: DependencyList;
 };
@@ -46,6 +51,9 @@ export function useAdaptivePageSize<
   min = DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
   max = DEFAULT_ADAPTIVE_PAGE_SIZE_MAX,
   bottomGap = DEFAULT_ADAPTIVE_PAGE_SIZE_BOTTOM_GAP,
+  minRows,
+  rowGap = 0,
+  topGap = 0,
   itemsPerRow = 1,
   dependencies = [],
 }: UseAdaptivePageSizeOptions) {
@@ -70,16 +78,21 @@ export function useAdaptivePageSize<
         ? itemsPerRow(itemArea, container)
         : itemsPerRow;
     const safeItemsPerRow = normalizeItemsPerRow(resolvedItemsPerRow);
+    const safeRowGap = Math.max(0, rowGap);
     const { top } = container.getBoundingClientRect();
-    const availableHeight = window.innerHeight - top - bottomGap;
-    const rows = Math.floor(availableHeight / itemHeight);
+    const availableHeight = window.innerHeight - top - topGap - bottomGap;
+    const measuredRows = Math.floor(
+      (availableHeight + safeRowGap) / (itemHeight + safeRowGap),
+    );
+    const rows =
+      minRows === undefined ? measuredRows : Math.max(minRows, measuredRows);
     const nextPageSize = clampPageSize(rows * safeItemsPerRow, min, max);
 
     setPageSize((current) =>
       current === nextPageSize ? current : nextPageSize,
     );
     setHasMeasured(true);
-  }, [bottomGap, itemHeight, itemsPerRow, max, min]);
+  }, [bottomGap, itemHeight, itemsPerRow, max, min, minRows, rowGap, topGap]);
 
   useEffect(() => {
     updatePageSize();

@@ -212,7 +212,7 @@ describe("customers page", () => {
       items: [],
       pagination: {
         page: 1,
-        pageSize: 22,
+        pageSize: 21,
         total: 0,
         totalPages: 1,
       },
@@ -224,7 +224,7 @@ describe("customers page", () => {
       expect(vi.mocked(listCustomersRequest)).toHaveBeenCalledWith(
         "access-token",
         expect.objectContaining({
-          pageSize: 22,
+          pageSize: 21,
         }),
       );
     });
@@ -249,6 +249,30 @@ describe("customers page", () => {
         "access-token",
         expect.objectContaining({
           pageSize: 10,
+        }),
+      );
+    });
+  });
+
+  it("reserves table header space when calculating customer rows", async () => {
+    mockCustomerListViewport({ top: 180, innerHeight: 1005 });
+    vi.mocked(listCustomersRequest).mockResolvedValue({
+      items: [],
+      pagination: {
+        page: 1,
+        pageSize: 12,
+        total: 0,
+        totalPages: 1,
+      },
+    });
+
+    render(<CustomersPage />);
+
+    await waitFor(() => {
+      expect(vi.mocked(listCustomersRequest)).toHaveBeenCalledWith(
+        "access-token",
+        expect.objectContaining({
+          pageSize: 12,
         }),
       );
     });

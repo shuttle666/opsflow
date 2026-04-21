@@ -21,6 +21,8 @@ import { listCustomersRequest } from "@/features/customer/customer-api";
 import { formatDateTime, formatScheduleRange, listJobsRequest } from "@/features/job";
 import {
   DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
+  PAGINATED_LIST_BOTTOM_GAP,
+  PAGINATED_TABLE_HEADER_OFFSET,
   useAdaptivePageSize,
 } from "@/hooks/use-adaptive-page-size";
 import { useAuthStore } from "@/store/auth-store";
@@ -70,7 +72,9 @@ export default function JobsPage() {
     itemAreaRef: jobTableBodyRef,
     pageSize: adaptivePageSize,
   } = useAdaptivePageSize<HTMLDivElement, HTMLTableSectionElement>({
+    bottomGap: PAGINATED_LIST_BOTTOM_GAP,
     itemHeight: JOB_ROW_HEIGHT_PX,
+    topGap: PAGINATED_TABLE_HEADER_OFFSET,
     dependencies: [error, isLoading, jobs.length],
   });
 

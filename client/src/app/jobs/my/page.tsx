@@ -19,6 +19,8 @@ import {
 import { formatDateTime, formatScheduleRange, listMyJobsRequest } from "@/features/job";
 import {
   DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
+  PAGINATED_LIST_BOTTOM_GAP,
+  PAGINATED_TABLE_HEADER_OFFSET,
   useAdaptivePageSize,
 } from "@/hooks/use-adaptive-page-size";
 import { useAuthStore } from "@/store/auth-store";
@@ -60,7 +62,9 @@ export default function MyJobsPage() {
     itemAreaRef: myJobsTableBodyRef,
     pageSize: adaptivePageSize,
   } = useAdaptivePageSize<HTMLDivElement, HTMLTableSectionElement>({
+    bottomGap: PAGINATED_LIST_BOTTOM_GAP,
     itemHeight: MY_JOB_ROW_HEIGHT_PX,
+    topGap: PAGINATED_TABLE_HEADER_OFFSET,
     dependencies: [error, isLoading, jobs.length],
   });
 

@@ -100,7 +100,7 @@ describe("my jobs page", () => {
     mockAdaptivePageSizeViewport({ top: 180, innerHeight: 1500 });
     vi.mocked(listMyJobsRequest).mockResolvedValue({
       items: [],
-      pagination: { page: 1, pageSize: 22, total: 0, totalPages: 1 },
+      pagination: { page: 1, pageSize: 21, total: 0, totalPages: 1 },
     });
 
     render(<MyJobsPage />);
@@ -108,7 +108,7 @@ describe("my jobs page", () => {
     await waitFor(() => {
       expect(listMyJobsRequest).toHaveBeenCalledWith(
         "access-token",
-        expect.objectContaining({ pageSize: 22 }),
+        expect.objectContaining({ pageSize: 21 }),
       );
     });
   });

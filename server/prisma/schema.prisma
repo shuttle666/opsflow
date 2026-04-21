@@ -91,6 +91,18 @@ enum NotificationType {
   JOB_COMPLETION_RETURNED
 }
 
+enum AgentMessageRole {
+  USER
+  ASSISTANT
+}
+
+enum AgentProposalStatus {
+  PENDING
+  CONFIRMING
+  CONFIRMED
+  FAILED
+}
+
 model User {
   id                         String                @id @default(uuid()) @db.Uuid
   email                      String                @unique
@@ -113,6 +125,9 @@ model User {
   auditLogs                  AuditLog[]
   receivedNotifications      Notification[]        @relation("NotificationRecipient")
   actedNotifications         Notification[]        @relation("NotificationActor")
+  agentConversations         AgentConversation[]   @relation("AgentConversationUser")
+  agentProposals             AgentProposal[]       @relation("AgentProposalUser")
+  confirmedAgentProposals    AgentProposal[]       @relation("AgentProposalConfirmedBy")
 
   @@map("users")
 }
@@ -135,6 +150,8 @@ model Tenant {
   invitations          TenantInvitation[]
   auditLogs            AuditLog[]
   notifications        Notification[]
+  agentConversations   AgentConversation[]
+  agentProposals       AgentProposal[]
 
   @@index([status])
   @@map("tenants")
@@ -156,19 +173,19 @@ model Membership {
 }
 
 model Customer {
-  id          String   @id @default(uuid()) @db.Uuid
-  tenantId    String   @map("tenant_id") @db.Uuid
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
   name        String
   phone       String?
   email       String?
   address     String?
   notes       String?
   archivedAt  DateTime? @map("archived_at")
-  createdById String   @map("created_by_id") @db.Uuid
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  createdBy   User     @relation("CustomerCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdById String    @map("created_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  createdBy   User      @relation("CustomerCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   jobs        Job[]
 
   @@unique([id, tenantId])
@@ -366,4 +383,81 @@ model Notification {
   @@index([tenantId, recipientUserId, createdAt])
   @@index([targetType, targetId])
   @@map("notifications")
+}
+
+model AgentConversation {
+  id            String          @id @default(uuid()) @db.Uuid
+  tenantId      String          @map("tenant_id") @db.Uuid
+  userId        String          @map("user_id") @db.Uuid
+  preview       String          @default("")
+  modelMessages Json            @map("model_messages")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user          User            @relation("AgentConversationUser", fields: [userId], references: [id], onDelete: Restrict)
+  messages      AgentMessage[]
+  proposals     AgentProposal[]
+  toolCalls     AgentToolCall[]
+
+  @@index([tenantId, userId, updatedAt])
+  @@index([userId, updatedAt])
+  @@map("agent_conversations")
+}
+
+model AgentMessage {
+  id             String            @id @default(uuid()) @db.Uuid
+  conversationId String            @map("conversation_id") @db.Uuid
+  role           AgentMessageRole
+  content        String
+  createdAt      DateTime          @default(now()) @map("created_at")
+  conversation   AgentConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  toolCalls      AgentToolCall[]
+  proposal       AgentProposal?    @relation("AgentMessageProposal")
+
+  @@index([conversationId, createdAt])
+  @@map("agent_messages")
+}
+
+model AgentToolCall {
+  id             String            @id @default(uuid()) @db.Uuid
+  conversationId String            @map("conversation_id") @db.Uuid
+  messageId      String            @map("message_id") @db.Uuid
+  toolName       String            @map("tool_name")
+  input          Json
+  result         Json
+  callOrder      Int               @map("call_order")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  conversation   AgentConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message        AgentMessage      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([messageId, callOrder])
+  @@map("agent_tool_calls")
+}
+
+model AgentProposal {
+  id                 String              @id @default(uuid()) @db.Uuid
+  conversationId     String              @map("conversation_id") @db.Uuid
+  tenantId           String              @map("tenant_id") @db.Uuid
+  userId             String              @map("user_id") @db.Uuid
+  assistantMessageId String?             @unique @map("assistant_message_id") @db.Uuid
+  intent             String
+  status             AgentProposalStatus @default(PENDING)
+  payload            Json
+  confirmationResult Json?               @map("confirmation_result")
+  failureMessage     String?             @map("failure_message")
+  confirmedById      String?             @map("confirmed_by_id") @db.Uuid
+  confirmedAt        DateTime?           @map("confirmed_at")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+  conversation       AgentConversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user               User                @relation("AgentProposalUser", fields: [userId], references: [id], onDelete: Restrict)
+  assistantMessage   AgentMessage?       @relation("AgentMessageProposal", fields: [assistantMessageId], references: [id], onDelete: SetNull)
+  confirmedBy        User?               @relation("AgentProposalConfirmedBy", fields: [confirmedById], references: [id], onDelete: SetNull)
+
+  @@index([conversationId, status])
+  @@index([tenantId, userId, updatedAt])
+  @@index([confirmedById, confirmedAt])
+  @@map("agent_proposals")
 }

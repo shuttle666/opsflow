@@ -1,0 +1,765 @@
+import type Anthropic from "@anthropic-ai/sdk";
+import {
+  AgentProposalStatus,
+  JobStatus,
+  MembershipRole,
+  MembershipStatus,
+  TenantStatus,
+} from "@prisma/client";
+import { prisma } from "../src/lib/prisma";
+import type { AuthContext } from "../src/types/auth";
+import { hashPassword } from "../src/modules/auth/auth-password";
+import {
+  addUserMessage,
+  appendAssistantMessage,
+  confirmDispatchProposal,
+  createConversation,
+  getConversation,
+  listConversations,
+  storeDispatchProposal,
+} from "../src/modules/agent/agent.service";
+import { describeIfDb, resetDatabase } from "./helpers/db";
+
+describeIfDb("agent persistence integration", () => {
+  beforeAll(async () => {
+    await prisma.$connect();
+  });
+
+  beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  afterAll(async () => {
+    await resetDatabase();
+    await prisma.$disconnect();
+  });
+
+  async function seedTenantUser(input: {
+    email: string;
+    displayName: string;
+    role: MembershipRole;
+    tenantName: string;
+    tenantSlug: string;
+  }) {
+    const passwordHash = await hashPassword("password123");
+    const [tenant, user] = await Promise.all([
+      prisma.tenant.create({
+        data: {
+          name: input.tenantName,
+          slug: input.tenantSlug,
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: input.email,
+          passwordHash,
+          displayName: input.displayName,
+        },
+      }),
+    ]);
+
+    const membership = await prisma.membership.create({
+      data: {
+        userId: user.id,
+        tenantId: tenant.id,
+        role: input.role,
+        status: MembershipStatus.ACTIVE,
+      },
+    });
+
+    return {
+      tenant,
+      user,
+      membership,
+      auth: {
+        userId: user.id,
+        sessionId: `${user.id}-session`,
+        tenantId: tenant.id,
+        role: input.role,
+      } satisfies AuthContext,
+    };
+  }
+
+  it("persists conversation messages, tool calls, proposal, and confirmation state", async () => {
+    const owner = await seedTenantUser({
+      email: "owner@agent-persistence.test",
+      displayName: "Agent Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Agent Persistence Tenant",
+      tenantSlug: "agent-persistence-tenant",
+    });
+
+    const passwordHash = await hashPassword("password123");
+    const staff = await prisma.user.create({
+      data: {
+        email: "staff@agent-persistence.test",
+        passwordHash,
+        displayName: "Agent Staff",
+      },
+    });
+    const staffMembership = await prisma.membership.create({
+      data: {
+        userId: staff.id,
+        tenantId: owner.tenant.id,
+        role: MembershipRole.STAFF,
+        status: MembershipStatus.ACTIVE,
+      },
+    });
+    const customer = await prisma.customer.create({
+      data: {
+        tenantId: owner.tenant.id,
+        createdById: owner.user.id,
+        name: "Noah Thompson",
+      },
+    });
+
+    const conversation = await createConversation(owner.auth);
+    await addUserMessage(
+      owner.auth,
+      conversation.id,
+      "Create a leaking tap job for Noah tomorrow morning.",
+    );
+
+    const proposal = await storeDispatchProposal(owner.auth, conversation.id, {
+      intent: "dispatch_plan",
+      customer: {
+        status: "matched",
+        matchedCustomerId: customer.id,
+        matches: [{ id: customer.id, name: customer.name }],
+      },
+      jobDraft: {
+        title: "Leaking tap repair",
+        description: "Kitchen tap leaking under the sink.",
+      },
+      scheduleDraft: {
+        scheduledStartAt: "2026-04-23T00:00:00.000Z",
+        scheduledEndAt: "2026-04-23T02:00:00.000Z",
+        timezone: "Australia/Adelaide",
+      },
+      assigneeDraft: {
+        status: "matched",
+        membershipId: staffMembership.id,
+        userId: staff.id,
+        displayName: staff.displayName,
+      },
+      warnings: [],
+      confidence: 0.88,
+    });
+
+    const modelMessages = [
+      { role: "user", content: "Create a leaking tap job for Noah tomorrow morning." },
+      { role: "assistant", content: "Drafted a dispatch plan." },
+    ] satisfies Anthropic.MessageParam[];
+
+    await appendAssistantMessage(conversation.id, "Drafted a dispatch plan.", modelMessages, [
+      {
+        name: "check_schedule_conflicts",
+        input: {
+          assigneeUserId: staff.id,
+          scheduledStartAt: "2026-04-23T00:00:00.000Z",
+          scheduledEndAt: "2026-04-23T02:00:00.000Z",
+        },
+        result: {
+          hasConflict: false,
+          conflicts: [],
+        },
+      },
+      {
+        name: "save_dispatch_proposal",
+        input: {
+          intent: "dispatch_plan",
+        },
+        result: {
+          proposal,
+        },
+      },
+    ]);
+
+    const summaries = await listConversations(owner.auth);
+    expect(summaries[0]?.preview).toBe(
+      "Create a leaking tap job for Noah tomorrow morning.",
+    );
+
+    const persisted = await getConversation(owner.auth, conversation.id);
+    expect(persisted?.messages.map((message) => message.role)).toEqual([
+      "user",
+      "assistant",
+    ]);
+    expect(persisted?.messages[1]?.toolCalls).toEqual([
+      expect.objectContaining({
+        name: "check_schedule_conflicts",
+        input: expect.objectContaining({ assigneeUserId: staff.id }),
+        result: { hasConflict: false, conflicts: [] },
+      }),
+      expect.objectContaining({
+        name: "save_dispatch_proposal",
+        result: expect.objectContaining({
+          proposal: expect.objectContaining({ id: proposal.id }),
+        }),
+      }),
+    ]);
+    expect(persisted?.messages[1]?.proposal?.id).toBe(proposal.id);
+
+    const pendingProposal = await prisma.agentProposal.findUniqueOrThrow({
+      where: { id: proposal.id },
+    });
+    expect(pendingProposal.status).toBe(AgentProposalStatus.PENDING);
+    expect(pendingProposal.assistantMessageId).toBeTruthy();
+
+    const result = await confirmDispatchProposal(
+      owner.auth,
+      conversation.id,
+      proposal.id,
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        entityType: "job",
+        createdJobTitle: "Leaking tap repair",
+        assignedToName: staff.displayName,
+        transitionedTo: JobStatus.SCHEDULED,
+      }),
+    );
+
+    const confirmedProposal = await prisma.agentProposal.findUniqueOrThrow({
+      where: { id: proposal.id },
+    });
+    expect(confirmedProposal.status).toBe(AgentProposalStatus.CONFIRMED);
+    expect(confirmedProposal.confirmedById).toBe(owner.user.id);
+    expect(confirmedProposal.confirmationResult).toEqual(
+      expect.objectContaining({
+        proposalId: proposal.id,
+        entityType: "job",
+      }),
+    );
+
+    const createdJob = await prisma.job.findUniqueOrThrow({
+      where: { id: result.createdJobId },
+    });
+    expect(createdJob.status).toBe(JobStatus.SCHEDULED);
+    expect(createdJob.assignedToId).toBe(staff.id);
+
+    const afterConfirm = await getConversation(owner.auth, conversation.id);
+    expect(afterConfirm?.messages.some((message) => message.proposal)).toBe(false);
+  });
+
+  it("updates an existing job instead of creating a duplicate when proposal includes existingJobId", async () => {
+    const owner = await seedTenantUser({
+      email: "owner-existing-job@agent-persistence.test",
+      displayName: "Existing Job Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Existing Job Tenant",
+      tenantSlug: "existing-job-tenant",
+    });
+
+    const passwordHash = await hashPassword("password123");
+    const staff = await prisma.user.create({
+      data: {
+        email: "staff-existing-job@agent-persistence.test",
+        passwordHash,
+        displayName: "Existing Job Staff",
+      },
+    });
+    const staffMembership = await prisma.membership.create({
+      data: {
+        userId: staff.id,
+        tenantId: owner.tenant.id,
+        role: MembershipRole.STAFF,
+        status: MembershipStatus.ACTIVE,
+      },
+    });
+    const customer = await prisma.customer.create({
+      data: {
+        tenantId: owner.tenant.id,
+        createdById: owner.user.id,
+        name: "Archie Wright",
+      },
+    });
+    const existingJob = await prisma.job.create({
+      data: {
+        tenantId: owner.tenant.id,
+        customerId: customer.id,
+        createdById: owner.user.id,
+        title: "Dishwasher leak investigation - Stirling",
+        description: "Dishwasher leaks after long cycle.",
+      },
+    });
+
+    const conversation = await createConversation(owner.auth);
+    const proposal = await storeDispatchProposal(owner.auth, conversation.id, {
+      intent: "update_existing_job",
+      customer: {
+        status: "matched",
+        matchedCustomerId: customer.id,
+        matches: [{ id: customer.id, name: customer.name }],
+      },
+      jobDraft: {
+        existingJobId: existingJob.id,
+        title: existingJob.title,
+        description: existingJob.description,
+      },
+      scheduleDraft: {
+        scheduledStartAt: "2026-04-23T00:00:00.000Z",
+        scheduledEndAt: "2026-04-23T02:00:00.000Z",
+        timezone: "Australia/Adelaide",
+      },
+      assigneeDraft: {
+        status: "matched",
+        membershipId: staffMembership.id,
+        userId: staff.id,
+        displayName: staff.displayName,
+      },
+      warnings: [],
+      confidence: 0.9,
+    });
+
+    const result = await confirmDispatchProposal(
+      owner.auth,
+      conversation.id,
+      proposal.id,
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        entityType: "job",
+        createdJobId: existingJob.id,
+        updatedExistingJob: true,
+        assignedToName: staff.displayName,
+        transitionedTo: JobStatus.SCHEDULED,
+      }),
+    );
+
+    const jobs = await prisma.job.findMany({
+      where: {
+        tenantId: owner.tenant.id,
+        title: existingJob.title,
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]).toEqual(
+      expect.objectContaining({
+        id: existingJob.id,
+        status: JobStatus.SCHEDULED,
+        assignedToId: staff.id,
+      }),
+    );
+    expect(jobs[0]?.scheduledStartAt?.toISOString()).toBe("2026-04-23T00:00:00.000Z");
+    expect(jobs[0]?.scheduledEndAt?.toISOString()).toBe("2026-04-23T02:00:00.000Z");
+  });
+
+  it("rejects duplicate-looking new job proposals when an existing open job should be updated", async () => {
+    const owner = await seedTenantUser({
+      email: "owner-existing-required@agent-persistence.test",
+      displayName: "Existing Required Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Existing Required Tenant",
+      tenantSlug: "existing-required-tenant",
+    });
+
+    const customer = await prisma.customer.create({
+      data: {
+        tenantId: owner.tenant.id,
+        createdById: owner.user.id,
+        name: "Leo Martin",
+        phone: "0412 001 781",
+        address: "36 Greenhill Rd, Port Adelaide SA",
+      },
+    });
+    const existingJob = await prisma.job.create({
+      data: {
+        tenantId: owner.tenant.id,
+        customerId: customer.id,
+        createdById: owner.user.id,
+        title: "Leaking kitchen tap - Adelaide",
+        description: "Kitchen tap is leaking under the sink.",
+      },
+    });
+
+    const conversation = await createConversation(owner.auth);
+
+    await expect(
+      storeDispatchProposal(owner.auth, conversation.id, {
+        intent: "dispatch_plan",
+        customer: {
+          status: "matched",
+          matchedCustomerId: customer.id,
+          matches: [{ id: customer.id, name: customer.name }],
+        },
+        jobDraft: {
+          title: "厨房水龙头漏水维修",
+          description: "安排 Harper Lee 上门维修。",
+        },
+        scheduleDraft: {
+          scheduledStartAt: "2026-04-23T04:30:00.000Z",
+          scheduledEndAt: "2026-04-23T06:30:00.000Z",
+          timezone: "Australia/Adelaide",
+        },
+        warnings: [],
+        confidence: 0.82,
+      }),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("existing open job"),
+      details: expect.objectContaining({
+        code: "EXISTING_JOB_REQUIRED",
+        candidateJobs: [
+          expect.objectContaining({
+            id: existingJob.id,
+            title: existingJob.title,
+          }),
+        ],
+      }),
+    });
+
+    await expect(
+      prisma.agentProposal.count({
+        where: {
+          conversationId: conversation.id,
+        },
+      }),
+    ).resolves.toBe(0);
+  });
+
+  it("rolls back new customer and job creation when proposal assignment fails", async () => {
+    const owner = await seedTenantUser({
+      email: "owner-rollback-new@agent-persistence.test",
+      displayName: "Rollback New Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Rollback New Tenant",
+      tenantSlug: "rollback-new-tenant",
+    });
+
+    const passwordHash = await hashPassword("password123");
+    const disabledStaff = await prisma.user.create({
+      data: {
+        email: "disabled-rollback-new@agent-persistence.test",
+        passwordHash,
+        displayName: "Disabled Rollback Staff",
+      },
+    });
+    const disabledMembership = await prisma.membership.create({
+      data: {
+        userId: disabledStaff.id,
+        tenantId: owner.tenant.id,
+        role: MembershipRole.STAFF,
+        status: MembershipStatus.DISABLED,
+      },
+    });
+
+    const conversation = await createConversation(owner.auth);
+    const proposal = await storeDispatchProposal(owner.auth, conversation.id, {
+      intent: "dispatch_plan",
+      customer: {
+        status: "new",
+        name: "Rollback Customer",
+      },
+      jobDraft: {
+        title: "Rollback job",
+      },
+      scheduleDraft: {
+        scheduledStartAt: "2026-04-23T00:00:00.000Z",
+        scheduledEndAt: "2026-04-23T02:00:00.000Z",
+        timezone: "Australia/Adelaide",
+      },
+      assigneeDraft: {
+        status: "matched",
+        membershipId: disabledMembership.id,
+        userId: disabledStaff.id,
+        displayName: disabledStaff.displayName,
+      },
+      warnings: [],
+      confidence: 0.71,
+    });
+
+    await expect(
+      confirmDispatchProposal(owner.auth, conversation.id, proposal.id),
+    ).rejects.toThrow("No customer or job was created");
+
+    await expect(
+      prisma.customer.findFirst({
+        where: {
+          tenantId: owner.tenant.id,
+          name: "Rollback Customer",
+        },
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      prisma.job.findFirst({
+        where: {
+          tenantId: owner.tenant.id,
+          title: "Rollback job",
+        },
+      }),
+    ).resolves.toBeNull();
+
+    const failedProposal = await prisma.agentProposal.findUniqueOrThrow({
+      where: { id: proposal.id },
+    });
+    expect(failedProposal.status).toBe(AgentProposalStatus.FAILED);
+    expect(failedProposal.failureMessage).toContain("No customer or job was created");
+    expect(failedProposal.confirmationResult).toEqual(
+      expect.objectContaining({
+        error: true,
+        message: expect.stringContaining("No customer or job was created"),
+      }),
+    );
+  });
+
+  it("does not create a job for an existing customer when proposal assignment fails", async () => {
+    const owner = await seedTenantUser({
+      email: "owner-rollback-existing@agent-persistence.test",
+      displayName: "Rollback Existing Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Rollback Existing Tenant",
+      tenantSlug: "rollback-existing-tenant",
+    });
+
+    const passwordHash = await hashPassword("password123");
+    const [disabledStaff, customer] = await Promise.all([
+      prisma.user.create({
+        data: {
+          email: "disabled-rollback-existing@agent-persistence.test",
+          passwordHash,
+          displayName: "Disabled Existing Staff",
+        },
+      }),
+      prisma.customer.create({
+        data: {
+          tenantId: owner.tenant.id,
+          createdById: owner.user.id,
+          name: "Existing Rollback Customer",
+        },
+      }),
+    ]);
+    const disabledMembership = await prisma.membership.create({
+      data: {
+        userId: disabledStaff.id,
+        tenantId: owner.tenant.id,
+        role: MembershipRole.STAFF,
+        status: MembershipStatus.DISABLED,
+      },
+    });
+
+    const conversation = await createConversation(owner.auth);
+    const proposal = await storeDispatchProposal(owner.auth, conversation.id, {
+      intent: "dispatch_plan",
+      customer: {
+        status: "matched",
+        matchedCustomerId: customer.id,
+        matches: [{ id: customer.id, name: customer.name }],
+      },
+      jobDraft: {
+        title: "Existing rollback job",
+      },
+      scheduleDraft: {
+        scheduledStartAt: "2026-04-23T00:00:00.000Z",
+        scheduledEndAt: "2026-04-23T02:00:00.000Z",
+        timezone: "Australia/Adelaide",
+      },
+      assigneeDraft: {
+        status: "matched",
+        membershipId: disabledMembership.id,
+        userId: disabledStaff.id,
+        displayName: disabledStaff.displayName,
+      },
+      warnings: [],
+      confidence: 0.72,
+    });
+
+    await expect(
+      confirmDispatchProposal(owner.auth, conversation.id, proposal.id),
+    ).rejects.toThrow("No customer or job was created");
+
+    await expect(
+      prisma.customer.findUnique({
+        where: { id: customer.id },
+      }),
+    ).resolves.toEqual(expect.objectContaining({ id: customer.id }));
+    await expect(
+      prisma.job.findFirst({
+        where: {
+          tenantId: owner.tenant.id,
+          title: "Existing rollback job",
+        },
+      }),
+    ).resolves.toBeNull();
+
+    const failedProposal = await prisma.agentProposal.findUniqueOrThrow({
+      where: { id: proposal.id },
+    });
+    expect(failedProposal.status).toBe(AgentProposalStatus.FAILED);
+  });
+
+  it("rolls back customer, job, and assignment when proposal status transition fails", async () => {
+    const owner = await seedTenantUser({
+      email: "owner-rollback-status@agent-persistence.test",
+      displayName: "Rollback Status Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Rollback Status Tenant",
+      tenantSlug: "rollback-status-tenant",
+    });
+
+    const passwordHash = await hashPassword("password123");
+    const staff = await prisma.user.create({
+      data: {
+        email: "staff-rollback-status@agent-persistence.test",
+        passwordHash,
+        displayName: "Rollback Status Staff",
+      },
+    });
+    const staffMembership = await prisma.membership.create({
+      data: {
+        userId: staff.id,
+        tenantId: owner.tenant.id,
+        role: MembershipRole.STAFF,
+        status: MembershipStatus.ACTIVE,
+      },
+    });
+
+    const conversation = await createConversation(owner.auth);
+    const proposal = await storeDispatchProposal(owner.auth, conversation.id, {
+      intent: "dispatch_plan",
+      customer: {
+        status: "new",
+        name: "Status Rollback Customer",
+      },
+      jobDraft: {
+        title: "Status rollback job",
+      },
+      scheduleDraft: {
+        scheduledStartAt: "2026-04-23T00:00:00.000Z",
+        scheduledEndAt: "2026-04-23T02:00:00.000Z",
+        timezone: "Australia/Adelaide",
+      },
+      assigneeDraft: {
+        status: "matched",
+        membershipId: staffMembership.id,
+        userId: staff.id,
+        displayName: staff.displayName,
+      },
+      warnings: [],
+      confidence: 0.73,
+    });
+
+    await prisma.tenant.update({
+      where: { id: owner.tenant.id },
+      data: { status: TenantStatus.DEACTIVATED },
+    });
+
+    await expect(
+      confirmDispatchProposal(owner.auth, conversation.id, proposal.id),
+    ).rejects.toThrow("No customer or job was created");
+
+    await expect(
+      prisma.customer.findFirst({
+        where: {
+          tenantId: owner.tenant.id,
+          name: "Status Rollback Customer",
+        },
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      prisma.job.findFirst({
+        where: {
+          tenantId: owner.tenant.id,
+          title: "Status rollback job",
+        },
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      prisma.notification.findFirst({
+        where: {
+          tenantId: owner.tenant.id,
+          recipientUserId: staff.id,
+        },
+      }),
+    ).resolves.toBeNull();
+
+    const failedProposal = await prisma.agentProposal.findUniqueOrThrow({
+      where: { id: proposal.id },
+    });
+    expect(failedProposal.status).toBe(AgentProposalStatus.FAILED);
+  });
+
+  it("keeps agent conversations and proposals isolated by user and tenant", async () => {
+    const owner = await seedTenantUser({
+      email: "owner-isolated@agent-persistence.test",
+      displayName: "Isolated Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Agent Isolation Tenant",
+      tenantSlug: "agent-isolation-tenant",
+    });
+    const otherOwner = await seedTenantUser({
+      email: "other-isolated@agent-persistence.test",
+      displayName: "Other Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Other Agent Isolation Tenant",
+      tenantSlug: "other-agent-isolation-tenant",
+    });
+
+    const conversation = await createConversation(owner.auth);
+    const proposal = await storeDispatchProposal(owner.auth, conversation.id, {
+      intent: "create_customer",
+      customer: {
+        status: "new",
+        name: "Cross Tenant Customer",
+      },
+      jobDraft: {
+        title: "Customer record only",
+      },
+      scheduleDraft: {
+        timezone: "Australia/Adelaide",
+      },
+      warnings: [],
+      confidence: 0.7,
+    });
+
+    await expect(getConversation(otherOwner.auth, conversation.id)).resolves.toBeNull();
+    await expect(
+      confirmDispatchProposal(otherOwner.auth, conversation.id, proposal.id),
+    ).rejects.toThrow("Proposal not found.");
+  });
+
+  it("rejects staff confirmation before resolving a persisted proposal", async () => {
+    const owner = await seedTenantUser({
+      email: "owner-staff-confirm@agent-persistence.test",
+      displayName: "Staff Confirm Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Staff Confirm Tenant",
+      tenantSlug: "staff-confirm-tenant",
+    });
+    const staff = await seedTenantUser({
+      email: "staff-confirm@agent-persistence.test",
+      displayName: "Staff Confirm User",
+      role: MembershipRole.STAFF,
+      tenantName: "Staff Confirm Other Tenant",
+      tenantSlug: "staff-confirm-other-tenant",
+    });
+
+    const conversation = await createConversation(owner.auth);
+    const proposal = await storeDispatchProposal(owner.auth, conversation.id, {
+      intent: "create_customer",
+      customer: {
+        status: "new",
+        name: "Staff Blocked Customer",
+      },
+      jobDraft: {
+        title: "Customer record only",
+      },
+      scheduleDraft: {
+        timezone: "Australia/Adelaide",
+      },
+      warnings: [],
+      confidence: 0.7,
+    });
+
+    await expect(
+      confirmDispatchProposal(staff.auth, conversation.id, proposal.id),
+    ).rejects.toThrow("Only owners and managers can confirm dispatch plans.");
+
+    const stillPending = await prisma.agentProposal.findUniqueOrThrow({
+      where: { id: proposal.id },
+    });
+    expect(stillPending.status).toBe(AgentProposalStatus.PENDING);
+  });
+});

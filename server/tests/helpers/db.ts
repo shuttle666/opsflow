@@ -7,6 +7,10 @@ export const runDbTests =
 export const describeIfDb = runDbTests ? describe : describe.skip;
 
 export async function resetDatabase() {
+  await prisma.agentToolCall.deleteMany();
+  await prisma.agentProposal.deleteMany();
+  await prisma.agentMessage.deleteMany();
+  await prisma.agentConversation.deleteMany();
   await prisma.notification.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.tenantInvitation.deleteMany();

@@ -28,6 +28,10 @@ function mockMatchMedia(matches: boolean) {
 describe("AppProviders theme attributes", () => {
   beforeEach(() => {
     mockMatchMedia(false);
+    window.localStorage.setItem(
+      "opsflow-theme",
+      JSON.stringify({ mode: "light", scheme: "violet", version: 2 }),
+    );
     document.documentElement.removeAttribute("data-theme");
     document.documentElement.removeAttribute("data-theme-mode");
     document.documentElement.removeAttribute("data-scheme");

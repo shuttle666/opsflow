@@ -19,6 +19,7 @@ export type DispatchProposal = {
     }>;
   };
   jobDraft: {
+    existingJobId?: string;
     title: string;
     description?: string | null;
   };
@@ -80,6 +81,7 @@ export type ConfirmProposalResult = {
   usedExistingCustomer?: boolean;
   createdJobId?: string;
   createdJobTitle?: string;
+  updatedExistingJob?: boolean;
   assignedToName?: string;
   transitionedTo?: string;
 };

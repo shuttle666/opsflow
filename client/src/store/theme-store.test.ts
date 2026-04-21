@@ -55,6 +55,11 @@ describe("theme store", () => {
     vi.resetModules();
     const { useThemeStore: freshStore } = await import("@/store/theme-store");
 
+    expect(freshStore.getState().mode).toBe("system");
+    expect(freshStore.getState().scheme).toBe("violet");
+
+    freshStore.getState().hydrateTheme();
+
     expect(freshStore.getState().mode).toBe("dark");
     expect(freshStore.getState().scheme).toBe("violet");
   });
@@ -68,6 +73,11 @@ describe("theme store", () => {
     vi.resetModules();
     const { useThemeStore: freshStore } = await import("@/store/theme-store");
 
+    expect(freshStore.getState().mode).toBe("system");
+    expect(freshStore.getState().scheme).toBe("violet");
+
+    freshStore.getState().hydrateTheme();
+
     expect(freshStore.getState().mode).toBe("dark");
     expect(freshStore.getState().scheme).toBe("ocean");
   });
@@ -80,6 +90,11 @@ describe("theme store", () => {
 
     vi.resetModules();
     const { useThemeStore: freshStore } = await import("@/store/theme-store");
+
+    expect(freshStore.getState().mode).toBe("system");
+    expect(freshStore.getState().scheme).toBe("violet");
+
+    freshStore.getState().hydrateTheme();
 
     expect(freshStore.getState().mode).toBe("light");
     expect(freshStore.getState().scheme).toBe("violet");

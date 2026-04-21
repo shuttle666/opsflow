@@ -6,7 +6,7 @@ This plan reflects the current state of the repository. Older Phase 3-8 implemen
 - The app is organized as a full-stack TypeScript monorepo with `client`, `server`, `docs`, and `infra`.
 - Authentication, tenant context, RBAC, refresh sessions, and tenant invitations are implemented.
 - Core operations are implemented: customers, jobs, assignment, staff workspace, workflow history, activity feed, evidence uploads, schedule calendar, completion reviews, notifications, and AI dispatch planning.
-- Prisma models currently include `User`, `Tenant`, `Membership`, `Customer`, `Job`, `JobStatusHistory`, `JobCompletionReview`, `JobEvidence`, `AuthSession`, `TenantInvitation`, `AuditLog`, and `Notification`.
+- Prisma models currently include `User`, `Tenant`, `Membership`, `Customer`, `Job`, `JobStatusHistory`, `JobCompletionReview`, `JobEvidence`, `AuthSession`, `TenantInvitation`, `AuditLog`, `Notification`, and persisted agent conversation/proposal records.
 - CI runs client and server validation through GitHub Actions; production deployment is handled by the deploy workflow and the script under `infra/scripts`.
 
 ## Near-Term Work

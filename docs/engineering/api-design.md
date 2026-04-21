@@ -157,7 +157,7 @@ Supported notification types:
 - `POST /agent/conversations/:conversationId/messages`
 - `POST /agent/conversations/:conversationId/proposals/:proposalId/confirm`
 
-The planner is available to authenticated tenant users, but proposal confirmation rejects `STAFF`. Conversations and proposals are in-memory and expire after 24 hours. Assistant responses stream over SSE and require `ANTHROPIC_API_KEY`.
+The planner is available to authenticated tenant users, but proposal confirmation rejects `STAFF`. Conversations, messages, tool calls, and proposals are persisted for restart recovery, multi-instance operation, and audit. Assistant responses stream over SSE and require `ANTHROPIC_API_KEY`.
 
 ## Contract Notes
 - All successful JSON responses use the common `success/message/data/meta` envelope.

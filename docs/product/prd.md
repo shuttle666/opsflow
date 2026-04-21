@@ -31,7 +31,7 @@ OpsFlow centralizes the operational workflow so owners, managers, and staff can 
 
 ## Current Constraints
 - The dashboard has a live "today's schedule" card, but revenue and crew metrics are still placeholder UI.
-- AI planner conversations and proposals are in-memory and expire after 24 hours.
+- AI planner conversations, tool traces, and proposals are persisted for restart recovery and audit.
 - Job evidence uses local disk storage in the current deployment shape, with a storage abstraction that can be replaced later.
 - There is no customer-facing portal yet.
 

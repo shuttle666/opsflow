@@ -149,6 +149,7 @@ function ProposalCard({
   result: ConfirmProposalResult | null;
 }) {
   const isCustomerOnly = proposal.intent === "create_customer";
+  const isExistingJobUpdate = Boolean(proposal.jobDraft.existingJobId);
 
   return (
     <div className="overflow-hidden rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] shadow-[var(--shadow-panel)]">
@@ -164,6 +165,7 @@ function ProposalCard({
                 : proposal.jobDraft.title}
             </h3>
             <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
+              {isExistingJobUpdate ? "Update existing job - " : ""}
               Confidence {(proposal.confidence * 100).toFixed(0)}%
             </p>
           </div>
@@ -242,7 +244,9 @@ function ProposalCard({
           <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
             {isCustomerOnly
               ? "No job will be created. Confirming this proposal creates only the customer record."
-              : proposal.jobDraft.description?.trim() || "No extra description provided."}
+              : proposal.jobDraft.existingJobId
+                ? "Confirming this proposal updates the existing job instead of creating a duplicate."
+                : proposal.jobDraft.description?.trim() || "No extra description provided."}
           </p>
         </div>
       </div>
@@ -666,7 +670,8 @@ export function AgentChat() {
                 </>
               ) : (
                 <>
-                  Created <strong>{confirmResult.createdJobTitle}</strong>.
+                  {confirmResult.updatedExistingJob ? "Updated" : "Created"}{" "}
+                  <strong>{confirmResult.createdJobTitle}</strong>.
                   {" "}
                   {confirmResult.createdJobId ? (
                     <Link href={`/jobs/${confirmResult.createdJobId}`} className="font-semibold underline">

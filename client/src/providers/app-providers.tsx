@@ -13,10 +13,15 @@ export function AppProviders({ children }: AppProvidersProps) {
   const bootstrapSession = useAuthStore((state) => state.bootstrapSession);
   const mode = useThemeStore((state) => state.mode);
   const scheme = useThemeStore((state) => state.scheme);
+  const hydrateTheme = useThemeStore((state) => state.hydrateTheme);
 
   useEffect(() => {
     void bootstrapSession();
   }, [bootstrapSession]);
+
+  useEffect(() => {
+    hydrateTheme();
+  }, [hydrateTheme]);
 
   useEffect(() => {
     const root = document.documentElement;

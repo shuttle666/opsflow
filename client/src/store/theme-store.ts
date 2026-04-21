@@ -6,6 +6,7 @@ export type ThemeScheme = "violet" | "ocean" | "ember";
 type ThemeStore = {
   mode: ThemeMode;
   scheme: ThemeScheme;
+  hydrateTheme: () => void;
   setMode: (mode: ThemeMode) => void;
   cycleMode: () => void;
   setScheme: (scheme: ThemeScheme) => void;
@@ -13,6 +14,10 @@ type ThemeStore = {
 
 const THEME_STORAGE_KEY = "opsflow-theme";
 const THEME_STORAGE_VERSION = 2;
+const DEFAULT_THEME: Pick<ThemeStore, "mode" | "scheme"> = {
+  mode: "system",
+  scheme: "violet",
+};
 
 type StoredTheme = {
   mode?: ThemeMode;
@@ -30,7 +35,7 @@ function isThemeScheme(value: unknown): value is ThemeScheme {
 
 function readStoredTheme(): Pick<ThemeStore, "mode" | "scheme"> {
   if (typeof window === "undefined") {
-    return { mode: "system", scheme: "violet" };
+    return DEFAULT_THEME;
   }
 
   try {
@@ -46,7 +51,7 @@ function readStoredTheme(): Pick<ThemeStore, "mode" | "scheme"> {
         : "violet",
     };
   } catch {
-    return { mode: "system", scheme: "violet" };
+    return DEFAULT_THEME;
   }
 }
 
@@ -61,11 +66,12 @@ function writeStoredTheme(theme: Pick<ThemeStore, "mode" | "scheme">) {
   );
 }
 
-const initialTheme = readStoredTheme();
-
 export const useThemeStore = create<ThemeStore>((set, get) => ({
-  mode: initialTheme.mode,
-  scheme: initialTheme.scheme,
+  mode: DEFAULT_THEME.mode,
+  scheme: DEFAULT_THEME.scheme,
+  hydrateTheme: () => {
+    set(readStoredTheme());
+  },
   setMode: (mode) => {
     set({ mode });
     writeStoredTheme({ mode, scheme: get().scheme });

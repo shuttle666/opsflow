@@ -24,146 +24,163 @@ const primaryStaffId = demoId("20000000", 3);
 const dayMs = 24 * 60 * 60 * 1000;
 const hourMs = 60 * 60 * 1000;
 
+const ownerAccount = {
+  id: ownerId,
+  email: "owner@acme.example",
+  password: "owner-password-123",
+  displayName: "Maya Hart",
+} as const;
+
+const managerAccount = {
+  id: managerId,
+  email: "manager@acme.example",
+  password: "manager-password-123",
+  displayName: "Daniel Brooks",
+} as const;
+
+const staffPassword = "staff-password-123";
+
 const allStaffProfiles = [
   {
     id: primaryStaffId,
     email: "staff@acme.example",
-    displayName: "Sam Staff",
+    displayName: "Sofia Nguyen",
   },
   {
     id: demoId("20000000", 4),
     email: "staff02@acme.example",
-    displayName: "Riley Chen",
+    displayName: "Ethan Caldwell",
   },
   {
     id: demoId("20000000", 5),
     email: "staff03@acme.example",
-    displayName: "Taylor Singh",
+    displayName: "Priya Shah",
   },
   {
     id: demoId("20000000", 6),
     email: "staff04@acme.example",
-    displayName: "Jordan Patel",
+    displayName: "Marcus Reed",
   },
   {
     id: demoId("20000000", 7),
     email: "staff05@acme.example",
-    displayName: "Casey Martin",
+    displayName: "Hannah O'Connor",
   },
   {
     id: demoId("20000000", 8),
     email: "staff06@acme.example",
-    displayName: "Alex Nguyen",
+    displayName: "Lucas Tan",
   },
   {
     id: demoId("20000000", 9),
     email: "staff07@acme.example",
-    displayName: "Jamie Wilson",
+    displayName: "Amelia Rossi",
   },
   {
     id: demoId("20000000", 10),
     email: "staff08@acme.example",
-    displayName: "Morgan Brooks",
+    displayName: "Noah Williams",
   },
   {
     id: demoId("20000000", 11),
     email: "staff09@acme.example",
-    displayName: "Quinn Roberts",
+    displayName: "Chloe Martin",
   },
   {
     id: demoId("20000000", 12),
     email: "staff10@acme.example",
-    displayName: "Harper Lee",
+    displayName: "Isaac Brown",
   },
 ] as const;
 
-const customerFirstNames = [
-  "Noah",
-  "Olivia",
-  "Ethan",
-  "Sophia",
-  "Liam",
-  "Mia",
-  "James",
-  "Charlotte",
-  "Lucas",
-  "Amelia",
-  "Henry",
-  "Isla",
-  "Leo",
-  "Ava",
-  "Jack",
-  "Grace",
-  "Archie",
-  "Ella",
-  "Hudson",
-  "Ruby",
-];
+type CustomerProfile = {
+  name: string;
+  address: string;
+  region: string;
+};
 
-const customerLastNames = [
-  "Thompson",
-  "Davis",
-  "Wilson",
-  "Brown",
-  "Martin",
-  "Clark",
-  "Lee",
-  "King",
-  "Walker",
-  "Hall",
-  "Allen",
-  "Young",
-  "Wright",
-  "Scott",
-  "Green",
-  "Baker",
-  "Adams",
-  "Nelson",
-  "Turner",
-  "Campbell",
-];
-
-const suburbs = [
-  "Adelaide",
-  "North Adelaide",
-  "Norwood",
-  "Unley",
-  "Prospect",
-  "Glenelg",
-  "Mile End",
-  "Kensington",
-  "Burnside",
-  "Goodwood",
-  "Henley Beach",
-  "Semaphore",
-  "Mawson Lakes",
-  "Modbury",
-  "Brighton",
-  "Stirling",
-  "Port Adelaide",
-  "Blackwood",
-  "Magill",
-  "Payneham",
-];
-
-const streetNames = [
-  "Glenview Rd",
-  "East Parkway",
-  "Garden St",
-  "River Ave",
-  "Ashford St",
-  "Franklin St",
-  "Main North Rd",
-  "Hazel Rd",
-  "King William Rd",
-  "The Parade",
-  "Jetty Rd",
-  "Prospect Rd",
-  "Greenhill Rd",
-  "Fullarton Rd",
-  "Military Rd",
-  "Port Rd",
-];
+const customerProfiles = [
+  { name: "Aiden Murphy", address: "18 Collins Street, Melbourne VIC 3000", region: "CBD" },
+  { name: "Mia Chen", address: "42 Queensbridge Street, Southbank VIC 3006", region: "CBD" },
+  { name: "Eleanor Wright", address: "7 Bourke Street, Docklands VIC 3008", region: "CBD" },
+  { name: "Oliver Haddad", address: "63 Rathdowne Street, Carlton VIC 3053", region: "Inner North" },
+  { name: "Zara Patel", address: "25 Gertrude Street, Fitzroy VIC 3065", region: "Inner North" },
+  { name: "Thomas Kelly", address: "89 Smith Street, Collingwood VIC 3066", region: "Inner North" },
+  { name: "Amara Singh", address: "31 Swan Street, Richmond VIC 3121", region: "Inner East" },
+  { name: "Luca Romano", address: "54 Toorak Road, South Yarra VIC 3141", region: "Inner South" },
+  { name: "Sophie Gallagher", address: "16 Greville Street, Prahran VIC 3181", region: "Inner South" },
+  { name: "Noah Ibrahim", address: "72 Acland Street, St Kilda VIC 3182", region: "Bayside" },
+  { name: "Isabella Tran", address: "27 Bay Street, Port Melbourne VIC 3207", region: "Bayside" },
+  { name: "Harry O'Neill", address: "44 Bridport Street, Albert Park VIC 3206", region: "Bayside" },
+  { name: "Priya Nair", address: "93 Sydney Road, Brunswick VIC 3056", region: "Inner North" },
+  { name: "Mason Clarke", address: "38 Bell Street, Coburg VIC 3058", region: "North" },
+  { name: "Grace Yamamoto", address: "12 High Street, Northcote VIC 3070", region: "Inner North" },
+  { name: "Finn Walsh", address: "64 Normanby Avenue, Thornbury VIC 3071", region: "North" },
+  { name: "Hannah Kim", address: "21 Plenty Road, Preston VIC 3072", region: "North" },
+  { name: "Sebastian Rossi", address: "84 Buckley Street, Essendon VIC 3040", region: "North West" },
+  { name: "Charlotte Nguyen", address: "33 Puckle Street, Moonee Ponds VIC 3039", region: "North West" },
+  { name: "Leo Simmons", address: "58 Errol Street, North Melbourne VIC 3051", region: "Inner West" },
+  { name: "Layla Brooks", address: "46 Hopkins Street, Footscray VIC 3011", region: "West" },
+  { name: "Archer Campbell", address: "19 Anderson Street, Yarraville VIC 3013", region: "West" },
+  { name: "Emily Farah", address: "75 Charles Street, Seddon VIC 3011", region: "West" },
+  { name: "Joshua Bennett", address: "23 Ferguson Street, Williamstown VIC 3016", region: "Bayside West" },
+  { name: "Chloe Anderson", address: "57 Mason Street, Newport VIC 3015", region: "Bayside West" },
+  { name: "Daniel Hart", address: "91 Pier Street, Altona VIC 3018", region: "Bayside West" },
+  { name: "Aaliyah Hassan", address: "28 Hampshire Road, Sunshine VIC 3020", region: "West" },
+  { name: "Nathan Foster", address: "67 Watton Street, Werribee VIC 3030", region: "Outer West" },
+  { name: "Ruby McKenzie", address: "14 Derrimut Road, Tarneit VIC 3029", region: "Outer West" },
+  { name: "Elijah Tan", address: "82 Dunnings Road, Point Cook VIC 3030", region: "Outer West" },
+  { name: "Abigail Morris", address: "36 Glenferrie Road, Hawthorn VIC 3122", region: "East" },
+  { name: "Jasper Lee", address: "70 Cotham Road, Kew VIC 3101", region: "East" },
+  { name: "Nina Desai", address: "24 Burke Road, Camberwell VIC 3124", region: "East" },
+  { name: "Ethan Parker", address: "88 Whitehorse Road, Balwyn VIC 3103", region: "East" },
+  { name: "Maya Goldberg", address: "45 Station Street, Box Hill VIC 3128", region: "East" },
+  { name: "Owen Russell", address: "11 Doncaster Road, Doncaster VIC 3108", region: "East" },
+  { name: "Sienna Taylor", address: "79 Maroondah Highway, Ringwood VIC 3134", region: "Outer East" },
+  { name: "Maxwell Chen", address: "32 Blackburn Road, Blackburn VIC 3130", region: "East" },
+  { name: "Eva Phillips", address: "55 Kingsway, Glen Waverley VIC 3150", region: "South East" },
+  { name: "Louis Nguyen", address: "17 Stephensons Road, Mount Waverley VIC 3149", region: "South East" },
+  { name: "Zoe Martin", address: "61 Burwood Highway, Burwood VIC 3125", region: "East" },
+  { name: "Caleb Wilson", address: "29 Glenferrie Road, Malvern VIC 3144", region: "Inner South East" },
+  { name: "Ivy Ahmed", address: "83 Hawthorn Road, Caulfield VIC 3162", region: "Inner South East" },
+  { name: "Aaron Davies", address: "41 Koornang Road, Carnegie VIC 3163", region: "South East" },
+  { name: "Matilda Scott", address: "26 Centre Road, Bentleigh VIC 3204", region: "South East" },
+  { name: "Samuel Brooks", address: "94 Bluff Road, Sandringham VIC 3191", region: "Bayside" },
+  { name: "Freya Wallace", address: "50 Ormond Road, Elwood VIC 3184", region: "Bayside" },
+  { name: "Benjamin Reid", address: "13 Hampton Street, Hampton VIC 3188", region: "Bayside" },
+  { name: "Lily Carter", address: "68 South Road, Moorabbin VIC 3189", region: "Bayside" },
+  { name: "Tyler Moore", address: "22 Charman Road, Cheltenham VIC 3192", region: "Bayside" },
+  { name: "Sarah Malik", address: "87 Atherton Road, Oakleigh VIC 3166", region: "South East" },
+  { name: "Xavier King", address: "35 Clayton Road, Clayton VIC 3168", region: "South East" },
+  { name: "Madison Allen", address: "59 Springvale Road, Springvale VIC 3171", region: "South East" },
+  { name: "Hamish Fraser", address: "18 Lonsdale Street, Dandenong VIC 3175", region: "South East" },
+  { name: "Ava Robinson", address: "73 Wellington Road, Mulgrave VIC 3170", region: "South East" },
+  { name: "Patrick Li", address: "40 Douglas Street, Noble Park VIC 3174", region: "South East" },
+  { name: "Jasmine Walker", address: "96 High Street, Berwick VIC 3806", region: "Outer South East" },
+  { name: "Connor Evans", address: "52 Webb Street, Narre Warren VIC 3805", region: "Outer South East" },
+  { name: "Olivia Graham", address: "30 Sladen Street, Cranbourne VIC 3977", region: "Outer South East" },
+  { name: "Blake Mitchell", address: "76 Wells Street, Frankston VIC 3199", region: "Bayside South" },
+  { name: "Harper Adams", address: "15 Upper Heidelberg Road, Ivanhoe VIC 3079", region: "North East" },
+  { name: "Riley Stone", address: "66 Burgundy Street, Heidelberg VIC 3084", region: "North East" },
+  { name: "Molly Jenkins", address: "37 Rosanna Road, Rosanna VIC 3084", region: "North East" },
+  { name: "Isaac Powell", address: "81 Main Street, Greensborough VIC 3088", region: "North East" },
+  { name: "Lucy Hernandez", address: "20 Plenty Road, Bundoora VIC 3083", region: "North" },
+  { name: "Dylan Turner", address: "62 High Street, Epping VIC 3076", region: "Outer North" },
+  { name: "Georgia Bailey", address: "34 McDonalds Road, South Morang VIC 3752", region: "Outer North" },
+  { name: "Cooper Nelson", address: "90 Spring Street, Reservoir VIC 3073", region: "North" },
+  { name: "Clara Hughes", address: "47 Wheatsheaf Road, Glenroy VIC 3046", region: "North West" },
+  { name: "Logan Stewart", address: "25 Gaffney Street, Pascoe Vale VIC 3044", region: "North West" },
+  { name: "Poppy Reynolds", address: "69 Melrose Drive, Tullamarine VIC 3043", region: "North West" },
+  { name: "Callum Price", address: "10 Milleara Road, Keilor East VIC 3033", region: "North West" },
+  { name: "Ella Freeman", address: "56 Matthews Avenue, Airport West VIC 3042", region: "North West" },
+  { name: "Marcus Young", address: "39 Raleigh Road, Maribyrnong VIC 3032", region: "Inner West" },
+  { name: "Nora Chapman", address: "71 Union Road, Ascot Vale VIC 3032", region: "Inner North West" },
+  { name: "Lachlan Gray", address: "44 Racecourse Road, Flemington VIC 3031", region: "Inner North West" },
+  { name: "Ariana Morris", address: "8 Johnston Street, Abbotsford VIC 3067", region: "Inner East" },
+  { name: "Felix Ward", address: "53 Heidelberg Road, Alphington VIC 3078", region: "Inner North East" },
+  { name: "Victoria Blake", address: "27 Station Street, Fairfield VIC 3078", region: "Inner North" },
+  { name: "Jayden Cook", address: "65 Queens Parade, Clifton Hill VIC 3068", region: "Inner North" },
+] satisfies CustomerProfile[];
 
 const jobTemplates = [
   {
@@ -354,6 +371,8 @@ export function buildDemoSeedData(
     tenantId?: string;
   } = {},
 ): DemoSeedData {
+  assertSeedProfileReady(profile);
+
   const baseDate = options.baseDate ?? resolveBaseDate();
   const tenantId = options.tenantId ?? demoTenant.id;
   const staffProfiles = allStaffProfiles.slice(0, profile.staffCount);
@@ -520,6 +539,66 @@ function buildPhone(index: number) {
   return `04${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5)}`;
 }
 
+function assertSeedProfileReady(profile: DemoSeedProfile) {
+  if (profile.customerCount > customerProfiles.length) {
+    throw new Error(
+      `Demo seed profile ${profile.name} needs ${profile.customerCount} customers, but only ${customerProfiles.length} are defined.`,
+    );
+  }
+
+  if (profile.staffCount > allStaffProfiles.length) {
+    throw new Error(
+      `Demo seed profile ${profile.name} needs ${profile.staffCount} staff members, but only ${allStaffProfiles.length} are defined.`,
+    );
+  }
+
+  const selectedCustomers = customerProfiles.slice(0, profile.customerCount);
+  const selectedStaff = allStaffProfiles.slice(0, profile.staffCount);
+
+  assertUniqueValues(
+    `customer names for ${profile.name}`,
+    selectedCustomers.map((customer) => customer.name),
+  );
+  assertUniqueValues(
+    `customer addresses for ${profile.name}`,
+    selectedCustomers.map((customer) => customer.address),
+  );
+  assertUniqueValues(
+    `team member names for ${profile.name}`,
+    [
+      ownerAccount.displayName,
+      managerAccount.displayName,
+      ...selectedStaff.map((staff) => staff.displayName),
+    ],
+  );
+}
+
+function assertUniqueValues(label: string, values: string[]) {
+  const seen = new Set<string>();
+
+  for (const value of values) {
+    if (seen.has(value)) {
+      throw new Error(`Duplicate ${label} value in demo seed: ${value}`);
+    }
+
+    seen.add(value);
+  }
+}
+
+function buildEmailLocalPart(name: string, index: number) {
+  const normalizedName = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ".")
+    .replace(/^\.+|\.+$/g, "");
+
+  return `${normalizedName}.${String(index).padStart(2, "0")}`;
+}
+
+function extractSuburbFromAddress(address: string | null | undefined) {
+  const match = address?.match(/,\s*(.+?)\s+VIC\s+\d{4}$/);
+  return match?.[1] ?? "Melbourne";
+}
+
 function replaceAssigneeIdInMetadata(
   metadata: Prisma.AuditLogCreateManyInput["metadata"],
   idReplacements: Map<string, string>,
@@ -539,22 +618,22 @@ function replaceAssigneeIdInMetadata(
 }
 
 function buildUsers(staffProfiles: DemoSeedData["staffProfiles"], tenantId: string) {
-  const ownerPasswordHash = bcrypt.hashSync("owner-password-123", 10);
-  const managerPasswordHash = bcrypt.hashSync("manager-password-123", 10);
-  const staffPasswordHash = bcrypt.hashSync("staff-password-123", 10);
+  const ownerPasswordHash = bcrypt.hashSync(ownerAccount.password, 10);
+  const managerPasswordHash = bcrypt.hashSync(managerAccount.password, 10);
+  const staffPasswordHash = bcrypt.hashSync(staffPassword, 10);
 
   const users: BuiltUser[] = [
     {
-      id: ownerId,
-      email: "owner@acme.example",
+      id: ownerAccount.id,
+      email: ownerAccount.email,
       passwordHash: ownerPasswordHash,
-      displayName: "Avery Owner",
+      displayName: ownerAccount.displayName,
     },
     {
-      id: managerId,
-      email: "manager@acme.example",
+      id: managerAccount.id,
+      email: managerAccount.email,
       passwordHash: managerPasswordHash,
-      displayName: "Morgan Manager",
+      displayName: managerAccount.displayName,
     },
     ...staffProfiles.map((staff) => ({
       id: staff.id,
@@ -566,13 +645,13 @@ function buildUsers(staffProfiles: DemoSeedData["staffProfiles"], tenantId: stri
 
   const memberships: Prisma.MembershipCreateManyInput[] = [
     {
-      userId: ownerId,
+      userId: ownerAccount.id,
       tenantId,
       role: MembershipRole.OWNER,
       status: MembershipStatus.ACTIVE,
     },
     {
-      userId: managerId,
+      userId: managerAccount.id,
       tenantId,
       role: MembershipRole.MANAGER,
       status: MembershipStatus.ACTIVE,
@@ -591,28 +670,25 @@ function buildUsers(staffProfiles: DemoSeedData["staffProfiles"], tenantId: stri
 function buildCustomers(profile: DemoSeedProfile, baseDate: Date, tenantId: string) {
   const firstArchivedIndex = profile.customerCount - profile.archivedCustomerCount;
 
-  return Array.from({ length: profile.customerCount }, (_, index): BuiltCustomer => {
+  return customerProfiles.slice(0, profile.customerCount).map((customerProfile, index): BuiltCustomer => {
     const oneBasedIndex = index + 1;
-    const firstName = pick(customerFirstNames, index);
-    const lastName = pick(customerLastNames, index * 7);
-    const suburb = pick(suburbs, index * 3);
     const archivedAt = index >= firstArchivedIndex ? addDays(baseDate, -(60 + index), 9) : null;
 
     return {
       id: demoId("30000000", oneBasedIndex),
       tenantId,
-      name: `${firstName} ${lastName}`,
+      name: customerProfile.name,
       phone: buildPhone(oneBasedIndex),
-      email: `${firstName}.${lastName}.${oneBasedIndex}@example.com`.toLowerCase(),
-      address: `${12 + ((index * 17) % 180)} ${pick(streetNames, index * 5)}, ${suburb} SA`,
+      email: `${buildEmailLocalPart(customerProfile.name, oneBasedIndex)}@example.com`,
+      address: customerProfile.address,
       notes:
         index % 5 === 0
-          ? "Prefers SMS before arrival. Dog on site, use side gate if no answer."
+          ? `Prefers SMS before arrival. ${customerProfile.region} access can be busy during school pickup.`
           : index % 7 === 0
-            ? "Property managed by a local agency. Confirm access window before dispatch."
+            ? `Property managed by a local agency. Confirm the ${customerProfile.region} access window before dispatch.`
             : null,
       archivedAt,
-      createdById: index % 3 === 0 ? ownerId : managerId,
+      createdById: index % 3 === 0 ? ownerAccount.id : managerAccount.id,
     };
   });
 }
@@ -631,15 +707,19 @@ function buildJobData(input: {
   const archivedCustomerIds = customers
     .filter((customer) => customer.archivedAt)
     .map((customer) => customer.id);
+  const customerSuburbsById = new Map(
+    customers.map((customer) => [customer.id, extractSuburbFromAddress(customer.address)]),
+  );
   const staffIds = staffProfiles.map((staff) => staff.id);
   const jobs: BuiltJob[] = [];
   const statusHistory: Prisma.JobStatusHistoryCreateManyInput[] = [];
   const completionReviews: Prisma.JobCompletionReviewCreateManyInput[] = [];
   const auditLogs: Prisma.AuditLogCreateManyInput[] = [];
+  let activeCustomerCursor = 0;
   let terminalCustomerCursor = 0;
   let reviewCursor = 0;
 
-  function pickCustomerForStatus(status: JobStatus, index: number) {
+  function pickCustomerForStatus(status: JobStatus) {
     if (status === JobStatus.COMPLETED || status === JobStatus.CANCELLED) {
       const terminalIndex = terminalCustomerCursor;
       terminalCustomerCursor += 1;
@@ -653,7 +733,10 @@ function buildJobData(input: {
       }
     }
 
-    return pick(activeCustomerIds, index * 7 + jobs.length);
+    const activeIndex = activeCustomerCursor;
+    activeCustomerCursor += 1;
+
+    return pick(activeCustomerIds, activeIndex);
   }
 
   function pushAuditLog(log: Prisma.AuditLogCreateManyInput) {
@@ -794,17 +877,18 @@ function buildJobData(input: {
     for (let statusIndex = 0; statusIndex < count; statusIndex += 1) {
       const jobNumber = jobs.length + 1;
       const template = pick(jobTemplates, jobNumber * 3);
-      const suburb = pick(suburbs, jobNumber * 5);
       const assignedToId = status === JobStatus.NEW ? null : pick(staffIds, statusIndex + jobNumber);
       const startAt = buildScheduleStart(baseDate, status, statusIndex, jobNumber);
+      const customerId = pickCustomerForStatus(status);
+      const suburb = customerSuburbsById.get(customerId) ?? "Melbourne";
       const job: BuiltJob = {
         id: demoId("40000000", jobNumber),
         tenantId,
-        customerId: pickCustomerForStatus(status, statusIndex),
+        customerId,
         title: `${template.title} - ${suburb}`,
         description: template.description,
         status,
-        createdById: jobNumber % 4 === 0 ? ownerId : managerId,
+        createdById: jobNumber % 4 === 0 ? ownerAccount.id : managerAccount.id,
         assignedToId,
         scheduledAt: startAt,
         scheduledStartAt: startAt,
@@ -844,7 +928,7 @@ function buildJobData(input: {
 
   for (const staff of staffProfiles) {
     pushAuditLog({
-      userId: ownerId,
+      userId: ownerAccount.id,
       action: AuditAction.MEMBERSHIP_UPDATED,
       targetType: "membership",
       createdAt: addDays(baseDate, -110 + (staffProfiles.indexOf(staff) % 12), 9),
@@ -862,7 +946,7 @@ function buildJobData(input: {
   for (const customer of customers) {
     if (customer.archivedAt) {
       pushAuditLog({
-        userId: managerId,
+        userId: managerAccount.id,
         action: AuditAction.CUSTOMER_ARCHIVED,
         targetType: "customer",
         targetId: customer.id,
@@ -876,7 +960,7 @@ function buildJobData(input: {
 
   for (const customer of customers.slice(0, Math.min(3, customers.length))) {
     pushAuditLog({
-      userId: ownerId,
+      userId: ownerAccount.id,
       action: AuditAction.CUSTOMER_RESTORED,
       targetType: "customer",
       targetId: customer.id,
@@ -968,7 +1052,7 @@ function buildStatusHistoryForJob(input: {
     pushCancellation({
       job,
       fromStatus: JobStatus.NEW,
-      changedById: managerId,
+      changedById: managerAccount.id,
       changedAt: scheduledAt,
       reason: cancellationReason,
       pushTransition,
@@ -980,7 +1064,7 @@ function buildStatusHistoryForJob(input: {
     job,
     fromStatus: JobStatus.NEW,
     toStatus: JobStatus.SCHEDULED,
-    changedById: managerId,
+    changedById: managerAccount.id,
     reason: "Scheduled for the next available technician.",
     changedAt: scheduledAt,
   });
@@ -993,7 +1077,7 @@ function buildStatusHistoryForJob(input: {
     pushCancellation({
       job,
       fromStatus: JobStatus.SCHEDULED,
-      changedById: managerId,
+      changedById: managerAccount.id,
       changedAt: inProgressAt,
       reason: cancellationReason,
       pushTransition,
@@ -1027,7 +1111,7 @@ function buildStatusHistoryForJob(input: {
         job,
         fromStatus: JobStatus.PENDING_REVIEW,
         toStatus: JobStatus.IN_PROGRESS,
-        changedById: managerId,
+        changedById: managerAccount.id,
         reason: `Returned for rework: ${reviewNote}`,
         changedAt: returnedAt,
       });
@@ -1037,7 +1121,7 @@ function buildStatusHistoryForJob(input: {
         submittedAt: pendingReviewAt,
         submittedById: assigneeId,
         reviewedAt: returnedAt,
-        reviewedById: managerId,
+        reviewedById: managerAccount.id,
         reviewNote,
       });
     }
@@ -1049,7 +1133,7 @@ function buildStatusHistoryForJob(input: {
     pushCancellation({
       job,
       fromStatus: JobStatus.IN_PROGRESS,
-      changedById: managerId,
+      changedById: managerAccount.id,
       changedAt: pendingReviewAt,
       reason: cancellationReason,
       pushTransition,
@@ -1081,7 +1165,7 @@ function buildStatusHistoryForJob(input: {
       job,
       fromStatus: JobStatus.PENDING_REVIEW,
       toStatus: JobStatus.COMPLETED,
-      changedById: managerId,
+      changedById: managerAccount.id,
       reason: "Completion review approved.",
       changedAt: finalAt,
     });
@@ -1091,7 +1175,7 @@ function buildStatusHistoryForJob(input: {
       submittedAt: pendingReviewAt,
       submittedById: assigneeId,
       reviewedAt: finalAt,
-      reviewedById: managerId,
+      reviewedById: managerAccount.id,
     });
     return;
   }
@@ -1099,7 +1183,7 @@ function buildStatusHistoryForJob(input: {
   pushCancellation({
     job,
     fromStatus: JobStatus.PENDING_REVIEW,
-    changedById: managerId,
+    changedById: managerAccount.id,
     changedAt: finalAt,
     reason: cancellationReason,
     pushTransition,

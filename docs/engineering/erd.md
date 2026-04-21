@@ -15,6 +15,10 @@ This document is aligned with `server/prisma/schema.prisma`.
 - `TenantInvitation`
 - `AuditLog`
 - `Notification`
+- `AgentConversation`
+- `AgentMessage`
+- `AgentToolCall`
+- `AgentProposal`
 
 ## Core Relationships
 - `User` and `Tenant` are many-to-many through `Membership`.
@@ -29,6 +33,7 @@ This document is aligned with `server/prisma/schema.prisma`.
 - `TenantInvitation` stores invitation lifecycle state.
 - `AuditLog` stores tenant activity.
 - `Notification` stores per-user in-app notifications.
+- `AgentConversation`, `AgentMessage`, `AgentToolCall`, and `AgentProposal` persist AI planner state and confirmation evidence.
 
 ## Important Notes
 - All tenant-scoped business models include `tenant_id`.
@@ -36,6 +41,7 @@ This document is aligned with `server/prisma/schema.prisma`.
 - `Job` keeps both legacy `scheduled_at` and current `scheduled_start_at` / `scheduled_end_at`; API and UI use the start/end window fields.
 - `JobStatus` includes `PENDING_REVIEW`.
 - Completion review AI fields already exist on `JobCompletionReview`, although automated AI review is not currently a primary user flow.
+- AI planner conversations, tool call input/output, and proposals are persisted; confirmed proposals are retained with confirmation metadata.
 
 ## Enums
 - `TenantStatus`: `ACTIVE`, `DEACTIVATED`
@@ -47,6 +53,8 @@ This document is aligned with `server/prisma/schema.prisma`.
 - `JobCompletionAiStatus`: `PENDING`, `APPROVED`, `NEEDS_REVIEW`, `FAILED`
 - `InvitationStatus`: `PENDING`, `ACCEPTED`, `CANCELLED`, `EXPIRED`
 - `NotificationType`: `JOB_ASSIGNED`, `JOB_UNASSIGNED`, `JOB_STATUS_CHANGED`, `JOB_COMPLETION_SUBMITTED`, `JOB_COMPLETION_APPROVED`, `JOB_COMPLETION_RETURNED`
+- `AgentMessageRole`: `USER`, `ASSISTANT`
+- `AgentProposalStatus`: `PENDING`, `CONFIRMING`, `CONFIRMED`, `FAILED`
 
 ## Future Candidates
 - Quote
@@ -83,6 +91,15 @@ erDiagram
     TENANTS ||--o{ NOTIFICATIONS : owns
     USERS ||--o{ NOTIFICATIONS : receives
     USERS ||--o{ NOTIFICATIONS : acts
+    TENANTS ||--o{ AGENT_CONVERSATIONS : owns
+    USERS ||--o{ AGENT_CONVERSATIONS : starts
+    AGENT_CONVERSATIONS ||--o{ AGENT_MESSAGES : contains
+    AGENT_CONVERSATIONS ||--o{ AGENT_TOOL_CALLS : traces
+    AGENT_MESSAGES ||--o{ AGENT_TOOL_CALLS : records
+    AGENT_CONVERSATIONS ||--o{ AGENT_PROPOSALS : drafts
+    USERS ||--o{ AGENT_PROPOSALS : creates
+    USERS ||--o{ AGENT_PROPOSALS : confirms
+    AGENT_MESSAGES ||--o| AGENT_PROPOSALS : presents
 
     USERS {
         uuid id
@@ -199,5 +216,44 @@ erDiagram
         NotificationType type
         string title
         datetime read_at
+    }
+
+    AGENT_CONVERSATIONS {
+        uuid id
+        uuid tenant_id
+        uuid user_id
+        string preview
+        json model_messages
+    }
+
+    AGENT_MESSAGES {
+        uuid id
+        uuid conversation_id
+        AgentMessageRole role
+        string content
+    }
+
+    AGENT_TOOL_CALLS {
+        uuid id
+        uuid conversation_id
+        uuid message_id
+        string tool_name
+        json input
+        json result
+        int call_order
+    }
+
+    AGENT_PROPOSALS {
+        uuid id
+        uuid conversation_id
+        uuid tenant_id
+        uuid user_id
+        uuid assistant_message_id
+        string intent
+        AgentProposalStatus status
+        json payload
+        json confirmation_result
+        uuid confirmed_by_id
+        datetime confirmed_at
     }
 ```

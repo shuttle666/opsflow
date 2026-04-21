@@ -46,7 +46,7 @@ Current modules:
 - `membership` - team membership listing and owner-only role/status updates
 - `audit` - tenant activity feed from audit logs
 - `notification` - persisted notifications, unread counts, and SSE streaming
-- `agent` - in-memory AI dispatch planner conversations and proposal confirmation
+- `agent` - persisted AI dispatch planner conversations, tool traces, proposals, and proposal confirmation
 
 ## Database
 PostgreSQL is the system of record. Tenant isolation is enforced through `tenantId` on business entities and tenant-aware query filters.
@@ -85,7 +85,7 @@ Activity is tenant-wide audit history for owners/managers. Notifications are use
 ### AI Dispatch Planner
 The agent uses Anthropic, repository-local tools, and explicit confirmation. It can search customers, jobs, staff, activity, and schedule conflicts, then save a proposal. Confirmation can create customers/jobs, assign work, and move scheduled jobs to `SCHEDULED`.
 
-Agent conversations and proposals are currently in-memory and expire after 24 hours.
+Agent conversations, messages, tool calls, and proposals are persisted in PostgreSQL. Confirmed proposals are retained with confirmation metadata for audit.
 
 ## Infrastructure
 - Local development uses `docker-compose.dev.yml`.

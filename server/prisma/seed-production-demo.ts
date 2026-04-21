@@ -29,7 +29,33 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg(pool),
 });
 
-async function main() {
+const transactionOptions = {
+  maxWait: 30_000,
+  timeout: 120_000,
+};
+const maxResetAttempts = 3;
+
+function isTransactionStartTimeout(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const maybeError = error as { code?: unknown; message?: unknown };
+
+  return (
+    maybeError.code === "P2028" &&
+    typeof maybeError.message === "string" &&
+    maybeError.message.includes("Unable to start a transaction")
+  );
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function resetProductionDemoData() {
   let seededData: ReturnType<typeof buildDemoSeedData> | undefined;
 
   await prisma.$transaction(async (tx) => {
@@ -126,12 +152,41 @@ async function main() {
     await tx.auditLog.createMany({ data: data.auditLogs });
 
     seededData = data;
-  });
+  }, transactionOptions);
 
-  console.log("Production demo reset complete: Acme Home Services demo tenant refreshed.");
   if (!seededData) {
     throw new Error("Production demo reset did not produce seed data.");
   }
+
+  return seededData;
+}
+
+async function resetProductionDemoDataWithRetry() {
+  for (let attempt = 1; attempt <= maxResetAttempts; attempt += 1) {
+    try {
+      return await resetProductionDemoData();
+    } catch (error) {
+      const canRetry = attempt < maxResetAttempts && isTransactionStartTimeout(error);
+
+      if (!canRetry) {
+        throw error;
+      }
+
+      const retryDelayMs = attempt * 5_000;
+      console.warn(
+        `Production demo reset could not start a transaction; retrying in ${retryDelayMs / 1000}s (${attempt}/${maxResetAttempts}).`,
+      );
+      await sleep(retryDelayMs);
+    }
+  }
+
+  throw new Error("Production demo reset exhausted retries.");
+}
+
+async function main() {
+  const seededData = await resetProductionDemoDataWithRetry();
+
+  console.log("Production demo reset complete: Acme Home Services demo tenant refreshed.");
   printDemoSeedSummary(seededData);
 }
 

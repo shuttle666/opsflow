@@ -1,14 +1,23 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { JobStatus, MembershipRole } from "@prisma/client";
+import {
+  AgentMessageRole,
+  AgentProposalStatus,
+  AuditAction,
+  JobStatus,
+  MembershipRole,
+  MembershipStatus,
+  type Prisma,
+} from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import type { AuthContext } from "../../types/auth";
 import { ApiError } from "../../utils/api-error";
-import { createCustomer } from "../customer/customer.service";
 import {
-  assignJob,
-  createJob,
-  transitionJobStatusForActor,
-} from "../job/job.service";
+  createJobAssignedNotification,
+  createJobStatusChangedNotification,
+  publishCreatedNotifications,
+  type NotificationDeliveryItem,
+} from "../notification/notification.service";
+import { transitionJobStatusInTransaction } from "../job/job-status.service";
 
 export type DispatchProposal = {
   id: string;
@@ -31,6 +40,7 @@ export type DispatchProposal = {
     }>;
   };
   jobDraft: {
+    existingJobId?: string;
     title: string;
     description?: string | null;
   };
@@ -81,6 +91,11 @@ export type ConversationSummary = {
   updatedAt: Date;
 };
 
+type DispatchProposalPayload = Omit<
+  DispatchProposal,
+  "id" | "conversationId" | "tenantId" | "userId" | "createdAt"
+>;
+
 type ConfirmedProposalResult = {
   proposalId: string;
   entityType: "customer" | "job";
@@ -89,117 +104,284 @@ type ConfirmedProposalResult = {
   usedExistingCustomer?: boolean;
   createdJobId?: string;
   createdJobTitle?: string;
+  updatedExistingJob?: boolean;
   assignedToName?: string;
   transitionedTo?: JobStatus;
 };
 
-const conversations = new Map<string, Conversation>();
-const proposals = new Map<string, DispatchProposal>();
+type ProposalJobTargetInput = Pick<
+  DispatchProposalPayload,
+  "intent" | "customer" | "jobDraft" | "scheduleDraft" | "assigneeDraft"
+>;
 
-function cleanupExpiredState() {
-  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+const openDispatchJobStatuses: JobStatus[] = [
+  JobStatus.NEW,
+  JobStatus.SCHEDULED,
+  JobStatus.IN_PROGRESS,
+  JobStatus.PENDING_REVIEW,
+];
 
-  for (const [id, conv] of conversations) {
-    if (conv.updatedAt.getTime() < cutoff) {
-      conversations.delete(id);
-    }
-  }
+const conversationInclude = {
+  messages: {
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    include: {
+      toolCalls: {
+        orderBy: { callOrder: "asc" },
+      },
+      proposal: true,
+    },
+  },
+} satisfies Prisma.AgentConversationInclude;
 
-  for (const [id, proposal] of proposals) {
-    if (proposal.createdAt.getTime() < cutoff) {
-      proposals.delete(id);
-    }
-  }
+type ConversationRecord = Prisma.AgentConversationGetPayload<{
+  include: typeof conversationInclude;
+}>;
+
+type ProposalRecord = Prisma.AgentProposalGetPayload<object>;
+
+function toJsonValue(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
 }
 
-setInterval(cleanupExpiredState, 30 * 60 * 1000);
+function modelMessagesFromJson(value: Prisma.JsonValue): Anthropic.MessageParam[] {
+  return Array.isArray(value) ? (value as unknown as Anthropic.MessageParam[]) : [];
+}
 
-export function createConversation(auth: AuthContext): Conversation {
-  const id = crypto.randomUUID();
-  const now = new Date();
-  const conversation: Conversation = {
-    id,
-    tenantId: auth.tenantId,
-    userId: auth.userId,
-    messages: [],
-    claudeMessages: [],
-    createdAt: now,
-    updatedAt: now,
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function proposalPayloadFromJson(value: Prisma.JsonValue): DispatchProposalPayload {
+  const payload = isRecord(value) ? value : {};
+  const customer = isRecord(payload.customer)
+    ? (payload.customer as DispatchProposalPayload["customer"])
+    : { status: "missing" as const };
+  const jobDraft = isRecord(payload.jobDraft)
+    ? (payload.jobDraft as DispatchProposalPayload["jobDraft"])
+    : { title: "" };
+  const scheduleDraft = isRecord(payload.scheduleDraft)
+    ? (payload.scheduleDraft as DispatchProposalPayload["scheduleDraft"])
+    : { timezone: "UTC" };
+  const warnings = Array.isArray(payload.warnings)
+    ? payload.warnings.map((warning) => String(warning))
+    : [];
+  const confidence =
+    typeof payload.confidence === "number" ? payload.confidence : Number(payload.confidence ?? 0.5);
+
+  return {
+    intent: String(payload.intent ?? "dispatch_plan"),
+    customer,
+    jobDraft,
+    scheduleDraft,
+    assigneeDraft: isRecord(payload.assigneeDraft)
+      ? (payload.assigneeDraft as DispatchProposalPayload["assigneeDraft"])
+      : undefined,
+    warnings,
+    confidence: Number.isFinite(confidence) ? confidence : 0.5,
   };
-  conversations.set(id, conversation);
-  return conversation;
 }
 
-export function getConversation(
+function proposalFromRecord(record: ProposalRecord): DispatchProposal {
+  const payload = proposalPayloadFromJson(record.payload);
+
+  return {
+    id: record.id,
+    conversationId: record.conversationId,
+    tenantId: record.tenantId,
+    userId: record.userId,
+    createdAt: record.createdAt,
+    ...payload,
+    intent: payload.intent || record.intent,
+  };
+}
+
+function mapConversationMessage(
+  message: ConversationRecord["messages"][number],
+): ConversationMessage {
+  const toolCalls = message.toolCalls.map((toolCall) => ({
+    name: toolCall.toolName,
+    input: toolCall.input,
+    result: toolCall.result,
+  }));
+
+  return {
+    id: message.id,
+    role: message.role === AgentMessageRole.USER ? "user" : "assistant",
+    content: message.content,
+    ...(toolCalls.length > 0 ? { toolCalls } : {}),
+    ...(message.proposal?.status === AgentProposalStatus.PENDING
+      ? { proposal: proposalFromRecord(message.proposal) }
+      : {}),
+    createdAt: message.createdAt,
+  };
+}
+
+function mapConversation(record: ConversationRecord): Conversation {
+  return {
+    id: record.id,
+    tenantId: record.tenantId,
+    userId: record.userId,
+    messages: record.messages.map(mapConversationMessage),
+    claudeMessages: modelMessagesFromJson(record.modelMessages),
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  };
+}
+
+async function getConversationRecord(
   auth: AuthContext,
   conversationId: string,
-): Conversation | null {
-  const conv = conversations.get(conversationId);
-  if (!conv) return null;
-  if (conv.tenantId !== auth.tenantId || conv.userId !== auth.userId) return null;
-  return conv;
+): Promise<ConversationRecord | null> {
+  return prisma.agentConversation.findFirst({
+    where: {
+      id: conversationId,
+      tenantId: auth.tenantId,
+      userId: auth.userId,
+    },
+    include: conversationInclude,
+  });
 }
 
-export function listConversations(auth: AuthContext): ConversationSummary[] {
-  const result: ConversationSummary[] = [];
-  for (const conv of conversations.values()) {
-    if (conv.tenantId === auth.tenantId && conv.userId === auth.userId) {
-      const firstMessage = conv.messages[0];
-      result.push({
-        id: conv.id,
-        preview: firstMessage?.content.slice(0, 100) ?? "",
-        createdAt: conv.createdAt,
-        updatedAt: conv.updatedAt,
-      });
-    }
-  }
-  return result.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+export async function createConversation(auth: AuthContext): Promise<Conversation> {
+  const conversation = await prisma.agentConversation.create({
+    data: {
+      tenantId: auth.tenantId,
+      userId: auth.userId,
+      preview: "",
+      modelMessages: toJsonValue([]),
+    },
+    include: conversationInclude,
+  });
+
+  return mapConversation(conversation);
 }
 
-export function addUserMessage(
+export async function getConversation(
+  auth: AuthContext,
+  conversationId: string,
+): Promise<Conversation | null> {
+  const conversation = await getConversationRecord(auth, conversationId);
+  return conversation ? mapConversation(conversation) : null;
+}
+
+export async function listConversations(auth: AuthContext): Promise<ConversationSummary[]> {
+  const conversations = await prisma.agentConversation.findMany({
+    where: {
+      tenantId: auth.tenantId,
+      userId: auth.userId,
+    },
+    orderBy: {
+      updatedAt: "desc",
+    },
+    select: {
+      id: true,
+      preview: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  return conversations;
+}
+
+export async function addUserMessage(
   auth: AuthContext,
   conversationId: string,
   content: string,
-): ConversationMessage {
-  const conv = getConversation(auth, conversationId);
-  if (!conv) throw new Error("Conversation not found.");
+): Promise<ConversationMessage> {
+  const conversation = await prisma.agentConversation.findFirst({
+    where: {
+      id: conversationId,
+      tenantId: auth.tenantId,
+      userId: auth.userId,
+    },
+    select: {
+      id: true,
+      preview: true,
+      modelMessages: true,
+    },
+  });
 
-  const message: ConversationMessage = {
-    id: crypto.randomUUID(),
-    role: "user",
-    content,
-    createdAt: new Date(),
-  };
-
-  conv.messages.push(message);
-  conv.claudeMessages.push({ role: "user", content });
-  conv.updatedAt = new Date();
-
-  return message;
-}
-
-export function storeDispatchProposal(
-  auth: AuthContext,
-  conversationId: string,
-  input: Omit<DispatchProposal, "id" | "conversationId" | "tenantId" | "userId" | "createdAt">,
-) {
-  const conversation = getConversation(auth, conversationId);
   if (!conversation) {
     throw new Error("Conversation not found.");
   }
 
-  const proposal: DispatchProposal = {
-    id: crypto.randomUUID(),
-    conversationId,
-    tenantId: auth.tenantId,
-    userId: auth.userId,
-    createdAt: new Date(),
-    ...input,
-  };
+  const claudeMessages = [
+    ...modelMessagesFromJson(conversation.modelMessages),
+    { role: "user", content } satisfies Anthropic.MessageParam,
+  ];
 
-  proposals.set(proposal.id, proposal);
-  conversation.updatedAt = new Date();
-  return proposal;
+  const message = await prisma.$transaction(async (tx) => {
+    const createdMessage = await tx.agentMessage.create({
+      data: {
+        conversationId,
+        role: AgentMessageRole.USER,
+        content,
+      },
+    });
+
+    await tx.agentConversation.update({
+      where: { id: conversationId },
+      data: {
+        modelMessages: toJsonValue(claudeMessages),
+        ...(conversation.preview ? {} : { preview: content.slice(0, 100) }),
+      },
+    });
+
+    return createdMessage;
+  });
+
+  return {
+    id: message.id,
+    role: "user",
+    content: message.content,
+    createdAt: message.createdAt,
+  };
+}
+
+export async function storeDispatchProposal(
+  auth: AuthContext,
+  conversationId: string,
+  input: DispatchProposalPayload,
+): Promise<DispatchProposal> {
+  const conversation = await prisma.agentConversation.findFirst({
+    where: {
+      id: conversationId,
+      tenantId: auth.tenantId,
+      userId: auth.userId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!conversation) {
+    throw new Error("Conversation not found.");
+  }
+
+  const proposal = await prisma.$transaction(async (tx) => {
+    await assertProposalJobTargetIsSafe(tx, auth, input);
+
+    const createdProposal = await tx.agentProposal.create({
+      data: {
+        conversationId,
+        tenantId: auth.tenantId,
+        userId: auth.userId,
+        intent: input.intent,
+        payload: toJsonValue(input),
+        status: AgentProposalStatus.PENDING,
+      },
+    });
+
+    await tx.agentConversation.update({
+      where: { id: conversationId },
+      data: { updatedAt: new Date() },
+    });
+
+    return createdProposal;
+  });
+
+  return proposalFromRecord(proposal);
 }
 
 function findLatestProposal(
@@ -220,68 +402,111 @@ function findLatestProposal(
   return undefined;
 }
 
-export function appendAssistantMessage(
+export async function appendAssistantMessage(
   conversationId: string,
   content: string,
   claudeMessages: Anthropic.MessageParam[],
   toolCalls?: Array<{ name: string; input: unknown; result: unknown }>,
-): void {
-  const conv = conversations.get(conversationId);
-  if (!conv) return;
+): Promise<void> {
+  const proposal = findLatestProposal(toolCalls);
 
-  conv.messages.push({
-    id: crypto.randomUUID(),
-    role: "assistant",
-    content,
-    toolCalls,
-    proposal: findLatestProposal(toolCalls),
-    createdAt: new Date(),
+  await prisma.$transaction(async (tx) => {
+    const message = await tx.agentMessage.create({
+      data: {
+        conversationId,
+        role: AgentMessageRole.ASSISTANT,
+        content,
+      },
+    });
+
+    if (toolCalls?.length) {
+      await tx.agentToolCall.createMany({
+        data: toolCalls.map((toolCall, index) => ({
+          conversationId,
+          messageId: message.id,
+          toolName: toolCall.name,
+          input: toJsonValue(toolCall.input),
+          result: toJsonValue(toolCall.result),
+          callOrder: index,
+        })),
+      });
+    }
+
+    if (proposal) {
+      await tx.agentProposal.updateMany({
+        where: {
+          id: proposal.id,
+          conversationId,
+          status: AgentProposalStatus.PENDING,
+        },
+        data: {
+          assistantMessageId: message.id,
+        },
+      });
+    }
+
+    await tx.agentConversation.update({
+      where: { id: conversationId },
+      data: {
+        modelMessages: toJsonValue(claudeMessages),
+      },
+    });
   });
-
-  conv.claudeMessages = claudeMessages;
-  conv.updatedAt = new Date();
 }
 
-export function appendLocalAssistantMessage(conversationId: string, content: string): void {
-  const conv = conversations.get(conversationId);
-  if (!conv) return;
-
-  conv.messages.push({
-    id: crypto.randomUUID(),
-    role: "assistant",
-    content,
-    createdAt: new Date(),
-  });
-  conv.updatedAt = new Date();
+export async function appendLocalAssistantMessage(
+  conversationId: string,
+  content: string,
+): Promise<void> {
+  await prisma.$transaction([
+    prisma.agentMessage.create({
+      data: {
+        conversationId,
+        role: AgentMessageRole.ASSISTANT,
+        content,
+      },
+    }),
+    prisma.agentConversation.update({
+      where: { id: conversationId },
+      data: { updatedAt: new Date() },
+    }),
+  ]);
 }
 
-export function getProposal(
+export async function getProposal(
   auth: AuthContext,
   conversationId: string,
   proposalId: string,
-): DispatchProposal | null {
-  const proposal = proposals.get(proposalId);
-  if (!proposal) return null;
-  if (
-    proposal.conversationId !== conversationId ||
-    proposal.tenantId !== auth.tenantId ||
-    proposal.userId !== auth.userId
-  ) {
-    return null;
-  }
-  return proposal;
+): Promise<DispatchProposal | null> {
+  const proposal = await prisma.agentProposal.findFirst({
+    where: {
+      id: proposalId,
+      conversationId,
+      tenantId: auth.tenantId,
+      userId: auth.userId,
+      status: AgentProposalStatus.PENDING,
+    },
+  });
+
+  return proposal ? proposalFromRecord(proposal) : null;
 }
 
-function resolveCustomerIdFromProposal(proposal: DispatchProposal): string | undefined {
-  if (proposal.customer.matchedCustomerId) {
-    return proposal.customer.matchedCustomerId;
+function resolveCustomerIdFromCustomer(
+  customer: DispatchProposal["customer"] | DispatchProposalPayload["customer"],
+): string | undefined {
+  if (customer.matchedCustomerId) {
+    return customer.matchedCustomerId;
   }
 
-  if (proposal.customer.status === "matched" && proposal.customer.matches?.length === 1) {
-    return proposal.customer.matches[0]?.id;
+  if (customer.status === "matched" && customer.matches?.length === 1) {
+    return customer.matches[0]?.id;
   }
 
   return undefined;
+}
+
+function resolveCustomerIdFromProposal(proposal: DispatchProposal): string | undefined {
+  return resolveCustomerIdFromCustomer(proposal.customer);
 }
 
 function resolveMembershipIdFromProposal(proposal: DispatchProposal): string | undefined {
@@ -300,12 +525,306 @@ function isCreateCustomerOnlyIntent(intent: string): boolean {
   return intent.trim().toLowerCase() === "create_customer";
 }
 
+function isUpdateExistingJobIntent(intent: string): boolean {
+  return intent.trim().toLowerCase() === "update_existing_job";
+}
+
+function hasSchedulingOrAssignmentIntent(proposal: ProposalJobTargetInput): boolean {
+  return Boolean(
+    proposal.assigneeDraft?.status === "matched" ||
+      proposal.scheduleDraft.scheduledStartAt ||
+      proposal.scheduleDraft.scheduledEndAt,
+  );
+}
+
+const jobConceptPatterns = [
+  ["leak", /leak|漏水|渗漏|漏/iu],
+  ["tap", /\btaps?\b|\bfaucets?\b|水龙头|龙头/iu],
+  ["kitchen", /\bkitchen\b|厨房/iu],
+  ["dishwasher", /\bdish\s*washer\b|\bdishwasher\b|洗碗机/iu],
+  ["investigation", /investigat|inspect|diagnos|调查|检查/iu],
+  ["installation", /install|安装/iu],
+  ["ceiling", /\bceiling\b|天花板|吊顶/iu],
+  ["fan", /\bfans?\b|风扇|吊扇/iu],
+  ["aircon", /\bair\s*con\b|\bac\b|\bair\s*condition|空调/iu],
+  ["maintenance", /mainten|service|维护|保养/iu],
+] satisfies Array<[string, RegExp]>;
+
+const comparableTokenStopWords = new Set([
+  "the",
+  "and",
+  "for",
+  "with",
+  "from",
+  "job",
+  "work",
+  "repair",
+  "repairs",
+  "service",
+  "services",
+]);
+
+function proposalJobText(proposal: ProposalJobTargetInput): string {
+  return `${proposal.jobDraft.title} ${proposal.jobDraft.description ?? ""}`;
+}
+
+function normalizeComparableText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractComparableTokens(value: string): Set<string> {
+  const tokens = value.toLowerCase().match(/[a-z0-9]+/gu) ?? [];
+
+  return new Set(
+    tokens
+      .map((token) => token.replace(/(?:ing|ed|s)$/u, ""))
+      .filter((token) => token.length >= 3 && !comparableTokenStopWords.has(token)),
+  );
+}
+
+function extractJobConcepts(value: string): Set<string> {
+  const concepts = new Set<string>();
+
+  for (const [concept, pattern] of jobConceptPatterns) {
+    if (pattern.test(value)) {
+      concepts.add(concept);
+    }
+  }
+
+  return concepts;
+}
+
+function intersectionSize(left: Set<string>, right: Set<string>): number {
+  let count = 0;
+
+  for (const item of left) {
+    if (right.has(item)) {
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
+function looksLikeSameJob(
+  job: { title: string; description: string | null },
+  proposal: ProposalJobTargetInput,
+): boolean {
+  const jobText = `${job.title} ${job.description ?? ""}`;
+  const draftText = proposalJobText(proposal);
+  const normalizedJobText = normalizeComparableText(jobText);
+  const normalizedDraftText = normalizeComparableText(draftText);
+
+  if (
+    normalizedJobText.length >= 8 &&
+    normalizedDraftText.length >= 8 &&
+    (normalizedJobText.includes(normalizedDraftText) ||
+      normalizedDraftText.includes(normalizedJobText))
+  ) {
+    return true;
+  }
+
+  const sharedConcepts = intersectionSize(
+    extractJobConcepts(jobText),
+    extractJobConcepts(draftText),
+  );
+  const sharedTokens = intersectionSize(
+    extractComparableTokens(jobText),
+    extractComparableTokens(draftText),
+  );
+
+  return sharedConcepts >= 2 || sharedTokens >= 2 || (sharedConcepts >= 1 && sharedTokens >= 1);
+}
+
+function formatExistingJobCandidate(job: {
+  id: string;
+  title: string;
+  status: JobStatus;
+  scheduledStartAt: Date | null;
+  scheduledEndAt: Date | null;
+  assignedTo: { displayName: string } | null;
+}) {
+  return {
+    id: job.id,
+    title: job.title,
+    status: job.status,
+    scheduledStartAt: job.scheduledStartAt?.toISOString() ?? null,
+    scheduledEndAt: job.scheduledEndAt?.toISOString() ?? null,
+    assignedToName: job.assignedTo?.displayName ?? null,
+  };
+}
+
+async function assertProposalJobTargetIsSafe(
+  tx: Prisma.TransactionClient,
+  auth: AuthContext,
+  proposal: ProposalJobTargetInput,
+) {
+  if (isCreateCustomerOnlyIntent(proposal.intent)) {
+    return;
+  }
+
+  const customerId = resolveCustomerIdFromCustomer(proposal.customer);
+  const existingJobId = proposal.jobDraft.existingJobId;
+
+  if (existingJobId) {
+    const job = await tx.job.findFirst({
+      where: {
+        id: existingJobId,
+        tenantId: auth.tenantId,
+      },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        customerId: true,
+        scheduledStartAt: true,
+        scheduledEndAt: true,
+        assignedTo: {
+          select: {
+            displayName: true,
+          },
+        },
+      },
+    });
+
+    if (!job) {
+      throw new ApiError(
+        400,
+        "The selected existing job is no longer available. Re-search jobs before saving the proposal.",
+      );
+    }
+
+    if (!openDispatchJobStatuses.includes(job.status)) {
+      throw new ApiError(
+        409,
+        "Only open jobs can be updated from an AI proposal.",
+        {
+          code: "EXISTING_JOB_NOT_OPEN",
+          job: formatExistingJobCandidate(job),
+        },
+      );
+    }
+
+    if (customerId && job.customerId !== customerId) {
+      throw new ApiError(
+        400,
+        "The selected existing job belongs to a different customer. Re-search the customer and job before saving the proposal.",
+        {
+          code: "EXISTING_JOB_CUSTOMER_MISMATCH",
+          customerId,
+          job: formatExistingJobCandidate(job),
+        },
+      );
+    }
+
+    return;
+  }
+
+  if (!customerId || proposal.customer.status === "new") {
+    return;
+  }
+
+  const openJobs = await tx.job.findMany({
+    where: {
+      tenantId: auth.tenantId,
+      customerId,
+      status: {
+        in: openDispatchJobStatuses,
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: 10,
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      status: true,
+      scheduledStartAt: true,
+      scheduledEndAt: true,
+      assignedTo: {
+        select: {
+          displayName: true,
+        },
+      },
+    },
+  });
+
+  if (openJobs.length === 0) {
+    return;
+  }
+
+  const likelyMatches = openJobs.filter((job) => looksLikeSameJob(job, proposal));
+  const blockingJobs =
+    likelyMatches.length > 0
+      ? likelyMatches
+      : hasSchedulingOrAssignmentIntent(proposal) && openJobs.length === 1
+        ? openJobs
+        : [];
+
+  if (blockingJobs.length === 0) {
+    return;
+  }
+
+  throw new ApiError(
+    400,
+    "This proposal appears to target an existing open job. Do not create a duplicate job; save the proposal with intent=\"update_existing_job\" and jobDraft.existingJobId.",
+    {
+      code: "EXISTING_JOB_REQUIRED",
+      customerId,
+      candidateJobs: blockingJobs.map(formatExistingJobCandidate),
+    },
+  );
+}
+
 function normalizeOptionalMatchValue(value?: string): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
 }
 
+function normalizeOptionalTextValue(value?: string | null): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function normalizeOptionalDateTimeValue(value?: string | null): Date | null {
+  const trimmed = value?.trim();
+  return trimmed ? new Date(trimmed) : null;
+}
+
+function normalizeProposalSchedule(proposal: DispatchProposal) {
+  const scheduledStartAt = normalizeOptionalDateTimeValue(
+    proposal.scheduleDraft.scheduledStartAt,
+  );
+  const scheduledEndAt = normalizeOptionalDateTimeValue(
+    proposal.scheduleDraft.scheduledEndAt,
+  );
+
+  if ((scheduledStartAt && !scheduledEndAt) || (!scheduledStartAt && scheduledEndAt)) {
+    throw new ApiError(
+      400,
+      "Both start and end time are required when scheduling a job.",
+    );
+  }
+
+  if (scheduledStartAt && scheduledEndAt && scheduledEndAt <= scheduledStartAt) {
+    throw new ApiError(400, "End time must be after the start time.");
+  }
+
+  return {
+    scheduledAt: scheduledStartAt,
+    scheduledStartAt,
+    scheduledEndAt,
+  };
+}
+
 async function findExistingCustomerMatch(
+  tx: Prisma.TransactionClient,
   auth: AuthContext,
   customer: DispatchProposal["customer"],
 ) {
@@ -316,7 +835,7 @@ async function findExistingCustomerMatch(
     return null;
   }
 
-  const matches = await prisma.customer.findMany({
+  const matches = await tx.customer.findMany({
     where: {
       tenantId: auth.tenantId,
       archivedAt: null,
@@ -352,6 +871,376 @@ async function findExistingCustomerMatch(
   return uniqueMatches[0];
 }
 
+async function resolveCustomerForConfirmation(
+  tx: Prisma.TransactionClient,
+  auth: AuthContext,
+  proposal: DispatchProposal,
+) {
+  let resolvedCustomerId = resolveCustomerIdFromProposal(proposal);
+  let resolvedCustomerName: string | undefined;
+  let usedExistingCustomer = false;
+
+  if (resolvedCustomerId) {
+    const customer = await tx.customer.findFirst({
+      where: {
+        id: resolvedCustomerId,
+        tenantId: auth.tenantId,
+        archivedAt: null,
+      },
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+
+    if (!customer) {
+      throw new ApiError(
+        400,
+        "The matched customer is no longer available. Please ask the AI to re-check the customer.",
+      );
+    }
+
+    resolvedCustomerId = customer.id;
+    resolvedCustomerName = customer.name;
+  }
+
+  const existingCustomerMatch = resolvedCustomerId
+    ? null
+    : await findExistingCustomerMatch(tx, auth, proposal.customer);
+
+  if (!resolvedCustomerId && existingCustomerMatch) {
+    resolvedCustomerId = existingCustomerMatch.id;
+    resolvedCustomerName = existingCustomerMatch.name;
+    usedExistingCustomer = true;
+  } else if (
+    !resolvedCustomerId &&
+    !(proposal.customer.status === "new" && proposal.customer.name?.trim())
+  ) {
+    throw new ApiError(
+      400,
+      "This proposal does not have a confirmed customer. Please resolve the customer match first.",
+    );
+  }
+
+  if (resolvedCustomerId) {
+    return {
+      customerId: resolvedCustomerId,
+      customerName:
+        resolvedCustomerName ??
+        proposal.customer.name?.trim() ??
+        proposal.customer.matches?.[0]?.name,
+      usedExistingCustomer,
+    };
+  }
+
+  const createdCustomer = await tx.customer.create({
+    data: {
+      tenantId: auth.tenantId,
+      createdById: auth.userId,
+      name: proposal.customer.name!.trim(),
+      phone: normalizeOptionalTextValue(proposal.customer.phone),
+      email: normalizeOptionalTextValue(proposal.customer.email),
+      address: normalizeOptionalTextValue(proposal.customer.address),
+      notes: normalizeOptionalTextValue(proposal.customer.notes),
+    },
+    select: {
+      id: true,
+      name: true,
+    },
+  });
+
+  return {
+    customerId: createdCustomer.id,
+    customerName: createdCustomer.name,
+    usedExistingCustomer,
+  };
+}
+
+async function createJobForConfirmation(
+  tx: Prisma.TransactionClient,
+  auth: AuthContext,
+  proposal: DispatchProposal,
+  customerId: string,
+) {
+  const scheduling = normalizeProposalSchedule(proposal);
+
+  return tx.job.create({
+    data: {
+      tenantId: auth.tenantId,
+      customerId,
+      title: proposal.jobDraft.title.trim(),
+      description: normalizeOptionalTextValue(proposal.jobDraft.description),
+      ...scheduling,
+      createdById: auth.userId,
+      status: JobStatus.NEW,
+    },
+    select: {
+      id: true,
+      title: true,
+      assignedToId: true,
+    },
+  });
+}
+
+async function getExistingJobForConfirmation(
+  tx: Prisma.TransactionClient,
+  auth: AuthContext,
+  jobId: string,
+) {
+  const job = await tx.job.findFirst({
+    where: {
+      id: jobId,
+      tenantId: auth.tenantId,
+    },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      assignedToId: true,
+      customer: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  });
+
+  if (!job) {
+    throw new ApiError(
+      404,
+      "The selected job is no longer available. Please ask the AI to re-check the job.",
+    );
+  }
+
+  return job;
+}
+
+async function updateExistingJobScheduleForConfirmation(
+  tx: Prisma.TransactionClient,
+  proposal: DispatchProposal,
+  job: { id: string },
+) {
+  const hasScheduleDraft = Boolean(
+    proposal.scheduleDraft.scheduledStartAt || proposal.scheduleDraft.scheduledEndAt,
+  );
+
+  if (!hasScheduleDraft) {
+    return;
+  }
+
+  const scheduling = normalizeProposalSchedule(proposal);
+
+  await tx.job.update({
+    where: {
+      id: job.id,
+    },
+    data: scheduling,
+  });
+}
+
+async function getAssignableMembershipForConfirmation(
+  tx: Prisma.TransactionClient,
+  auth: AuthContext,
+  membershipId: string,
+) {
+  const membership = await tx.membership.findFirst({
+    where: {
+      id: membershipId,
+      tenantId: auth.tenantId,
+    },
+    select: {
+      id: true,
+      userId: true,
+      role: true,
+      status: true,
+      user: {
+        select: {
+          id: true,
+          displayName: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  if (!membership) {
+    throw new ApiError(404, "Membership not found.");
+  }
+
+  if (
+    membership.status !== MembershipStatus.ACTIVE ||
+    membership.role !== MembershipRole.STAFF
+  ) {
+    throw new ApiError(409, "Jobs can only be assigned to active staff members.");
+  }
+
+  return membership;
+}
+
+async function assignJobForConfirmation(
+  tx: Prisma.TransactionClient,
+  auth: AuthContext,
+  job: { id: string; title: string; assignedToId: string | null },
+  membershipId: string,
+) {
+  const membership = await getAssignableMembershipForConfirmation(tx, auth, membershipId);
+
+  if (job.assignedToId === membership.userId) {
+    return {
+      assignedToName: membership.user.displayName,
+      assigneeUserId: membership.userId,
+      notifications: [] as NotificationDeliveryItem[],
+    };
+  }
+
+  const updated = await tx.job.update({
+    where: {
+      id: job.id,
+    },
+    data: {
+      assignedToId: membership.userId,
+    },
+    select: {
+      id: true,
+      title: true,
+    },
+  });
+
+  await tx.auditLog.create({
+    data: {
+      action: AuditAction.JOB_ASSIGNED,
+      tenantId: auth.tenantId,
+      userId: auth.userId,
+      targetType: "job",
+      targetId: updated.id,
+      metadata: {
+        jobTitle: updated.title,
+        assigneeId: membership.user.id,
+        assigneeName: membership.user.displayName,
+        assigneeEmail: membership.user.email,
+      },
+    },
+  });
+
+  const notifications = await createJobAssignedNotification(tx, {
+    tenantId: auth.tenantId,
+    actorUserId: auth.userId,
+    recipientUserId: membership.userId,
+    jobId: updated.id,
+    jobTitle: updated.title,
+  });
+
+  return {
+    assignedToName: membership.user.displayName,
+    assigneeUserId: membership.userId,
+    notifications,
+  };
+}
+
+async function scheduleJobForConfirmation(
+  tx: Prisma.TransactionClient,
+  auth: AuthContext,
+  job: { id: string; title: string },
+  recipientUserId: string,
+) {
+  const transitioned = await transitionJobStatusInTransaction(tx, {
+    tenantId: auth.tenantId,
+    jobId: job.id,
+    toStatus: JobStatus.SCHEDULED,
+    changedById: auth.userId,
+  });
+
+  const notifications = await createJobStatusChangedNotification(tx, {
+    tenantId: auth.tenantId,
+    actorUserId: auth.userId,
+    recipientUserId,
+    jobId: job.id,
+    jobTitle: job.title,
+    fromStatus: transitioned.history.fromStatus,
+    toStatus: transitioned.history.toStatus,
+  });
+
+  return {
+    transitionedTo: transitioned.history.toStatus,
+    notifications,
+  };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "An unexpected error occurred.";
+}
+
+async function markProposalFailed(proposalId: string, message: string) {
+  await prisma.agentProposal.update({
+    where: { id: proposalId },
+    data: {
+      status: AgentProposalStatus.FAILED,
+      failureMessage: message,
+      confirmationResult: toJsonValue({ error: true, message }),
+    },
+  });
+}
+
+async function completeProposalConfirmationInTransaction(
+  tx: Prisma.TransactionClient,
+  proposalId: string,
+  confirmedById: string,
+  result: ConfirmedProposalResult,
+  conversationId: string,
+  assistantMessage: string,
+) {
+  await tx.agentProposal.update({
+    where: { id: proposalId },
+    data: {
+      status: AgentProposalStatus.CONFIRMED,
+      confirmedById,
+      confirmedAt: new Date(),
+      confirmationResult: toJsonValue(result),
+      failureMessage: null,
+    },
+  });
+
+  await tx.agentMessage.create({
+    data: {
+      conversationId,
+      role: AgentMessageRole.ASSISTANT,
+      content: assistantMessage,
+    },
+  });
+
+  await tx.agentConversation.update({
+    where: { id: conversationId },
+    data: { updatedAt: new Date() },
+  });
+}
+
+async function publishConfirmationNotifications(
+  notifications: NotificationDeliveryItem[],
+) {
+  if (notifications.length === 0) {
+    return;
+  }
+
+  try {
+    await publishCreatedNotifications(notifications);
+  } catch (error) {
+    console.error("Failed to publish agent confirmation notifications", error);
+  }
+}
+
+function confirmationFailureMessage(error: unknown) {
+  return `Dispatch proposal confirmation failed. No customer or job was created or updated. ${errorMessage(error)}`;
+}
+
+function rethrowConfirmationFailure(error: unknown, message: string): never {
+  if (error instanceof ApiError) {
+    throw new ApiError(error.statusCode, message, error.details);
+  }
+
+  throw new ApiError(500, message);
+}
+
 export async function confirmDispatchProposal(
   auth: AuthContext,
   conversationId: string,
@@ -361,157 +1250,225 @@ export async function confirmDispatchProposal(
     throw new ApiError(403, "Only owners and managers can confirm dispatch plans.");
   }
 
-  const proposal = getProposal(auth, conversationId, proposalId);
-  if (!proposal) {
+  const proposalRecord = await prisma.agentProposal.findFirst({
+    where: {
+      id: proposalId,
+      conversationId,
+      tenantId: auth.tenantId,
+      userId: auth.userId,
+    },
+  });
+
+  if (!proposalRecord) {
     throw new ApiError(404, "Proposal not found.");
   }
 
-  const createCustomerOnly = isCreateCustomerOnlyIntent(proposal.intent);
-
-  // --- Pre-flight validation: check everything before writing anything ---
-
-  // Validate assignee before any writes
-  const membershipId = resolveMembershipIdFromProposal(proposal);
-  if (!createCustomerOnly && proposal.assigneeDraft?.status === "matched" && !membershipId) {
-    throw new ApiError(
-      400,
-      "The assignee was matched but no membership ID was resolved. Please ask the AI to re-search for the staff member.",
-    );
+  if (proposalRecord.status !== AgentProposalStatus.PENDING) {
+    throw new ApiError(409, "Dispatch proposal has already been resolved.");
   }
 
-  // Resolve or validate customer
-  let resolvedCustomerId = resolveCustomerIdFromProposal(proposal);
-  let resolvedCustomerName: string | undefined;
-  let usedExistingCustomer = false;
-
-  const existingCustomerMatch = resolvedCustomerId
-    ? null
-    : await findExistingCustomerMatch(auth, proposal.customer);
-
-  if (!resolvedCustomerId && existingCustomerMatch) {
-    resolvedCustomerId = existingCustomerMatch.id;
-    resolvedCustomerName = existingCustomerMatch.name;
-    usedExistingCustomer = true;
-  } else if (!resolvedCustomerId && !(proposal.customer.status === "new" && proposal.customer.name?.trim())) {
-    throw new ApiError(
-      400,
-      "This proposal does not have a confirmed customer. Please resolve the customer match first.",
-    );
-  }
-
-  // --- All validations passed: execute writes ---
-
-  // Create customer if needed
-  let customerId = resolvedCustomerId;
-  let createdCustomerName = resolvedCustomerName;
-
-  if (!customerId) {
-    const createdCustomer = await createCustomer(auth, {
-      name: proposal.customer.name!.trim(),
-      phone: proposal.customer.phone,
-      email: proposal.customer.email,
-      address: proposal.customer.address,
-      notes: proposal.customer.notes,
-    });
-    customerId = createdCustomer.id;
-    createdCustomerName = createdCustomer.name;
-  }
-
-  if (createCustomerOnly) {
-    const customerName =
-      createdCustomerName ??
-      proposal.customer.name?.trim() ??
-      proposal.customer.matches?.[0]?.name;
-
-    appendLocalAssistantMessage(
-      conversationId,
-      usedExistingCustomer
-        ? `Plan confirmed. Reused existing customer **${customerName ?? "Existing customer"}**.`
-        : `Plan confirmed. Created customer **${customerName ?? "New customer"}**.`,
-    );
-
-    const conversation = conversations.get(conversationId);
-    if (conversation) {
-      conversation.messages = conversation.messages.map((message) =>
-        message.proposal?.id === proposal.id
-          ? { ...message, proposal: undefined }
-          : message,
-      );
-    }
-
-    proposals.delete(proposal.id);
-
-    return {
-      proposalId: proposal.id,
-      entityType: "customer",
-      createdCustomerId: customerId,
-      ...(customerName ? { createdCustomerName: customerName } : {}),
-      ...(usedExistingCustomer ? { usedExistingCustomer } : {}),
-    };
-  }
-
-  // Create job and optionally assign, wrapped in a transaction
-  const shouldAssign = proposal.assigneeDraft?.status === "matched" && membershipId;
-  const shouldSchedule =
-    shouldAssign &&
-    proposal.scheduleDraft.scheduledStartAt &&
-    proposal.scheduleDraft.scheduledEndAt;
-
-  const createdJob = await createJob(auth, {
-    customerId,
-    title: proposal.jobDraft.title,
-    description: proposal.jobDraft.description ?? undefined,
-    scheduledStartAt: proposal.scheduleDraft.scheduledStartAt ?? undefined,
-    scheduledEndAt: proposal.scheduleDraft.scheduledEndAt ?? undefined,
+  const locked = await prisma.agentProposal.updateMany({
+    where: {
+      id: proposalRecord.id,
+      status: AgentProposalStatus.PENDING,
+    },
+    data: {
+      status: AgentProposalStatus.CONFIRMING,
+    },
   });
 
-  let assignedToName: string | undefined;
-  let transitionedTo: JobStatus | undefined;
+  if (locked.count !== 1) {
+    throw new ApiError(409, "Dispatch proposal is already being confirmed.");
+  }
 
-  if (shouldAssign && membershipId) {
-    try {
-      const assigned = await assignJob(auth, createdJob.id, { membershipId });
-      assignedToName = assigned.assignedTo?.displayName;
+  const proposal = proposalFromRecord(proposalRecord);
 
-      if (shouldSchedule) {
-        await transitionJobStatusForActor(auth, createdJob.id, { toStatus: JobStatus.SCHEDULED });
-        transitionedTo = JobStatus.SCHEDULED;
-      }
-    } catch (assignError) {
-      // Assignment failed after job creation — surface the error but keep the created job
-      const message = assignError instanceof Error ? assignError.message : "Assignment failed.";
+  try {
+    const createCustomerOnly = isCreateCustomerOnlyIntent(proposal.intent);
+    const updateExistingJob = isUpdateExistingJobIntent(proposal.intent);
+
+    if (updateExistingJob && !proposal.jobDraft.existingJobId) {
       throw new ApiError(
-        500,
-        `Job was created (ID: ${createdJob.id}) but assignment failed: ${message}. You can assign the staff member manually.`,
+        400,
+        "Updating an existing job requires jobDraft.existingJobId. Please ask the AI to re-search and select the job.",
       );
     }
+
+    const membershipId = resolveMembershipIdFromProposal(proposal);
+    if (!createCustomerOnly && proposal.assigneeDraft?.status === "matched" && !membershipId) {
+      throw new ApiError(
+        400,
+        "The assignee was matched but no membership ID was resolved. Please ask the AI to re-search for the staff member.",
+      );
+    }
+
+    const { result, notifications } = await prisma.$transaction(async (tx) => {
+      await assertProposalJobTargetIsSafe(tx, auth, proposal);
+
+      const existingJobId = proposal.jobDraft.existingJobId;
+
+      if (existingJobId && !createCustomerOnly) {
+        const job = await getExistingJobForConfirmation(tx, auth, existingJobId);
+        await updateExistingJobScheduleForConfirmation(tx, proposal, job);
+
+        const shouldAssign = proposal.assigneeDraft?.status === "matched" && membershipId;
+        const hasScheduleDraft = Boolean(
+          proposal.scheduleDraft.scheduledStartAt || proposal.scheduleDraft.scheduledEndAt,
+        );
+        const notifications: NotificationDeliveryItem[] = [];
+        let assignedToName: string | undefined;
+        let assignedToUserId = job.assignedToId ?? undefined;
+        let transitionedTo: JobStatus | undefined;
+
+        if (shouldAssign && membershipId) {
+          const assigned = await assignJobForConfirmation(tx, auth, job, membershipId);
+          assignedToName = assigned.assignedToName;
+          assignedToUserId = assigned.assigneeUserId;
+          notifications.push(...assigned.notifications);
+        }
+
+        if (hasScheduleDraft && assignedToUserId) {
+          if (job.status === JobStatus.NEW) {
+            const scheduled = await scheduleJobForConfirmation(
+              tx,
+              auth,
+              job,
+              assignedToUserId,
+            );
+            transitionedTo = scheduled.transitionedTo;
+            notifications.push(...scheduled.notifications);
+          } else if (job.status !== JobStatus.SCHEDULED) {
+            throw new ApiError(
+              409,
+              `Only NEW or SCHEDULED jobs can be scheduled from an AI proposal. Current status is ${job.status}.`,
+            );
+          }
+        }
+
+        const result: ConfirmedProposalResult = {
+          proposalId: proposal.id,
+          entityType: "job",
+          createdCustomerId: job.customer.id,
+          createdCustomerName: job.customer.name,
+          createdJobId: job.id,
+          createdJobTitle: job.title,
+          updatedExistingJob: true,
+          ...(assignedToName ? { assignedToName } : {}),
+          ...(transitionedTo ? { transitionedTo } : {}),
+        };
+
+        await completeProposalConfirmationInTransaction(
+          tx,
+          proposal.id,
+          auth.userId,
+          result,
+          conversationId,
+          `Plan confirmed. Updated job **${job.title}**${assignedToName ? ` and assigned it to **${assignedToName}**` : ""}${transitionedTo ? `, then moved it to **${transitionedTo}**.` : "."}`,
+        );
+
+        return {
+          result,
+          notifications,
+        };
+      }
+
+      const customer = await resolveCustomerForConfirmation(tx, auth, proposal);
+
+      if (createCustomerOnly) {
+        const result: ConfirmedProposalResult = {
+          proposalId: proposal.id,
+          entityType: "customer",
+          createdCustomerId: customer.customerId,
+          ...(customer.customerName ? { createdCustomerName: customer.customerName } : {}),
+          ...(customer.usedExistingCustomer ? { usedExistingCustomer: true } : {}),
+        };
+
+        await completeProposalConfirmationInTransaction(
+          tx,
+          proposal.id,
+          auth.userId,
+          result,
+          conversationId,
+          customer.usedExistingCustomer
+            ? `Plan confirmed. Reused existing customer **${customer.customerName ?? "Existing customer"}**.`
+            : `Plan confirmed. Created customer **${customer.customerName ?? "New customer"}**.`,
+        );
+
+        return {
+          result,
+          notifications: [] as NotificationDeliveryItem[],
+        };
+      }
+
+      const shouldAssign = proposal.assigneeDraft?.status === "matched" && membershipId;
+      const shouldSchedule =
+        shouldAssign &&
+        proposal.scheduleDraft.scheduledStartAt &&
+        proposal.scheduleDraft.scheduledEndAt;
+      const notifications: NotificationDeliveryItem[] = [];
+      const createdJob = await createJobForConfirmation(
+        tx,
+        auth,
+        proposal,
+        customer.customerId,
+      );
+      let assignedToName: string | undefined;
+      let transitionedTo: JobStatus | undefined;
+
+      if (shouldAssign && membershipId) {
+        const assigned = await assignJobForConfirmation(
+          tx,
+          auth,
+          createdJob,
+          membershipId,
+        );
+        assignedToName = assigned.assignedToName;
+        notifications.push(...assigned.notifications);
+
+        if (shouldSchedule) {
+          const scheduled = await scheduleJobForConfirmation(
+            tx,
+            auth,
+            createdJob,
+            assigned.assigneeUserId,
+          );
+          transitionedTo = scheduled.transitionedTo;
+          notifications.push(...scheduled.notifications);
+        }
+      }
+
+      const result: ConfirmedProposalResult = {
+        proposalId: proposal.id,
+        entityType: "job",
+        ...(customer.usedExistingCustomer ? { usedExistingCustomer: true } : {}),
+        createdCustomerId: customer.customerId,
+        ...(customer.customerName ? { createdCustomerName: customer.customerName } : {}),
+        createdJobId: createdJob.id,
+        createdJobTitle: createdJob.title,
+        ...(assignedToName ? { assignedToName } : {}),
+        ...(transitionedTo ? { transitionedTo } : {}),
+      };
+
+      await completeProposalConfirmationInTransaction(
+        tx,
+        proposal.id,
+        auth.userId,
+        result,
+        conversationId,
+        `Plan confirmed. Created job **${createdJob.title}**${assignedToName ? ` and assigned it to **${assignedToName}**` : ""}${transitionedTo ? `, then moved it to **${transitionedTo}**.` : "."}`,
+      );
+
+      return {
+        result,
+        notifications,
+      };
+    });
+
+    await publishConfirmationNotifications(notifications);
+    return result;
+  } catch (error) {
+    const message = confirmationFailureMessage(error);
+    await markProposalFailed(proposal.id, message);
+    rethrowConfirmationFailure(error, message);
   }
-
-  appendLocalAssistantMessage(
-    conversationId,
-    `Plan confirmed. Created job **${createdJob.title}**${assignedToName ? ` and assigned it to **${assignedToName}**` : ""}${transitionedTo ? `, then moved it to **${transitionedTo}**.` : "."}`,
-  );
-
-  const conversation = conversations.get(conversationId);
-  if (conversation) {
-    conversation.messages = conversation.messages.map((message) =>
-      message.proposal?.id === proposal.id
-        ? { ...message, proposal: undefined }
-        : message,
-    );
-  }
-
-  proposals.delete(proposal.id);
-
-  return {
-    proposalId: proposal.id,
-    entityType: "job",
-    ...(usedExistingCustomer ? { usedExistingCustomer } : {}),
-    ...(customerId ? { createdCustomerId: customerId } : {}),
-    ...(createdCustomerName ? { createdCustomerName } : {}),
-    createdJobId: createdJob.id,
-    createdJobTitle: createdJob.title,
-    ...(assignedToName ? { assignedToName } : {}),
-    ...(transitionedTo ? { transitionedTo } : {}),
-  };
 }

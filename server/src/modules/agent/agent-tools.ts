@@ -1,10 +1,22 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { MembershipRole } from "@prisma/client";
+import { z } from "zod";
 import type { AuthContext } from "../../types/auth";
+import { ApiError } from "../../utils/api-error";
 import * as auditService from "../audit/audit.service";
 import * as customerService from "../customer/customer.service";
 import * as jobService from "../job/job.service";
 import * as membershipService from "../membership/membership.service";
+import {
+  checkScheduleConflictsToolInputSchema,
+  getCustomerDetailToolInputSchema,
+  getJobDetailToolInputSchema,
+  listActivityFeedToolInputSchema,
+  listCustomersToolInputSchema,
+  listJobsToolInputSchema,
+  listMembershipsToolInputSchema,
+  saveDispatchProposalToolInputSchema,
+} from "./agent-schemas";
 import { storeDispatchProposal } from "./agent.service";
 
 type ToolContext = {
@@ -44,8 +56,37 @@ async function safeExecute(fn: () => Promise<unknown>): Promise<unknown> {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "An unexpected error occurred.";
-    return { error: true, message };
+    return {
+      error: true,
+      message,
+      ...(error instanceof ApiError && error.details ? { details: error.details } : {}),
+    };
   }
+}
+
+function formatToolValidationError(error: z.ZodError) {
+  return {
+    error: true,
+    message: "Tool input validation failed.",
+    details: error.issues.map((issue) => ({
+      path: issue.path.length ? issue.path.join(".") : "(root)",
+      message: issue.message,
+    })),
+  };
+}
+
+async function safeExecuteWithSchema<T>(
+  schema: z.ZodType<T>,
+  input: Record<string, unknown>,
+  fn: (validatedInput: T) => Promise<unknown>,
+): Promise<unknown> {
+  const parsed = schema.safeParse(input);
+
+  if (!parsed.success) {
+    return formatToolValidationError(parsed.error);
+  }
+
+  return safeExecute(() => fn(parsed.data));
 }
 
 const toolMap = new Map<string, AgentTool>();
@@ -79,15 +120,15 @@ toolMap.set("list_jobs", {
     },
   },
   execute: (auth, input) =>
-    safeExecute(() =>
+    safeExecuteWithSchema(listJobsToolInputSchema, input, (validatedInput) =>
       jobService.listJobs(auth, {
-        q: input.q as string | undefined,
-        status: input.status as never,
-        customerId: input.customerId as string | undefined,
-        scheduledFrom: input.scheduledFrom as string | undefined,
-        scheduledTo: input.scheduledTo as string | undefined,
-        page: (input.page as number) ?? 1,
-        pageSize: (input.pageSize as number) ?? 10,
+        q: validatedInput.q,
+        status: validatedInput.status,
+        customerId: validatedInput.customerId,
+        scheduledFrom: validatedInput.scheduledFrom,
+        scheduledTo: validatedInput.scheduledTo,
+        page: validatedInput.page,
+        pageSize: validatedInput.pageSize,
         sort: "createdAt_desc",
       }),
     ),
@@ -106,7 +147,9 @@ toolMap.set("get_job_detail", {
     },
   },
   execute: (auth, input) =>
-    safeExecute(() => jobService.getJobDetail(auth, input.jobId as string)),
+    safeExecuteWithSchema(getJobDetailToolInputSchema, input, (validatedInput) =>
+      jobService.getJobDetail(auth, validatedInput.jobId),
+    ),
 });
 
 toolMap.set("list_customers", {
@@ -124,11 +167,11 @@ toolMap.set("list_customers", {
     },
   },
   execute: (auth, input) =>
-    safeExecute(() =>
+    safeExecuteWithSchema(listCustomersToolInputSchema, input, (validatedInput) =>
       customerService.listCustomers(auth, {
-        q: input.q as string | undefined,
-        page: (input.page as number) ?? 1,
-        pageSize: (input.pageSize as number) ?? 10,
+        q: validatedInput.q,
+        page: validatedInput.page,
+        pageSize: validatedInput.pageSize,
         status: "active",
         sort: "createdAt_desc",
       }),
@@ -148,8 +191,8 @@ toolMap.set("get_customer_detail", {
     },
   },
   execute: (auth, input) =>
-    safeExecute(() =>
-      customerService.getCustomerDetail(auth, input.customerId as string),
+    safeExecuteWithSchema(getCustomerDetailToolInputSchema, input, (validatedInput) =>
+      customerService.getCustomerDetail(auth, validatedInput.customerId),
     ),
 });
 
@@ -176,13 +219,13 @@ toolMap.set("list_memberships", {
     },
   },
   execute: (auth, input) =>
-    safeExecute(() =>
+    safeExecuteWithSchema(listMembershipsToolInputSchema, input, (validatedInput) =>
       membershipService.listMemberships(auth, {
-        q: input.q as string | undefined,
-        role: input.role as never,
-        status: input.status as never,
-        page: (input.page as number) ?? 1,
-        pageSize: (input.pageSize as number) ?? 10,
+        q: validatedInput.q,
+        role: validatedInput.role,
+        status: validatedInput.status,
+        page: validatedInput.page,
+        pageSize: validatedInput.pageSize,
       }),
     ),
 });
@@ -201,10 +244,10 @@ toolMap.set("list_activity_feed", {
     },
   },
   execute: (auth, input) =>
-    safeExecute(() =>
+    safeExecuteWithSchema(listActivityFeedToolInputSchema, input, (validatedInput) =>
       auditService.listActivityFeed(auth, {
-        page: (input.page as number) ?? 1,
-        pageSize: (input.pageSize as number) ?? 10,
+        page: validatedInput.page,
+        pageSize: validatedInput.pageSize,
       }),
     ),
 });
@@ -225,12 +268,12 @@ toolMap.set("check_schedule_conflicts", {
     },
   },
   execute: (auth, input) =>
-    safeExecute(() =>
+    safeExecuteWithSchema(checkScheduleConflictsToolInputSchema, input, (validatedInput) =>
       jobService.checkScheduleConflicts(auth, {
-        assigneeUserId: input.assigneeUserId as string,
-        scheduledStartAt: input.scheduledStartAt as string,
-        scheduledEndAt: input.scheduledEndAt as string,
-        excludeJobId: input.excludeJobId as string | undefined,
+        assigneeUserId: validatedInput.assigneeUserId,
+        scheduledStartAt: validatedInput.scheduledStartAt,
+        scheduledEndAt: validatedInput.scheduledEndAt,
+        excludeJobId: validatedInput.excludeJobId,
       }),
     ),
 });
@@ -274,6 +317,7 @@ toolMap.set("save_dispatch_proposal", {
         jobDraft: {
           type: "object",
           properties: {
+            existingJobId: { type: "string" },
             title: { type: "string" },
             description: { type: "string" },
           },
@@ -332,68 +376,31 @@ toolMap.set("save_dispatch_proposal", {
 
     const conversationId = context.conversationId;
 
-    return safeExecute(async () => {
-      const proposal = storeDispatchProposal(auth, conversationId, {
-        intent: String(input.intent ?? "dispatch_plan"),
-        customer: {
-          status: input.customer && typeof input.customer === "object"
-            ? (input.customer as { status: "matched" | "new" | "missing" | "ambiguous" }).status
-            : "missing",
-          ...(input.customer && typeof input.customer === "object"
-            ? {
-                query: (input.customer as { query?: string }).query,
-                matchedCustomerId: (input.customer as { matchedCustomerId?: string }).matchedCustomerId,
-                name: (input.customer as { name?: string }).name,
-                phone: (input.customer as { phone?: string }).phone,
-                email: (input.customer as { email?: string }).email,
-                address: (input.customer as { address?: string }).address,
-                notes: (input.customer as { notes?: string }).notes,
-                matches: (input.customer as { matches?: Array<{ id: string; name: string }> }).matches,
-              }
-            : {}),
-        },
-        jobDraft: {
-          title: String((input.jobDraft as { title?: string } | undefined)?.title ?? ""),
-          description: (input.jobDraft as { description?: string } | undefined)?.description ?? null,
-        },
-        scheduleDraft: {
-          scheduledStartAt:
-            (input.scheduleDraft as { scheduledStartAt?: string } | undefined)?.scheduledStartAt ?? null,
-          scheduledEndAt:
-            (input.scheduleDraft as { scheduledEndAt?: string } | undefined)?.scheduledEndAt ?? null,
-          timezone: String((input.scheduleDraft as { timezone?: string } | undefined)?.timezone ?? "UTC"),
-        },
-        assigneeDraft:
-          input.assigneeDraft && typeof input.assigneeDraft === "object"
-            ? {
-                status: (input.assigneeDraft as { status: "matched" | "missing" | "ambiguous" }).status,
-                membershipId: (input.assigneeDraft as { membershipId?: string }).membershipId,
-                userId: (input.assigneeDraft as { userId?: string }).userId,
-                displayName: (input.assigneeDraft as { displayName?: string }).displayName,
-                matches: (input.assigneeDraft as {
-                  matches?: Array<{
-                    membershipId: string;
-                    userId: string;
-                    displayName: string;
-                  }>;
-                }).matches,
-              }
-            : undefined,
-        warnings: Array.isArray(input.warnings)
-          ? input.warnings.map((warning) => String(warning))
-          : [],
-        confidence:
-          typeof input.confidence === "number"
-            ? input.confidence
-            : Number(input.confidence ?? 0.5),
-      });
+    return safeExecuteWithSchema(
+      saveDispatchProposalToolInputSchema,
+      input,
+      async (validatedInput) => {
+        const proposal = await storeDispatchProposal(auth, conversationId, {
+          intent: validatedInput.intent,
+          customer: validatedInput.customer,
+          jobDraft: {
+            existingJobId: validatedInput.jobDraft.existingJobId,
+            title: validatedInput.jobDraft.title,
+            description: validatedInput.jobDraft.description ?? null,
+          },
+          scheduleDraft: validatedInput.scheduleDraft,
+          assigneeDraft: validatedInput.assigneeDraft,
+          warnings: validatedInput.warnings,
+          confidence: validatedInput.confidence,
+        });
 
-      return {
-        saved: true,
-        proposalId: proposal.id,
-        proposal,
-      };
-    });
+        return {
+          saved: true,
+          proposalId: proposal.id,
+          proposal,
+        };
+      },
+    );
   },
 });
 

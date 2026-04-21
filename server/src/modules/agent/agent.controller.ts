@@ -23,7 +23,7 @@ export const createConversationHandler: RequestHandler = asyncHandler(
     if (!req.auth) throw new ApiError(401, "Authentication is required.");
     if (!env.ANTHROPIC_API_KEY) throw new ApiError(503, "AI agent is not configured.");
 
-    const conversation = createConversation(req.auth);
+    const conversation = await createConversation(req.auth);
     sendSuccess(res, {
       statusCode: 201,
       message: "Conversation created.",
@@ -39,7 +39,7 @@ export const listConversationsHandler: RequestHandler = asyncHandler(
   async (req, res) => {
     if (!req.auth) throw new ApiError(401, "Authentication is required.");
 
-    const conversations = listConversations(req.auth);
+    const conversations = await listConversations(req.auth);
     sendSuccess(res, {
       message: "Conversations retrieved.",
       data: conversations,
@@ -52,7 +52,7 @@ export const getConversationHandler: RequestHandler = asyncHandler(
     if (!req.auth) throw new ApiError(401, "Authentication is required.");
 
     const { conversationId } = conversationIdParamSchema.parse(req.params);
-    const conversation = getConversation(req.auth, conversationId);
+    const conversation = await getConversation(req.auth, conversationId);
 
     if (!conversation) throw new ApiError(404, "Conversation not found.");
 
@@ -76,10 +76,13 @@ export const sendMessageHandler: RequestHandler = asyncHandler(
     const { conversationId } = conversationIdParamSchema.parse(req.params);
     const { content, timezone } = sendMessageSchema.parse(req.body);
 
-    const conversation = getConversation(req.auth, conversationId);
+    const conversation = await getConversation(req.auth, conversationId);
     if (!conversation) throw new ApiError(404, "Conversation not found.");
 
-    addUserMessage(req.auth, conversationId, content);
+    await addUserMessage(req.auth, conversationId, content);
+
+    const updatedConversation = await getConversation(req.auth, conversationId);
+    if (!updatedConversation) throw new ApiError(404, "Conversation not found.");
 
     // Set up SSE
     res.writeHead(200, {
@@ -92,7 +95,7 @@ export const sendMessageHandler: RequestHandler = asyncHandler(
 
     try {
       const result = await runAgentLoop(
-        conversation.claudeMessages,
+        updatedConversation.claudeMessages,
         auth,
         {
           conversationId,
@@ -120,7 +123,7 @@ export const sendMessageHandler: RequestHandler = asyncHandler(
         },
       );
 
-      appendAssistantMessage(
+      await appendAssistantMessage(
         conversationId,
         result.fullText,
         result.messages,

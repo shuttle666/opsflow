@@ -198,6 +198,7 @@ describeIfDb("job service integration", () => {
     const updated = await updateJob(auth, job.id, {
       customerId: customerB.id,
       title: "Aircon service visit",
+      serviceAddress: "32 Blackburn Road, Blackburn VIC 3130",
       description: "",
       scheduledStartAt: "2026-04-01T03:00:00.000Z",
       scheduledEndAt: "2026-04-01T04:00:00.000Z",
@@ -291,6 +292,7 @@ describeIfDb("job service integration", () => {
       updateJob(auth, activeJob.id, {
         customerId: archivedCustomer.id,
         title: "Move to archived customer",
+        serviceAddress: "55 Kingsway, Glen Waverley VIC 3150",
         description: "",
         scheduledStartAt: undefined,
         scheduledEndAt: undefined,
@@ -314,6 +316,7 @@ describeIfDb("job service integration", () => {
       updateJob(auth, historicalJob.id, {
         customerId: archivedCustomer.id,
         title: "Historical archived customer job updated",
+        serviceAddress: "17 Stephensons Road, Mount Waverley VIC 3149",
         description: "",
         scheduledStartAt: undefined,
         scheduledEndAt: undefined,

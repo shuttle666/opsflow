@@ -95,91 +95,96 @@ const allStaffProfiles = [
 
 type CustomerProfile = {
   name: string;
-  address: string;
+  serviceAreaAddress: string;
   region: string;
 };
 
+type JobTemplate = {
+  title: string;
+  description: string;
+};
+
 const customerProfiles = [
-  { name: "Aiden Murphy", address: "18 Collins Street, Melbourne VIC 3000", region: "CBD" },
-  { name: "Mia Chen", address: "42 Queensbridge Street, Southbank VIC 3006", region: "CBD" },
-  { name: "Eleanor Wright", address: "7 Bourke Street, Docklands VIC 3008", region: "CBD" },
-  { name: "Oliver Haddad", address: "63 Rathdowne Street, Carlton VIC 3053", region: "Inner North" },
-  { name: "Zara Patel", address: "25 Gertrude Street, Fitzroy VIC 3065", region: "Inner North" },
-  { name: "Thomas Kelly", address: "89 Smith Street, Collingwood VIC 3066", region: "Inner North" },
-  { name: "Amara Singh", address: "31 Swan Street, Richmond VIC 3121", region: "Inner East" },
-  { name: "Luca Romano", address: "54 Toorak Road, South Yarra VIC 3141", region: "Inner South" },
-  { name: "Sophie Gallagher", address: "16 Greville Street, Prahran VIC 3181", region: "Inner South" },
-  { name: "Noah Ibrahim", address: "72 Acland Street, St Kilda VIC 3182", region: "Bayside" },
-  { name: "Isabella Tran", address: "27 Bay Street, Port Melbourne VIC 3207", region: "Bayside" },
-  { name: "Harry O'Neill", address: "44 Bridport Street, Albert Park VIC 3206", region: "Bayside" },
-  { name: "Priya Nair", address: "93 Sydney Road, Brunswick VIC 3056", region: "Inner North" },
-  { name: "Mason Clarke", address: "38 Bell Street, Coburg VIC 3058", region: "North" },
-  { name: "Grace Yamamoto", address: "12 High Street, Northcote VIC 3070", region: "Inner North" },
-  { name: "Finn Walsh", address: "64 Normanby Avenue, Thornbury VIC 3071", region: "North" },
-  { name: "Hannah Kim", address: "21 Plenty Road, Preston VIC 3072", region: "North" },
-  { name: "Sebastian Rossi", address: "84 Buckley Street, Essendon VIC 3040", region: "North West" },
-  { name: "Charlotte Nguyen", address: "33 Puckle Street, Moonee Ponds VIC 3039", region: "North West" },
-  { name: "Leo Simmons", address: "58 Errol Street, North Melbourne VIC 3051", region: "Inner West" },
-  { name: "Layla Brooks", address: "46 Hopkins Street, Footscray VIC 3011", region: "West" },
-  { name: "Archer Campbell", address: "19 Anderson Street, Yarraville VIC 3013", region: "West" },
-  { name: "Emily Farah", address: "75 Charles Street, Seddon VIC 3011", region: "West" },
-  { name: "Joshua Bennett", address: "23 Ferguson Street, Williamstown VIC 3016", region: "Bayside West" },
-  { name: "Chloe Anderson", address: "57 Mason Street, Newport VIC 3015", region: "Bayside West" },
-  { name: "Daniel Hart", address: "91 Pier Street, Altona VIC 3018", region: "Bayside West" },
-  { name: "Aaliyah Hassan", address: "28 Hampshire Road, Sunshine VIC 3020", region: "West" },
-  { name: "Nathan Foster", address: "67 Watton Street, Werribee VIC 3030", region: "Outer West" },
-  { name: "Ruby McKenzie", address: "14 Derrimut Road, Tarneit VIC 3029", region: "Outer West" },
-  { name: "Elijah Tan", address: "82 Dunnings Road, Point Cook VIC 3030", region: "Outer West" },
-  { name: "Abigail Morris", address: "36 Glenferrie Road, Hawthorn VIC 3122", region: "East" },
-  { name: "Jasper Lee", address: "70 Cotham Road, Kew VIC 3101", region: "East" },
-  { name: "Nina Desai", address: "24 Burke Road, Camberwell VIC 3124", region: "East" },
-  { name: "Ethan Parker", address: "88 Whitehorse Road, Balwyn VIC 3103", region: "East" },
-  { name: "Maya Goldberg", address: "45 Station Street, Box Hill VIC 3128", region: "East" },
-  { name: "Owen Russell", address: "11 Doncaster Road, Doncaster VIC 3108", region: "East" },
-  { name: "Sienna Taylor", address: "79 Maroondah Highway, Ringwood VIC 3134", region: "Outer East" },
-  { name: "Maxwell Chen", address: "32 Blackburn Road, Blackburn VIC 3130", region: "East" },
-  { name: "Eva Phillips", address: "55 Kingsway, Glen Waverley VIC 3150", region: "South East" },
-  { name: "Louis Nguyen", address: "17 Stephensons Road, Mount Waverley VIC 3149", region: "South East" },
-  { name: "Zoe Martin", address: "61 Burwood Highway, Burwood VIC 3125", region: "East" },
-  { name: "Caleb Wilson", address: "29 Glenferrie Road, Malvern VIC 3144", region: "Inner South East" },
-  { name: "Ivy Ahmed", address: "83 Hawthorn Road, Caulfield VIC 3162", region: "Inner South East" },
-  { name: "Aaron Davies", address: "41 Koornang Road, Carnegie VIC 3163", region: "South East" },
-  { name: "Matilda Scott", address: "26 Centre Road, Bentleigh VIC 3204", region: "South East" },
-  { name: "Samuel Brooks", address: "94 Bluff Road, Sandringham VIC 3191", region: "Bayside" },
-  { name: "Freya Wallace", address: "50 Ormond Road, Elwood VIC 3184", region: "Bayside" },
-  { name: "Benjamin Reid", address: "13 Hampton Street, Hampton VIC 3188", region: "Bayside" },
-  { name: "Lily Carter", address: "68 South Road, Moorabbin VIC 3189", region: "Bayside" },
-  { name: "Tyler Moore", address: "22 Charman Road, Cheltenham VIC 3192", region: "Bayside" },
-  { name: "Sarah Malik", address: "87 Atherton Road, Oakleigh VIC 3166", region: "South East" },
-  { name: "Xavier King", address: "35 Clayton Road, Clayton VIC 3168", region: "South East" },
-  { name: "Madison Allen", address: "59 Springvale Road, Springvale VIC 3171", region: "South East" },
-  { name: "Hamish Fraser", address: "18 Lonsdale Street, Dandenong VIC 3175", region: "South East" },
-  { name: "Ava Robinson", address: "73 Wellington Road, Mulgrave VIC 3170", region: "South East" },
-  { name: "Patrick Li", address: "40 Douglas Street, Noble Park VIC 3174", region: "South East" },
-  { name: "Jasmine Walker", address: "96 High Street, Berwick VIC 3806", region: "Outer South East" },
-  { name: "Connor Evans", address: "52 Webb Street, Narre Warren VIC 3805", region: "Outer South East" },
-  { name: "Olivia Graham", address: "30 Sladen Street, Cranbourne VIC 3977", region: "Outer South East" },
-  { name: "Blake Mitchell", address: "76 Wells Street, Frankston VIC 3199", region: "Bayside South" },
-  { name: "Harper Adams", address: "15 Upper Heidelberg Road, Ivanhoe VIC 3079", region: "North East" },
-  { name: "Riley Stone", address: "66 Burgundy Street, Heidelberg VIC 3084", region: "North East" },
-  { name: "Molly Jenkins", address: "37 Rosanna Road, Rosanna VIC 3084", region: "North East" },
-  { name: "Isaac Powell", address: "81 Main Street, Greensborough VIC 3088", region: "North East" },
-  { name: "Lucy Hernandez", address: "20 Plenty Road, Bundoora VIC 3083", region: "North" },
-  { name: "Dylan Turner", address: "62 High Street, Epping VIC 3076", region: "Outer North" },
-  { name: "Georgia Bailey", address: "34 McDonalds Road, South Morang VIC 3752", region: "Outer North" },
-  { name: "Cooper Nelson", address: "90 Spring Street, Reservoir VIC 3073", region: "North" },
-  { name: "Clara Hughes", address: "47 Wheatsheaf Road, Glenroy VIC 3046", region: "North West" },
-  { name: "Logan Stewart", address: "25 Gaffney Street, Pascoe Vale VIC 3044", region: "North West" },
-  { name: "Poppy Reynolds", address: "69 Melrose Drive, Tullamarine VIC 3043", region: "North West" },
-  { name: "Callum Price", address: "10 Milleara Road, Keilor East VIC 3033", region: "North West" },
-  { name: "Ella Freeman", address: "56 Matthews Avenue, Airport West VIC 3042", region: "North West" },
-  { name: "Marcus Young", address: "39 Raleigh Road, Maribyrnong VIC 3032", region: "Inner West" },
-  { name: "Nora Chapman", address: "71 Union Road, Ascot Vale VIC 3032", region: "Inner North West" },
-  { name: "Lachlan Gray", address: "44 Racecourse Road, Flemington VIC 3031", region: "Inner North West" },
-  { name: "Ariana Morris", address: "8 Johnston Street, Abbotsford VIC 3067", region: "Inner East" },
-  { name: "Felix Ward", address: "53 Heidelberg Road, Alphington VIC 3078", region: "Inner North East" },
-  { name: "Victoria Blake", address: "27 Station Street, Fairfield VIC 3078", region: "Inner North" },
-  { name: "Jayden Cook", address: "65 Queens Parade, Clifton Hill VIC 3068", region: "Inner North" },
+  { name: "Aiden Murphy", serviceAreaAddress: "18 Collins Street, Melbourne VIC 3000", region: "CBD" },
+  { name: "Mia Chen", serviceAreaAddress: "42 Queensbridge Street, Southbank VIC 3006", region: "CBD" },
+  { name: "Eleanor Wright", serviceAreaAddress: "7 Bourke Street, Docklands VIC 3008", region: "CBD" },
+  { name: "Oliver Haddad", serviceAreaAddress: "63 Rathdowne Street, Carlton VIC 3053", region: "Inner North" },
+  { name: "Zara Patel", serviceAreaAddress: "25 Gertrude Street, Fitzroy VIC 3065", region: "Inner North" },
+  { name: "Thomas Kelly", serviceAreaAddress: "89 Smith Street, Collingwood VIC 3066", region: "Inner North" },
+  { name: "Amara Singh", serviceAreaAddress: "31 Swan Street, Richmond VIC 3121", region: "Inner East" },
+  { name: "Luca Romano", serviceAreaAddress: "54 Toorak Road, South Yarra VIC 3141", region: "Inner South" },
+  { name: "Sophie Gallagher", serviceAreaAddress: "16 Greville Street, Prahran VIC 3181", region: "Inner South" },
+  { name: "Noah Ibrahim", serviceAreaAddress: "72 Acland Street, St Kilda VIC 3182", region: "Bayside" },
+  { name: "Isabella Tran", serviceAreaAddress: "27 Bay Street, Port Melbourne VIC 3207", region: "Bayside" },
+  { name: "Harry O'Neill", serviceAreaAddress: "44 Bridport Street, Albert Park VIC 3206", region: "Bayside" },
+  { name: "Priya Nair", serviceAreaAddress: "93 Sydney Road, Brunswick VIC 3056", region: "Inner North" },
+  { name: "Mason Clarke", serviceAreaAddress: "38 Bell Street, Coburg VIC 3058", region: "North" },
+  { name: "Grace Yamamoto", serviceAreaAddress: "12 High Street, Northcote VIC 3070", region: "Inner North" },
+  { name: "Finn Walsh", serviceAreaAddress: "64 Normanby Avenue, Thornbury VIC 3071", region: "North" },
+  { name: "Hannah Kim", serviceAreaAddress: "21 Plenty Road, Preston VIC 3072", region: "North" },
+  { name: "Sebastian Rossi", serviceAreaAddress: "84 Buckley Street, Essendon VIC 3040", region: "North West" },
+  { name: "Charlotte Nguyen", serviceAreaAddress: "33 Puckle Street, Moonee Ponds VIC 3039", region: "North West" },
+  { name: "Leo Simmons", serviceAreaAddress: "58 Errol Street, North Melbourne VIC 3051", region: "Inner West" },
+  { name: "Layla Brooks", serviceAreaAddress: "46 Hopkins Street, Footscray VIC 3011", region: "West" },
+  { name: "Archer Campbell", serviceAreaAddress: "19 Anderson Street, Yarraville VIC 3013", region: "West" },
+  { name: "Emily Farah", serviceAreaAddress: "75 Charles Street, Seddon VIC 3011", region: "West" },
+  { name: "Joshua Bennett", serviceAreaAddress: "23 Ferguson Street, Williamstown VIC 3016", region: "Bayside West" },
+  { name: "Chloe Anderson", serviceAreaAddress: "57 Mason Street, Newport VIC 3015", region: "Bayside West" },
+  { name: "Daniel Hart", serviceAreaAddress: "91 Pier Street, Altona VIC 3018", region: "Bayside West" },
+  { name: "Aaliyah Hassan", serviceAreaAddress: "28 Hampshire Road, Sunshine VIC 3020", region: "West" },
+  { name: "Nathan Foster", serviceAreaAddress: "67 Watton Street, Werribee VIC 3030", region: "Outer West" },
+  { name: "Ruby McKenzie", serviceAreaAddress: "14 Derrimut Road, Tarneit VIC 3029", region: "Outer West" },
+  { name: "Elijah Tan", serviceAreaAddress: "82 Dunnings Road, Point Cook VIC 3030", region: "Outer West" },
+  { name: "Abigail Morris", serviceAreaAddress: "36 Glenferrie Road, Hawthorn VIC 3122", region: "East" },
+  { name: "Jasper Lee", serviceAreaAddress: "70 Cotham Road, Kew VIC 3101", region: "East" },
+  { name: "Nina Desai", serviceAreaAddress: "24 Burke Road, Camberwell VIC 3124", region: "East" },
+  { name: "Ethan Parker", serviceAreaAddress: "88 Whitehorse Road, Balwyn VIC 3103", region: "East" },
+  { name: "Maya Goldberg", serviceAreaAddress: "45 Station Street, Box Hill VIC 3128", region: "East" },
+  { name: "Owen Russell", serviceAreaAddress: "11 Doncaster Road, Doncaster VIC 3108", region: "East" },
+  { name: "Sienna Taylor", serviceAreaAddress: "79 Maroondah Highway, Ringwood VIC 3134", region: "Outer East" },
+  { name: "Maxwell Chen", serviceAreaAddress: "32 Blackburn Road, Blackburn VIC 3130", region: "East" },
+  { name: "Eva Phillips", serviceAreaAddress: "55 Kingsway, Glen Waverley VIC 3150", region: "South East" },
+  { name: "Louis Nguyen", serviceAreaAddress: "17 Stephensons Road, Mount Waverley VIC 3149", region: "South East" },
+  { name: "Zoe Martin", serviceAreaAddress: "61 Burwood Highway, Burwood VIC 3125", region: "East" },
+  { name: "Caleb Wilson", serviceAreaAddress: "29 Glenferrie Road, Malvern VIC 3144", region: "Inner South East" },
+  { name: "Ivy Ahmed", serviceAreaAddress: "83 Hawthorn Road, Caulfield VIC 3162", region: "Inner South East" },
+  { name: "Aaron Davies", serviceAreaAddress: "41 Koornang Road, Carnegie VIC 3163", region: "South East" },
+  { name: "Matilda Scott", serviceAreaAddress: "26 Centre Road, Bentleigh VIC 3204", region: "South East" },
+  { name: "Samuel Brooks", serviceAreaAddress: "94 Bluff Road, Sandringham VIC 3191", region: "Bayside" },
+  { name: "Freya Wallace", serviceAreaAddress: "50 Ormond Road, Elwood VIC 3184", region: "Bayside" },
+  { name: "Benjamin Reid", serviceAreaAddress: "13 Hampton Street, Hampton VIC 3188", region: "Bayside" },
+  { name: "Lily Carter", serviceAreaAddress: "68 South Road, Moorabbin VIC 3189", region: "Bayside" },
+  { name: "Tyler Moore", serviceAreaAddress: "22 Charman Road, Cheltenham VIC 3192", region: "Bayside" },
+  { name: "Sarah Malik", serviceAreaAddress: "87 Atherton Road, Oakleigh VIC 3166", region: "South East" },
+  { name: "Xavier King", serviceAreaAddress: "35 Clayton Road, Clayton VIC 3168", region: "South East" },
+  { name: "Madison Allen", serviceAreaAddress: "59 Springvale Road, Springvale VIC 3171", region: "South East" },
+  { name: "Hamish Fraser", serviceAreaAddress: "18 Lonsdale Street, Dandenong VIC 3175", region: "South East" },
+  { name: "Ava Robinson", serviceAreaAddress: "73 Wellington Road, Mulgrave VIC 3170", region: "South East" },
+  { name: "Patrick Li", serviceAreaAddress: "40 Douglas Street, Noble Park VIC 3174", region: "South East" },
+  { name: "Jasmine Walker", serviceAreaAddress: "96 High Street, Berwick VIC 3806", region: "Outer South East" },
+  { name: "Connor Evans", serviceAreaAddress: "52 Webb Street, Narre Warren VIC 3805", region: "Outer South East" },
+  { name: "Olivia Graham", serviceAreaAddress: "30 Sladen Street, Cranbourne VIC 3977", region: "Outer South East" },
+  { name: "Blake Mitchell", serviceAreaAddress: "76 Wells Street, Frankston VIC 3199", region: "Bayside South" },
+  { name: "Harper Adams", serviceAreaAddress: "15 Upper Heidelberg Road, Ivanhoe VIC 3079", region: "North East" },
+  { name: "Riley Stone", serviceAreaAddress: "66 Burgundy Street, Heidelberg VIC 3084", region: "North East" },
+  { name: "Molly Jenkins", serviceAreaAddress: "37 Rosanna Road, Rosanna VIC 3084", region: "North East" },
+  { name: "Isaac Powell", serviceAreaAddress: "81 Main Street, Greensborough VIC 3088", region: "North East" },
+  { name: "Lucy Hernandez", serviceAreaAddress: "20 Plenty Road, Bundoora VIC 3083", region: "North" },
+  { name: "Dylan Turner", serviceAreaAddress: "62 High Street, Epping VIC 3076", region: "Outer North" },
+  { name: "Georgia Bailey", serviceAreaAddress: "34 McDonalds Road, South Morang VIC 3752", region: "Outer North" },
+  { name: "Cooper Nelson", serviceAreaAddress: "90 Spring Street, Reservoir VIC 3073", region: "North" },
+  { name: "Clara Hughes", serviceAreaAddress: "47 Wheatsheaf Road, Glenroy VIC 3046", region: "North West" },
+  { name: "Logan Stewart", serviceAreaAddress: "25 Gaffney Street, Pascoe Vale VIC 3044", region: "North West" },
+  { name: "Poppy Reynolds", serviceAreaAddress: "69 Melrose Drive, Tullamarine VIC 3043", region: "North West" },
+  { name: "Callum Price", serviceAreaAddress: "10 Milleara Road, Keilor East VIC 3033", region: "North West" },
+  { name: "Ella Freeman", serviceAreaAddress: "56 Matthews Avenue, Airport West VIC 3042", region: "North West" },
+  { name: "Marcus Young", serviceAreaAddress: "39 Raleigh Road, Maribyrnong VIC 3032", region: "Inner West" },
+  { name: "Nora Chapman", serviceAreaAddress: "71 Union Road, Ascot Vale VIC 3032", region: "Inner North West" },
+  { name: "Lachlan Gray", serviceAreaAddress: "44 Racecourse Road, Flemington VIC 3031", region: "Inner North West" },
+  { name: "Ariana Morris", serviceAreaAddress: "8 Johnston Street, Abbotsford VIC 3067", region: "Inner East" },
+  { name: "Felix Ward", serviceAreaAddress: "53 Heidelberg Road, Alphington VIC 3078", region: "Inner North East" },
+  { name: "Victoria Blake", serviceAreaAddress: "27 Station Street, Fairfield VIC 3078", region: "Inner North" },
+  { name: "Jayden Cook", serviceAreaAddress: "65 Queens Parade, Clifton Hill VIC 3068", region: "Inner North" },
 ] satisfies CustomerProfile[];
 
 const jobTemplates = [
@@ -231,7 +236,55 @@ const jobTemplates = [
     title: "Garage light fault",
     description: "Fluorescent garage light fails to start reliably.",
   },
-];
+  {
+    title: "Roof gutter overflow",
+    description: "Front gutter overflows during heavy rain and needs clearing plus a downpipe check.",
+  },
+  {
+    title: "Bathroom exhaust fan fault",
+    description: "Exhaust fan is noisy and airflow is weak after several minutes of operation.",
+  },
+  {
+    title: "Oven not heating evenly",
+    description: "Customer reports uneven heating and longer cooking times from the electric oven.",
+  },
+  {
+    title: "Laundry cabinet repair",
+    description: "Laundry cabinet hinge has pulled loose and the door is no longer closing squarely.",
+  },
+  {
+    title: "Security light adjustment",
+    description: "Motion sensor light is triggering late and needs repositioning near the side path.",
+  },
+  {
+    title: "Toilet cistern running",
+    description: "Toilet cistern continues running after flush and customer can hear water overnight.",
+  },
+  {
+    title: "Split-system fault diagnosis",
+    description: "Split-system starts normally, then shuts down before reaching the set temperature.",
+  },
+  {
+    title: "Window latch replacement",
+    description: "Bedroom window latch is broken and customer needs it secured before the weekend.",
+  },
+  {
+    title: "Stormwater drain inspection",
+    description: "Water is pooling near the driveway after rain and stormwater flow needs checking.",
+  },
+  {
+    title: "Decking board repair",
+    description: "One deck board has lifted near the back step and is creating a trip hazard.",
+  },
+  {
+    title: "Intercom handset fault",
+    description: "Apartment intercom handset rings but audio is distorted during visitor calls.",
+  },
+  {
+    title: "Wardrobe sliding door repair",
+    description: "Sliding wardrobe door has come off its track and needs rollers adjusted.",
+  },
+] satisfies JobTemplate[];
 
 const cancellationReasons = [
   "Customer resolved the issue independently.",
@@ -246,6 +299,42 @@ const returnReasons = [
   "Customer reported the issue is still present after testing.",
   "Invoice details need to be corrected before this can be approved.",
   "Please confirm the replacement part model in the completion note.",
+];
+
+const jobAccessNotes = [
+  "Customer prefers a text message 20 minutes before arrival.",
+  "Use the side gate if there is no answer at the front door.",
+  "Parking is usually easier on the nearest side street.",
+  "Property manager can provide access if the customer is not home.",
+  "Avoid school pickup traffic when planning the arrival window.",
+  "Customer works from home and prefers a quiet knock rather than the doorbell.",
+];
+
+const serviceStreetNames = [
+  "Market Lane",
+  "Station Street",
+  "Garden Avenue",
+  "Victoria Parade",
+  "Albert Road",
+  "Park Street",
+  "Riverside Drive",
+  "Union Street",
+  "Highland Crescent",
+  "Bridge Road",
+  "Wellington Street",
+  "Oak Grove",
+  "Civic Way",
+  "Miller Street",
+  "Harcourt Avenue",
+  "Lygon Street",
+  "Barkly Street",
+  "Domain Road",
+  "Mason Avenue",
+  "Harris Street",
+  "Rose Street",
+  "Nelson Road",
+  "King Street",
+  "Queens Lane",
 ];
 
 type BuiltUser = Prisma.UserCreateManyInput & {
@@ -392,6 +481,11 @@ export function buildDemoSeedData(
     staffProfiles,
     tenantId,
   });
+
+  assertUniqueValues(
+    `job service addresses for ${profile.name}`,
+    jobs.map((job) => job.serviceAddress),
+  );
 
   return {
     profile,
@@ -560,10 +654,6 @@ function assertSeedProfileReady(profile: DemoSeedProfile) {
     selectedCustomers.map((customer) => customer.name),
   );
   assertUniqueValues(
-    `customer addresses for ${profile.name}`,
-    selectedCustomers.map((customer) => customer.address),
-  );
-  assertUniqueValues(
     `team member names for ${profile.name}`,
     [
       ownerAccount.displayName,
@@ -594,9 +684,41 @@ function buildEmailLocalPart(name: string, index: number) {
   return `${normalizedName}.${String(index).padStart(2, "0")}`;
 }
 
-function extractSuburbFromAddress(address: string | null | undefined) {
-  const match = address?.match(/,\s*(.+?)\s+VIC\s+\d{4}$/);
+function extractSuburbFromAddress(serviceAreaAddress: string | null | undefined) {
+  const match = serviceAreaAddress?.match(/,\s*(.+?)\s+VIC\s+\d{4}$/);
   return match?.[1] ?? "Melbourne";
+}
+
+function extractPostcodeFromAddress(serviceAreaAddress: string | null | undefined) {
+  const match = serviceAreaAddress?.match(/VIC\s+(\d{4})$/);
+  return match?.[1] ?? "3000";
+}
+
+function buildServiceAddress(jobNumber: number, suburb: string, postcode: string) {
+  const streetNumber = 8 + ((jobNumber * 17) % 920);
+  const street = pick(serviceStreetNames, jobNumber * 7);
+  const unitPrefix = jobNumber % 11 === 0 ? `Unit ${1 + (jobNumber % 18)}, ` : "";
+
+  return `${unitPrefix}${streetNumber} ${street}, ${suburb} VIC ${postcode}`;
+}
+
+function buildJobDescription(
+  template: JobTemplate,
+  status: JobStatus,
+  statusIndex: number,
+  suburb: string,
+) {
+  const accessNote = pick(jobAccessNotes, statusIndex);
+  const statusContext = {
+    [JobStatus.NEW]: "Needs triage before booking a technician.",
+    [JobStatus.SCHEDULED]: `Booked into the ${suburb} service run.`,
+    [JobStatus.IN_PROGRESS]: "Technician is on site or actively working through the checklist.",
+    [JobStatus.PENDING_REVIEW]: "Completion details have been submitted for manager review.",
+    [JobStatus.COMPLETED]: "Historical job retained for reporting and customer context.",
+    [JobStatus.CANCELLED]: "No dispatch required; cancellation reason is recorded in the status history.",
+  } satisfies Record<JobStatus, string>;
+
+  return `${template.description} ${accessNote} ${statusContext[status]}`;
 }
 
 function replaceAssigneeIdInMetadata(
@@ -680,7 +802,6 @@ function buildCustomers(profile: DemoSeedProfile, baseDate: Date, tenantId: stri
       name: customerProfile.name,
       phone: buildPhone(oneBasedIndex),
       email: `${buildEmailLocalPart(customerProfile.name, oneBasedIndex)}@example.com`,
-      address: customerProfile.address,
       notes:
         index % 5 === 0
           ? `Prefers SMS before arrival. ${customerProfile.region} access can be busy during school pickup.`
@@ -708,8 +829,19 @@ function buildJobData(input: {
     .filter((customer) => customer.archivedAt)
     .map((customer) => customer.id);
   const customerSuburbsById = new Map(
-    customers.map((customer) => [customer.id, extractSuburbFromAddress(customer.address)]),
+    customers.map((customer, index) => [
+      customer.id,
+      extractSuburbFromAddress(customerProfiles[index]?.serviceAreaAddress),
+    ]),
   );
+  const customerPostcodesById = new Map(
+    customers.map((customer, index) => [
+      customer.id,
+      extractPostcodeFromAddress(customerProfiles[index]?.serviceAreaAddress),
+    ]),
+  );
+  const customerIndexesById = new Map(customers.map((customer, index) => [customer.id, index]));
+  const customerJobCounts = new Map<string, number>();
   const staffIds = staffProfiles.map((staff) => staff.id);
   const jobs: BuiltJob[] = [];
   const statusHistory: Prisma.JobStatusHistoryCreateManyInput[] = [];
@@ -737,6 +869,15 @@ function buildJobData(input: {
     activeCustomerCursor += 1;
 
     return pick(activeCustomerIds, activeIndex);
+  }
+
+  function pickJobTemplateForCustomer(customerId: string) {
+    const customerIndex = customerIndexesById.get(customerId) ?? 0;
+    const customerJobIndex = customerJobCounts.get(customerId) ?? 0;
+
+    customerJobCounts.set(customerId, customerJobIndex + 1);
+
+    return pick(jobTemplates, customerIndex * 5 + customerJobIndex * 7);
   }
 
   function pushAuditLog(log: Prisma.AuditLogCreateManyInput) {
@@ -876,17 +1017,23 @@ function buildJobData(input: {
   for (const [status, count] of Object.entries(profile.statusCounts) as Array<[JobStatus, number]>) {
     for (let statusIndex = 0; statusIndex < count; statusIndex += 1) {
       const jobNumber = jobs.length + 1;
-      const template = pick(jobTemplates, jobNumber * 3);
       const assignedToId = status === JobStatus.NEW ? null : pick(staffIds, statusIndex + jobNumber);
       const startAt = buildScheduleStart(baseDate, status, statusIndex, jobNumber);
       const customerId = pickCustomerForStatus(status);
+      const template = pickJobTemplateForCustomer(customerId);
       const suburb = customerSuburbsById.get(customerId) ?? "Melbourne";
+      const serviceAddress = buildServiceAddress(
+        jobNumber,
+        suburb,
+        customerPostcodesById.get(customerId) ?? "3000",
+      );
       const job: BuiltJob = {
         id: demoId("40000000", jobNumber),
         tenantId,
         customerId,
         title: `${template.title} - ${suburb}`,
-        description: template.description,
+        serviceAddress,
+        description: buildJobDescription(template, status, statusIndex, suburb),
         status,
         createdById: jobNumber % 4 === 0 ? ownerAccount.id : managerAccount.id,
         assignedToId,

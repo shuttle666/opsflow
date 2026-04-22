@@ -129,6 +129,7 @@ describeIfDb("agent persistence integration", () => {
       },
       jobDraft: {
         title: "Leaking tap repair",
+        serviceAddress: "18 Collins Street, Melbourne VIC 3000",
         description: "Kitchen tap leaking under the sink.",
       },
       scheduleDraft: {
@@ -281,6 +282,7 @@ describeIfDb("agent persistence integration", () => {
         customerId: customer.id,
         createdById: owner.user.id,
         title: "Dishwasher leak investigation - Stirling",
+        serviceAddress: "42 Queensbridge Street, Southbank VIC 3006",
         description: "Dishwasher leaks after long cycle.",
       },
     });
@@ -363,7 +365,6 @@ describeIfDb("agent persistence integration", () => {
         createdById: owner.user.id,
         name: "Leo Martin",
         phone: "0412 001 781",
-        address: "36 Greenhill Rd, Port Adelaide SA",
       },
     });
     const existingJob = await prisma.job.create({
@@ -372,6 +373,7 @@ describeIfDb("agent persistence integration", () => {
         customerId: customer.id,
         createdById: owner.user.id,
         title: "Leaking kitchen tap - Adelaide",
+        serviceAddress: "7 Bourke Street, Docklands VIC 3008",
         description: "Kitchen tap is leaking under the sink.",
       },
     });
@@ -388,6 +390,7 @@ describeIfDb("agent persistence integration", () => {
         },
         jobDraft: {
           title: "厨房水龙头漏水维修",
+          serviceAddress: "63 Rathdowne Street, Carlton VIC 3053",
           description: "安排 Harper Lee 上门维修。",
         },
         scheduleDraft: {
@@ -455,6 +458,7 @@ describeIfDb("agent persistence integration", () => {
       },
       jobDraft: {
         title: "Rollback job",
+        serviceAddress: "25 Gertrude Street, Fitzroy VIC 3065",
       },
       scheduleDraft: {
         scheduledStartAt: "2026-04-23T00:00:00.000Z",
@@ -550,6 +554,7 @@ describeIfDb("agent persistence integration", () => {
       },
       jobDraft: {
         title: "Existing rollback job",
+        serviceAddress: "89 Smith Street, Collingwood VIC 3066",
       },
       scheduleDraft: {
         scheduledStartAt: "2026-04-23T00:00:00.000Z",
@@ -625,6 +630,7 @@ describeIfDb("agent persistence integration", () => {
       },
       jobDraft: {
         title: "Status rollback job",
+        serviceAddress: "31 Swan Street, Richmond VIC 3121",
       },
       scheduleDraft: {
         scheduledStartAt: "2026-04-23T00:00:00.000Z",

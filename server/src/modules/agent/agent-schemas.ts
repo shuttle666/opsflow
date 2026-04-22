@@ -119,7 +119,6 @@ const dispatchCustomerSchema = z
     name: z.string().trim().min(1).max(200).optional(),
     phone: z.string().trim().max(50).optional(),
     email: z.string().trim().email().optional().or(z.literal("")),
-    address: z.string().trim().max(500).optional(),
     notes: z.string().trim().max(2000).optional(),
     matches: z.array(dispatchCustomerMatchSchema).max(10).optional(),
   })
@@ -226,6 +225,7 @@ export const saveDispatchProposalToolInputSchema = z
       .object({
         existingJobId: optionalUuidSchema,
         title: z.string().trim().min(1, "Job title is required.").max(200),
+        serviceAddress: z.string().trim().max(500).optional(),
         description: optionalProposalStringSchema,
       })
       .strict(),
@@ -251,6 +251,18 @@ export const saveDispatchProposalToolInputSchema = z
         code: z.ZodIssueCode.custom,
         path: ["jobDraft", "existingJobId"],
         message: "Customer-only proposals cannot update an existing job.",
+      });
+    }
+
+    if (
+      intent !== "create_customer" &&
+      !value.jobDraft.existingJobId &&
+      !value.jobDraft.serviceAddress?.trim()
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["jobDraft", "serviceAddress"],
+        message: "New job proposals require jobDraft.serviceAddress.",
       });
     }
   });

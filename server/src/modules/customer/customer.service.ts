@@ -13,7 +13,6 @@ type CustomerListItem = {
   name: string;
   phone: string | null;
   email: string | null;
-  address: string | null;
   notes: string | null;
   archivedAt: Date | null;
   createdAt: Date;
@@ -23,6 +22,7 @@ type CustomerListItem = {
 type CustomerJobSummary = {
   id: string;
   title: string;
+  serviceAddress: string;
   status: string;
   scheduledStartAt: Date | null;
   scheduledEndAt: Date | null;
@@ -122,7 +122,6 @@ async function getCustomerOrThrow(auth: AuthContext, customerId: string) {
       name: true,
       phone: true,
       email: true,
-      address: true,
       notes: true,
       archivedAt: true,
       createdAt: true,
@@ -157,7 +156,6 @@ export async function listCustomers(
         name: true,
         phone: true,
         email: true,
-        address: true,
         notes: true,
         archivedAt: true,
         createdAt: true,
@@ -188,7 +186,6 @@ export async function createCustomer(
       name: input.name.trim(),
       phone: normalizeOptionalString(input.phone),
       email: normalizeOptionalString(input.email),
-      address: normalizeOptionalString(input.address),
       notes: normalizeOptionalString(input.notes),
     },
     select: {
@@ -196,7 +193,6 @@ export async function createCustomer(
       name: true,
       phone: true,
       email: true,
-      address: true,
       notes: true,
       archivedAt: true,
       createdAt: true,
@@ -219,7 +215,6 @@ export async function getCustomerDetail(
       name: true,
       phone: true,
       email: true,
-      address: true,
       notes: true,
       archivedAt: true,
       createdAt: true,
@@ -239,6 +234,7 @@ export async function getCustomerDetail(
         select: {
           id: true,
           title: true,
+          serviceAddress: true,
           status: true,
           scheduledStartAt: true,
           scheduledEndAt: true,
@@ -261,7 +257,6 @@ export async function getCustomerDetail(
     name: customer.name,
     phone: customer.phone,
     email: customer.email,
-    address: customer.address,
     notes: customer.notes,
     archivedAt: customer.archivedAt,
     createdAt: customer.createdAt,
@@ -270,6 +265,7 @@ export async function getCustomerDetail(
     jobs: customer.jobs.map((job) => ({
       id: job.id,
       title: job.title,
+      serviceAddress: job.serviceAddress,
       status: job.status,
       scheduledStartAt: job.scheduledStartAt,
       scheduledEndAt: job.scheduledEndAt,
@@ -295,7 +291,6 @@ export async function updateCustomer(
       name: input.name.trim(),
       phone: normalizeOptionalString(input.phone),
       email: normalizeOptionalString(input.email),
-      address: normalizeOptionalString(input.address),
       notes: normalizeOptionalString(input.notes),
     },
     select: {
@@ -303,7 +298,6 @@ export async function updateCustomer(
       name: true,
       phone: true,
       email: true,
-      address: true,
       notes: true,
       archivedAt: true,
       createdAt: true,
@@ -328,7 +322,6 @@ export async function archiveCustomer(
         name: true,
         phone: true,
         email: true,
-        address: true,
         notes: true,
         archivedAt: true,
         createdAt: true,
@@ -373,7 +366,6 @@ export async function archiveCustomer(
         name: true,
         phone: true,
         email: true,
-        address: true,
         notes: true,
         archivedAt: true,
         createdAt: true,
@@ -418,7 +410,6 @@ export async function restoreCustomer(
         name: true,
         phone: true,
         email: true,
-        address: true,
         notes: true,
         archivedAt: true,
         createdAt: true,
@@ -446,7 +437,6 @@ export async function restoreCustomer(
         name: true,
         phone: true,
         email: true,
-        address: true,
         notes: true,
         archivedAt: true,
         createdAt: true,

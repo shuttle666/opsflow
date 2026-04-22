@@ -56,6 +56,7 @@ export function JobForm({
     defaultValues: defaultValues ?? {
       customerId: "",
       title: "",
+      serviceAddress: "",
       description: "",
       scheduledStartAt: "",
       scheduledEndAt: "",
@@ -100,6 +101,19 @@ export function JobForm({
             />
             {errors.title ? (
               <p className="text-sm text-rose-600">{errors.title.message}</p>
+            ) : null}
+          </label>
+
+          <label className="block space-y-2 md:col-span-2">
+            <span className="text-sm font-medium text-[var(--color-text-secondary)]">Service address</span>
+            <textarea
+              {...register("serviceAddress")}
+              rows={3}
+              className={textAreaClassName}
+              placeholder="18 Collins Street, Melbourne VIC 3000"
+            />
+            {errors.serviceAddress ? (
+              <p className="text-sm text-rose-600">{errors.serviceAddress.message}</p>
             ) : null}
           </label>
 

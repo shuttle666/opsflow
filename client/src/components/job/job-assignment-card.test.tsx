@@ -29,6 +29,7 @@ const baseJob: JobDetail = {
   id: "job-1",
   title: "Assigned visit",
   description: "Desc",
+  serviceAddress: "18 Collins Street, Melbourne VIC 3000",
   status: "NEW",
   scheduledStartAt: null,
   scheduledEndAt: null,

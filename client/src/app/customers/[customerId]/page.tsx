@@ -183,6 +183,9 @@ function JobHistoryCard({ jobs }: { jobs: CustomerJobSummary[] }) {
                 <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
                   {formatStatusLabel(job.status)}
                 </p>
+                <p className="mt-1 truncate text-xs text-[var(--color-text-muted)]">
+                  {job.serviceAddress}
+                </p>
               </div>
               <StatusBadge kind="job" value={job.status} />
               <p className="font-mono text-xs text-[var(--color-text-secondary)]">
@@ -424,7 +427,6 @@ export default function CustomerDetailPage() {
                 <DetailCard eyebrow="Contact" title="Contact information">
                   <InfoRow label="Phone" value={customer.phone ?? "-"} />
                   <InfoRow label="Email" value={customer.email ?? "-"} />
-                  <InfoRow label="Address" value={customer.address ?? "-"} />
                   {customer.archivedAt ? (
                     <InfoRow label="Archived" value={formatDateTime(customer.archivedAt)} mono />
                   ) : null}

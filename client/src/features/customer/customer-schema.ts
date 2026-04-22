@@ -10,7 +10,6 @@ export const customerFormSchema = z.object({
     .refine((value) => !value || z.string().email().safeParse(value).success, {
       message: "Enter a valid email",
     }),
-  address: z.string().trim().optional(),
 });
 
 export type CustomerFormValues = z.infer<typeof customerFormSchema>;

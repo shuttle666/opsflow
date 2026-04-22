@@ -71,6 +71,7 @@ describe("dashboard page", () => {
         {
           id: "job-1",
           title: "Boiler inspection",
+          serviceAddress: "18 Collins Street, Melbourne VIC 3000",
           status: "SCHEDULED",
           scheduledStartAt: "2026-03-20T01:30:00.000Z",
           scheduledEndAt: "2026-03-20T02:30:00.000Z",

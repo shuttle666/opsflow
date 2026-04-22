@@ -70,7 +70,6 @@ describe("new customer page", () => {
       name: "Noah Thompson",
       phone: "0412 000 001",
       email: "noah@example.com",
-      address: "12 Glenview Rd",
       notes: null,
       archivedAt: null,
       createdAt: "2026-03-20T00:00:00.000Z",
@@ -83,10 +82,6 @@ describe("new customer page", () => {
     await user.type(screen.getByPlaceholderText("Noah Thompson"), "Noah Thompson");
     await user.type(screen.getByPlaceholderText("0412 000 001"), "0412 000 001");
     await user.type(screen.getByPlaceholderText("noah@example.com"), "noah@example.com");
-    await user.type(
-      screen.getByPlaceholderText("12 Glenview Rd, Adelaide"),
-      "12 Glenview Rd",
-    );
     await user.click(screen.getByRole("button", { name: "Create customer" }));
 
     await waitFor(() => {
@@ -96,7 +91,6 @@ describe("new customer page", () => {
           name: "Noah Thompson",
           phone: "0412 000 001",
           email: "noah@example.com",
-          address: "12 Glenview Rd",
         },
       );
       expect(pushMock).toHaveBeenCalledWith("/customers/customer-1");

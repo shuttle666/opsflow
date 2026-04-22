@@ -34,6 +34,7 @@ function NewJobPageContent() {
   const [defaultValues, setDefaultValues] = useState<JobFormValues>({
     customerId: selectedCustomerId,
     title: "",
+    serviceAddress: "",
     description: "",
     scheduledStartAt: "",
     scheduledEndAt: "",
@@ -76,7 +77,6 @@ function NewJobPageContent() {
               name: selected.name,
               phone: selected.phone ?? null,
               email: selected.email ?? null,
-              address: selected.address ?? null,
               notes: selected.notes ?? null,
               archivedAt: selected.archivedAt,
               createdAt: selected.createdAt,
@@ -145,6 +145,7 @@ function NewJobPageContent() {
                       createJobRequest(accessToken, {
                       customerId: values.customerId,
                       title: values.title,
+                      serviceAddress: values.serviceAddress,
                       description: values.description,
                       scheduledStartAt: toApiDateTime(values.scheduledStartAt),
                       scheduledEndAt: toApiDateTime(values.scheduledEndAt),

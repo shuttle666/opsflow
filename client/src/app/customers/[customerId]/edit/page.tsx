@@ -54,7 +54,6 @@ export default function EditCustomerPage() {
             name: loaded.name,
             phone: loaded.phone ?? "",
             email: loaded.email ?? "",
-            address: loaded.address ?? "",
           });
         }
       } catch (error) {

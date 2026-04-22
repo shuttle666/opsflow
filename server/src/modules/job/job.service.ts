@@ -41,6 +41,7 @@ type JobTiming = {
 type JobListItem = JobTiming & {
   id: string;
   title: string;
+  serviceAddress: string;
   status: JobStatus;
   createdAt: Date;
   updatedAt: Date;
@@ -54,6 +55,7 @@ type JobListItem = JobTiming & {
 export type JobDetail = JobTiming & {
   id: string;
   title: string;
+  serviceAddress: string;
   description: string | null;
   status: JobStatus;
   createdAt: Date;
@@ -108,6 +110,7 @@ export type JobStatusTransitionResult = {
 export type ScheduleDayJobItem = JobTiming & {
   id: string;
   title: string;
+  serviceAddress: string;
   status: JobStatus;
   customer: {
     id: string;
@@ -145,6 +148,7 @@ export type ScheduleDayResult = ScheduleRangeResult & {
 export type ScheduleConflictItem = {
   id: string;
   title: string;
+  serviceAddress: string;
   status: JobStatus;
   scheduledStartAt: Date;
   scheduledEndAt: Date;
@@ -284,6 +288,12 @@ function buildJobWhere(auth: AuthContext, query: JobListQueryInput) {
               },
             },
             {
+              serviceAddress: {
+                contains: normalizedQuery,
+                mode: "insensitive" as const,
+              },
+            },
+            {
               customer: {
                 name: {
                   contains: normalizedQuery,
@@ -300,6 +310,7 @@ function buildJobWhere(auth: AuthContext, query: JobListQueryInput) {
 function mapJobListItem(job: {
   id: string;
   title: string;
+  serviceAddress: string;
   status: JobStatus;
   scheduledStartAt: Date | null;
   scheduledEndAt: Date | null;
@@ -316,6 +327,7 @@ function mapJobListItem(job: {
   return {
     id: job.id,
     title: job.title,
+    serviceAddress: job.serviceAddress,
     status: job.status,
     scheduledStartAt: job.scheduledStartAt,
     scheduledEndAt: job.scheduledEndAt,
@@ -331,6 +343,7 @@ function mapJobListItem(job: {
 function mapJobDetail(job: {
   id: string;
   title: string;
+  serviceAddress: string;
   description: string | null;
   status: JobStatus;
   scheduledStartAt: Date | null;
@@ -352,6 +365,7 @@ function mapJobDetail(job: {
   return {
     id: job.id,
     title: job.title,
+    serviceAddress: job.serviceAddress,
     description: job.description,
     status: job.status,
     scheduledStartAt: job.scheduledStartAt,
@@ -539,6 +553,7 @@ export async function listJobs(
       select: {
         id: true,
         title: true,
+        serviceAddress: true,
         status: true,
         scheduledStartAt: true,
         scheduledEndAt: true,
@@ -582,6 +597,7 @@ export async function createJob(
       tenantId: auth.tenantId,
       customerId: customer.id,
       title: input.title.trim(),
+      serviceAddress: input.serviceAddress.trim(),
       description: normalizeOptionalString(input.description),
       ...scheduling,
       createdById: auth.userId,
@@ -590,6 +606,7 @@ export async function createJob(
     select: {
       id: true,
       title: true,
+      serviceAddress: true,
       status: true,
       scheduledStartAt: true,
       scheduledEndAt: true,
@@ -621,6 +638,7 @@ export async function getJobDetail(
     select: {
       id: true,
       title: true,
+      serviceAddress: true,
       description: true,
       status: true,
       scheduledStartAt: true,
@@ -677,12 +695,14 @@ export async function updateJob(
     data: {
       customerId: customer.id,
       title: input.title.trim(),
+      serviceAddress: input.serviceAddress.trim(),
       description: normalizeOptionalString(input.description),
       ...scheduling,
     },
     select: {
       id: true,
       title: true,
+      serviceAddress: true,
       status: true,
       scheduledStartAt: true,
       scheduledEndAt: true,
@@ -726,6 +746,7 @@ export async function listMyJobs(
       select: {
         id: true,
         title: true,
+        serviceAddress: true,
         status: true,
         scheduledStartAt: true,
         scheduledEndAt: true,
@@ -848,6 +869,7 @@ async function loadScheduleRange(
       select: {
         id: true,
         title: true,
+        serviceAddress: true,
         status: true,
         scheduledStartAt: true,
         scheduledEndAt: true,
@@ -872,6 +894,7 @@ async function loadScheduleRange(
     jobs.map((job) => ({
       id: job.id,
       title: job.title,
+      serviceAddress: job.serviceAddress,
       status: job.status,
       scheduledStartAt: job.scheduledStartAt,
       scheduledEndAt: job.scheduledEndAt,
@@ -972,6 +995,7 @@ export async function checkScheduleConflicts(
     select: {
       id: true,
       title: true,
+      serviceAddress: true,
       status: true,
       scheduledStartAt: true,
       scheduledEndAt: true,
@@ -989,6 +1013,7 @@ export async function checkScheduleConflicts(
     conflicts: conflicts.map((job) => ({
       id: job.id,
       title: job.title,
+      serviceAddress: job.serviceAddress,
       status: job.status,
       scheduledStartAt: job.scheduledStartAt!,
       scheduledEndAt: job.scheduledEndAt!,

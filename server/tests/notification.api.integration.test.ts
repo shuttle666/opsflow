@@ -91,6 +91,7 @@ describeIfDb("notification api integration", () => {
         tenantId: tenant.id,
         customerId: customer.id,
         title: "Notification Test Job",
+        serviceAddress: "18 Collins Street, Melbourne VIC 3000",
         status: JobStatus.NEW,
         createdById: ownerUser.id,
       },

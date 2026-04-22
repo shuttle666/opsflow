@@ -91,7 +91,6 @@ describeIfDb("customer api integration", () => {
         name: "Noah Thompson",
         phone: "0412 000 001",
         email: "noah@example.com",
-        address: "12 Glenview Rd",
       });
 
     expect(created.status).toBe(201);
@@ -102,6 +101,7 @@ describeIfDb("customer api integration", () => {
         tenantId: tenant.id,
         customerId: created.body.data.id,
         title: "Leaking kitchen tap",
+        serviceAddress: "18 Collins Street, Melbourne VIC 3000",
         status: JobStatus.NEW,
         createdById: user.id,
       },
@@ -130,7 +130,6 @@ describeIfDb("customer api integration", () => {
         name: "Noah Thompson Updated",
         phone: "",
         email: "noah.updated@example.com",
-        address: "14 Glenview Rd",
       });
 
     expect(updated.status).toBe(200);
@@ -243,6 +242,7 @@ describeIfDb("customer api integration", () => {
         tenantId: tenant.id,
         customerId: openJobCustomer.id,
         title: "Open job",
+        serviceAddress: "54 Toorak Road, South Yarra VIC 3141",
         status: JobStatus.IN_PROGRESS,
         createdById: user.id,
       },

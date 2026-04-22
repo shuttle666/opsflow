@@ -39,6 +39,7 @@ export type JobCustomerListSummary = {
 export type JobListItem = {
   id: string;
   title: string;
+  serviceAddress: string;
   status: JobStatus;
   scheduledStartAt: string | null;
   scheduledEndAt: string | null;
@@ -58,6 +59,7 @@ export type JobCustomerDetailSummary = {
 export type JobDetail = {
   id: string;
   title: string;
+  serviceAddress: string;
   description: string | null;
   status: JobStatus;
   scheduledStartAt: string | null;
@@ -169,6 +171,7 @@ export type UploadJobEvidenceInput = {
 export type CreateJobInput = {
   customerId: string;
   title: string;
+  serviceAddress: string;
   description?: string;
   scheduledStartAt?: string;
   scheduledEndAt?: string;
@@ -179,6 +182,7 @@ export type UpdateJobInput = CreateJobInput;
 export type ScheduleDayJobItem = {
   id: string;
   title: string;
+  serviceAddress: string;
   status: JobStatus;
   scheduledStartAt: string | null;
   scheduledEndAt: string | null;
@@ -223,6 +227,7 @@ export type ScheduleRangeResult = {
 export type ScheduleConflictItem = {
   id: string;
   title: string;
+  serviceAddress: string;
   status: JobStatus;
   scheduledStartAt: string;
   scheduledEndAt: string;

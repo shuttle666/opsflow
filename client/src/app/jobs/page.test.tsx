@@ -96,6 +96,7 @@ describe("jobs page", () => {
         {
           id: "job-1",
           title: "Leaking kitchen tap",
+          serviceAddress: "18 Collins Street, Melbourne VIC 3000",
           status: "NEW",
           scheduledStartAt: null,
           scheduledEndAt: null,
@@ -166,7 +167,6 @@ describe("jobs page", () => {
           name: "Noah Thompson",
           phone: null,
           email: null,
-          address: null,
           notes: null,
           archivedAt: null,
           createdAt: "2026-03-20T00:00:00.000Z",

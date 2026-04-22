@@ -6,6 +6,8 @@ import { hashPassword } from "../src/modules/auth/auth-password";
 import { login } from "../src/modules/auth/auth.service";
 import { describeIfDb, resetDatabase } from "./helpers/db";
 
+const testServiceAddress = "18 Collins Street, Melbourne VIC 3000";
+
 describeIfDb("job api integration", () => {
   const app = createApp();
 
@@ -101,6 +103,7 @@ describeIfDb("job api integration", () => {
       .send({
         customerId: customer.id,
         title: "Leaking kitchen tap",
+        serviceAddress: testServiceAddress,
         description: "Tap leaking overnight.",
         scheduledStartAt: "2026-03-30T02:00:00.000Z",
         scheduledEndAt: "2026-03-30T03:00:00.000Z",
@@ -131,6 +134,7 @@ describeIfDb("job api integration", () => {
       .send({
         customerId: customer.id,
         title: "Leaking kitchen tap updated",
+        serviceAddress: "20 Collins Street, Melbourne VIC 3000",
         description: "",
         scheduledStartAt: "",
         scheduledEndAt: "",
@@ -222,6 +226,7 @@ describeIfDb("job api integration", () => {
         tenantId: owner.tenant.id,
         customerId: customer.id,
         title: "Existing Job",
+        serviceAddress: testServiceAddress,
         status: JobStatus.NEW,
         createdById: owner.user.id,
       },
@@ -265,6 +270,7 @@ describeIfDb("job api integration", () => {
       .send({
         customerId: customer.id,
         title: "Blocked Job",
+        serviceAddress: testServiceAddress,
       });
     expect(createRes.status).toBe(403);
 
@@ -279,6 +285,7 @@ describeIfDb("job api integration", () => {
       .send({
         customerId: customer.id,
         title: "Blocked Edit",
+        serviceAddress: testServiceAddress,
       });
     expect(patchRes.status).toBe(403);
 
@@ -364,6 +371,7 @@ describeIfDb("job api integration", () => {
           tenantId: owner.tenant.id,
           customerId: customer.id,
           title: "First API overlap",
+          serviceAddress: testServiceAddress,
           status: JobStatus.SCHEDULED,
           createdById: owner.user.id,
           assignedToId: staffUser.id,
@@ -375,6 +383,7 @@ describeIfDb("job api integration", () => {
           tenantId: owner.tenant.id,
           customerId: customer.id,
           title: "Second API overlap",
+          serviceAddress: testServiceAddress,
           status: JobStatus.SCHEDULED,
           createdById: owner.user.id,
           assignedToId: staffUser.id,
@@ -386,6 +395,7 @@ describeIfDb("job api integration", () => {
           tenantId: owner.tenant.id,
           customerId: customer.id,
           title: "Other staff API job",
+          serviceAddress: testServiceAddress,
           status: JobStatus.SCHEDULED,
           createdById: owner.user.id,
           assignedToId: otherStaffUser.id,
@@ -397,6 +407,7 @@ describeIfDb("job api integration", () => {
           tenantId: owner.tenant.id,
           customerId: customer.id,
           title: "Unassigned API range job",
+          serviceAddress: testServiceAddress,
           status: JobStatus.NEW,
           createdById: owner.user.id,
           scheduledStartAt: new Date("2026-04-09T00:00:00.000Z"),
@@ -497,6 +508,7 @@ describeIfDb("job api integration", () => {
       .send({
         customerId: primaryCustomer.id,
         title: "Primary Job",
+        serviceAddress: testServiceAddress,
       });
     expect(created.status).toBe(201);
 
@@ -506,6 +518,7 @@ describeIfDb("job api integration", () => {
       .send({
         customerId: otherCustomer.id,
         title: "Wrong Customer Job",
+        serviceAddress: testServiceAddress,
       });
     expect(crossTenantCreate.status).toBe(404);
 
@@ -523,6 +536,7 @@ describeIfDb("job api integration", () => {
       .send({
         customerId: primaryCustomer.id,
         title: "Primary Job",
+        serviceAddress: testServiceAddress,
         status: "COMPLETED",
       });
     expect(illegalPatch.status).toBe(400);
@@ -620,6 +634,7 @@ describeIfDb("job api integration", () => {
         tenantId: owner.tenant.id,
         customerId: customer.id,
         title: "Workflow Job",
+        serviceAddress: testServiceAddress,
         status: JobStatus.NEW,
         createdById: owner.user.id,
         assignedToId: staffUser.id,
@@ -746,6 +761,7 @@ describeIfDb("job api integration", () => {
         tenantId: owner.tenant.id,
         customerId: customer.id,
         title: "Pending review cancel job",
+        serviceAddress: testServiceAddress,
         status: JobStatus.PENDING_REVIEW,
         createdById: owner.user.id,
         assignedToId: staffUser.id,

@@ -178,7 +178,6 @@ model Customer {
   name        String
   phone       String?
   email       String?
-  address     String?
   notes       String?
   archivedAt  DateTime? @map("archived_at")
   createdById String    @map("created_by_id") @db.Uuid
@@ -201,6 +200,7 @@ model Job {
   customerId        String                @map("customer_id") @db.Uuid
   title             String
   description       String?
+  serviceAddress    String                @map("service_address")
   status            JobStatus             @default(NEW)
   assignedToId      String?               @map("assigned_to_id") @db.Uuid
   createdById       String                @map("created_by_id") @db.Uuid
@@ -221,6 +221,7 @@ model Job {
   @@index([tenantId])
   @@index([tenantId, status])
   @@index([tenantId, customerId])
+  @@index([tenantId, serviceAddress])
   @@index([tenantId, scheduledStartAt])
   @@index([tenantId, assignedToId, scheduledStartAt])
   @@map("jobs")

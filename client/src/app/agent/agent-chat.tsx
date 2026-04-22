@@ -227,7 +227,7 @@ function ProposalCard({
           </p>
           <p className="mt-2 text-sm font-semibold text-[var(--color-text)]">
             {isCustomerOnly
-              ? proposal.customer.address ?? "No address provided"
+              ? proposal.customer.phone ?? proposal.customer.email ?? "No contact details provided"
               : proposal.assigneeDraft?.displayName ?? "Unassigned"}
           </p>
           <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
@@ -246,8 +246,13 @@ function ProposalCard({
               ? "No job will be created. Confirming this proposal creates only the customer record."
               : proposal.jobDraft.existingJobId
                 ? "Confirming this proposal updates the existing job instead of creating a duplicate."
-                : proposal.jobDraft.description?.trim() || "No extra description provided."}
+                : proposal.jobDraft.serviceAddress?.trim() || "No service address provided."}
           </p>
+          {!isCustomerOnly && !proposal.jobDraft.existingJobId ? (
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+              {proposal.jobDraft.description?.trim() || "No extra description provided."}
+            </p>
+          ) : null}
         </div>
       </div>
 

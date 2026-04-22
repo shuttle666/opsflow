@@ -99,7 +99,7 @@ function getStatusGuidance(status: JobStatus, assigneeName?: string | null) {
         description:
           "The job is in intake. Customer details, schedule, and assignment should be prepared before it becomes scheduled.",
         nextStep:
-          "Normal progress should come from setting a visit window and assigning staff.",
+          "Normal progress should come from setting a scheduled visit time and assigning staff.",
         ownerManager: "Prepare the schedule and assignee. Use manual status edit only as a fallback.",
         staff: "Wait until the job is assigned and scheduled.",
       };

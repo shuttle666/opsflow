@@ -76,7 +76,6 @@ describe("edit job page", () => {
           name: "Noah Thompson",
           phone: null,
           email: null,
-          address: null,
           notes: null,
           archivedAt: null,
           createdAt: "2026-03-20T00:00:00.000Z",
@@ -89,6 +88,7 @@ describe("edit job page", () => {
       id: "job-1",
       title: "Leaking kitchen tap",
       description: "Tap leaking overnight.",
+      serviceAddress: "18 Collins Street, Melbourne VIC 3000",
       status: "NEW",
       scheduledStartAt: "2026-03-30T02:00:00.000Z",
       scheduledEndAt: "2026-03-30T03:00:00.000Z",
@@ -107,6 +107,7 @@ describe("edit job page", () => {
     vi.mocked(updateJobRequest).mockResolvedValue({
       id: "job-1",
       title: "Leaking kitchen tap updated",
+      serviceAddress: "20 Collins Street, Melbourne VIC 3000",
       status: "NEW",
       scheduledStartAt: "2026-03-30T03:30:00.000Z",
       scheduledEndAt: "2026-03-30T04:30:00.000Z",
@@ -127,6 +128,10 @@ describe("edit job page", () => {
     await user.clear(titleInput);
     await user.type(titleInput, "Leaking kitchen tap updated");
 
+    const addressInput = screen.getByDisplayValue("18 Collins Street, Melbourne VIC 3000");
+    await user.clear(addressInput);
+    await user.type(addressInput, "20 Collins Street, Melbourne VIC 3000");
+
     await user.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() => {
@@ -136,6 +141,7 @@ describe("edit job page", () => {
         expect.objectContaining({
           customerId: "customer-1",
           title: "Leaking kitchen tap updated",
+          serviceAddress: "20 Collins Street, Melbourne VIC 3000",
         }),
       );
       expect(pushMock).toHaveBeenCalledWith("/jobs/job-1");

@@ -6,11 +6,13 @@ const optionalDateTimeSchema = z
   .optional();
 
 const optionalStringSchema = z.string().trim().max(5000).optional().or(z.literal(""));
+const serviceAddressSchema = z.string().trim().min(1, "Service address is required.").max(500);
 
 export const createJobSchema = z
   .object({
     customerId: z.uuid(),
     title: z.string().trim().min(1, "Job title is required."),
+    serviceAddress: serviceAddressSchema,
     description: optionalStringSchema,
     scheduledStartAt: optionalDateTimeSchema,
     scheduledEndAt: optionalDateTimeSchema,

@@ -163,7 +163,7 @@ function getTransitionAction(status: JobStatus): TransitionActionView {
       return {
         id: "schedule",
         label: "Mark scheduled",
-        description: "Use after the visit window and staff assignment are ready.",
+        description: "Use after the scheduled visit time and staff assignment are ready.",
         toStatus: "SCHEDULED",
       };
     case "IN_PROGRESS":
@@ -664,7 +664,7 @@ export default function JobDetailPage() {
               <OverviewMetric
                 label="Scheduled"
                 value={formatScheduleRange(job.scheduledStartAt, job.scheduledEndAt)}
-                meta="Visit window"
+                meta="Visit time"
               />
               <OverviewMetric
                 label="Assigned"
@@ -688,10 +688,11 @@ export default function JobDetailPage() {
                         Schedule
                       </p>
                       <InfoRow
-                        label="Window"
+                        label="Visit time"
                         value={formatScheduleRange(job.scheduledStartAt, job.scheduledEndAt)}
                         mono
                       />
+                      <InfoRow label="Service address" value={job.serviceAddress} />
                       <InfoRow label="Created" value={formatDateTime(job.createdAt)} mono />
                       <InfoRow label="Updated" value={formatDateTime(job.updatedAt)} mono />
                     </div>

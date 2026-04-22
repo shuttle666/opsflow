@@ -457,6 +457,7 @@ function DayJobBlock({
           <StatusBadge kind="job" value={job.status} />
         </div>
         <p className="text-xs text-[var(--color-text-secondary)]">{job.customer.name}</p>
+        <p className="truncate text-xs text-[var(--color-text-muted)]">{job.serviceAddress}</p>
         <p className="text-xs font-medium text-[var(--color-text-muted)]">
           {formatTimeRange(job.scheduledStartAt, job.scheduledEndAt)}
         </p>
@@ -577,6 +578,7 @@ function ScheduleJobCard({
         </div>
         <div className="space-y-1 text-xs text-[var(--color-text-secondary)]">
           <p>{job.customer.name}</p>
+          <p className="truncate text-[var(--color-text-muted)]">{job.serviceAddress}</p>
           <p>{jobAssigneeLabel(job)}</p>
         </div>
         <div className="flex items-center justify-between gap-2">
@@ -700,7 +702,7 @@ function WeekView({
                           {job.title}
                         </p>
                         <p className="mt-1 truncate text-xs text-[var(--color-text-muted)]">
-                          {jobAssigneeLabel(job)}
+                          {job.serviceAddress}
                         </p>
                         {job.hasConflict ? (
                           <p className="mt-2 text-[10px] font-semibold uppercase text-[var(--color-danger)]">

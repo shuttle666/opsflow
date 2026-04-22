@@ -68,7 +68,6 @@ describe("edit customer page", () => {
       name: "Noah Thompson",
       phone: "0412 000 001",
       email: "noah@example.com",
-      address: "12 Glenview Rd",
       notes: null,
       archivedAt: null,
       createdAt: "2026-03-20T00:00:00.000Z",
@@ -85,7 +84,6 @@ describe("edit customer page", () => {
       name: "Noah Thompson Updated",
       phone: "0412 000 001",
       email: "noah.updated@example.com",
-      address: "14 Glenview Rd",
       notes: null,
       archivedAt: null,
       createdAt: "2026-03-20T00:00:00.000Z",
@@ -105,10 +103,6 @@ describe("edit customer page", () => {
     await user.clear(emailInput);
     await user.type(emailInput, "noah.updated@example.com");
 
-    const addressInput = screen.getByDisplayValue("12 Glenview Rd");
-    await user.clear(addressInput);
-    await user.type(addressInput, "14 Glenview Rd");
-
     await user.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() => {
@@ -118,7 +112,6 @@ describe("edit customer page", () => {
         expect.objectContaining({
           name: "Noah Thompson Updated",
           email: "noah.updated@example.com",
-          address: "14 Glenview Rd",
         }),
       );
       expect(pushMock).toHaveBeenCalledWith("/customers/customer-1");

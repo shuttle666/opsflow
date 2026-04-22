@@ -20,6 +20,7 @@ const baseJob: JobDetail = {
   id: "job-1",
   title: "Leaking kitchen tap",
   description: "Tap leaking overnight.",
+  serviceAddress: "18 Collins Street, Melbourne VIC 3000",
   status: "NEW",
   scheduledStartAt: null,
   scheduledEndAt: null,

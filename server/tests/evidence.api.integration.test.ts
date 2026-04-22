@@ -111,6 +111,7 @@ describeIfDb("evidence api integration", () => {
         tenantId: owner.tenant.id,
         customerId: customer.id,
         title: "Evidence Job",
+        serviceAddress: "18 Collins Street, Melbourne VIC 3000",
         createdById: owner.user.id,
       },
     });
@@ -235,6 +236,7 @@ describeIfDb("evidence api integration", () => {
         tenantId: owner.tenant.id,
         customerId: customer.id,
         title: "Assigned Evidence Job",
+        serviceAddress: "42 Queensbridge Street, Southbank VIC 3006",
         createdById: owner.user.id,
         assignedToId: staffUser.id,
       },
@@ -286,6 +288,7 @@ describeIfDb("evidence api integration", () => {
         tenantId: owner.tenant.id,
         customerId: customer.id,
         title: "Validation Job",
+        serviceAddress: "7 Bourke Street, Docklands VIC 3008",
         createdById: owner.user.id,
       },
     });

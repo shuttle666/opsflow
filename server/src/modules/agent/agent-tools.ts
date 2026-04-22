@@ -298,7 +298,6 @@ toolMap.set("save_dispatch_proposal", {
             name: { type: "string" },
             phone: { type: "string" },
             email: { type: "string" },
-            address: { type: "string" },
             notes: { type: "string" },
             matches: {
               type: "array",
@@ -319,6 +318,7 @@ toolMap.set("save_dispatch_proposal", {
           properties: {
             existingJobId: { type: "string" },
             title: { type: "string" },
+            serviceAddress: { type: "string" },
             description: { type: "string" },
           },
           required: ["title"],
@@ -386,6 +386,7 @@ toolMap.set("save_dispatch_proposal", {
           jobDraft: {
             existingJobId: validatedInput.jobDraft.existingJobId,
             title: validatedInput.jobDraft.title,
+            serviceAddress: validatedInput.jobDraft.serviceAddress,
             description: validatedInput.jobDraft.description ?? null,
           },
           scheduleDraft: validatedInput.scheduleDraft,

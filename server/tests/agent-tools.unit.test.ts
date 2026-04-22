@@ -66,6 +66,7 @@ function buildValidProposalInput() {
     },
     jobDraft: {
       title: "Leaking tap repair",
+      serviceAddress: "18 Collins Street, Melbourne VIC 3000",
       description: "Kitchen tap leaking under the sink.",
     },
     scheduleDraft: {
@@ -180,6 +181,7 @@ describe("agent tools", () => {
         ...input,
         jobDraft: {
           title: input.jobDraft.title,
+          serviceAddress: input.jobDraft.serviceAddress,
           description: input.jobDraft.description,
         },
       },
@@ -198,6 +200,7 @@ describe("agent tools", () => {
       jobDraft: {
         existingJobId: "66666666-6666-4666-8666-666666666666",
         title: "Leaking tap repair",
+        serviceAddress: "18 Collins Street, Melbourne VIC 3000",
         description: "Existing work order.",
       },
     };
@@ -314,6 +317,13 @@ describe("agent tools", () => {
         } as typeof input.customer;
       },
       path: "customer.matches",
+    },
+    {
+      name: "new job without service address",
+      mutate: (input: ReturnType<typeof buildValidProposalInput>) => {
+        input.jobDraft.serviceAddress = "";
+      },
+      path: "jobDraft.serviceAddress",
     },
     {
       name: "existing job update without job ID",

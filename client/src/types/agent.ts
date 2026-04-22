@@ -11,7 +11,6 @@ export type DispatchProposal = {
     name?: string;
     phone?: string;
     email?: string;
-    address?: string;
     notes?: string;
     matches?: Array<{
       id: string;
@@ -21,6 +20,7 @@ export type DispatchProposal = {
   jobDraft: {
     existingJobId?: string;
     title: string;
+    serviceAddress?: string;
     description?: string | null;
   };
   scheduleDraft: {

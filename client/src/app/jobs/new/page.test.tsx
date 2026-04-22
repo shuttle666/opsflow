@@ -86,7 +86,6 @@ describe("new job page", () => {
           name: "Noah Thompson",
           phone: null,
           email: null,
-          address: null,
           notes: null,
           archivedAt: null,
           createdAt: "2026-03-20T00:00:00.000Z",
@@ -98,6 +97,7 @@ describe("new job page", () => {
     vi.mocked(createJobRequest).mockResolvedValue({
       id: "job-1",
       title: "Leaking kitchen tap",
+      serviceAddress: "18 Collins Street, Melbourne VIC 3000",
       status: "NEW",
       scheduledStartAt: null,
       scheduledEndAt: null,
@@ -120,6 +120,10 @@ describe("new job page", () => {
       screen.getByPlaceholderText("Describe the issue or requested work"),
       "Tap leaking overnight.",
     );
+    await user.type(
+      screen.getByPlaceholderText("18 Collins Street, Melbourne VIC 3000"),
+      "18 Collins Street, Melbourne VIC 3000",
+    );
     await user.type(screen.getByLabelText("Start time"), "2026-03-30T12:30");
     expect(screen.getByLabelText("End time")).toHaveValue("2026-03-30T13:30");
     await user.click(screen.getByRole("button", { name: "Create job" }));
@@ -131,6 +135,7 @@ describe("new job page", () => {
           customerId: "customer-1",
           title: "Leaking kitchen tap",
           description: "Tap leaking overnight.",
+          serviceAddress: "18 Collins Street, Melbourne VIC 3000",
           scheduledStartAt: expect.any(String),
           scheduledEndAt: expect.any(String),
         }),

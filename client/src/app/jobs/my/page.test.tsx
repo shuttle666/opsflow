@@ -76,6 +76,7 @@ describe("my jobs page", () => {
         {
           id: "job-1",
           title: "Assigned visit",
+          serviceAddress: "18 Collins Street, Melbourne VIC 3000",
           status: "SCHEDULED",
           scheduledStartAt: "2026-03-30T02:00:00.000Z",
           scheduledEndAt: "2026-03-30T03:00:00.000Z",

@@ -84,13 +84,11 @@ describeIfDb("customer service integration", () => {
       name: "Noah Thompson",
       phone: "0412 000 001",
       email: "noah@example.com",
-      address: "12 Glenview Rd",
     });
     await createCustomer(auth, {
       name: "Olivia Davis",
       phone: "0412 000 002",
       email: "olivia@example.com",
-      address: "44 East Parkway",
     });
 
     const firstPage = await listCustomers(auth, {
@@ -204,6 +202,7 @@ describeIfDb("customer service integration", () => {
         tenantId: auth.tenantId,
         customerId: openCustomer.id,
         title: "Open work",
+        serviceAddress: "18 Collins Street, Melbourne VIC 3000",
         status: JobStatus.NEW,
         createdById: user.id,
       },
@@ -222,6 +221,7 @@ describeIfDb("customer service integration", () => {
           tenantId: auth.tenantId,
           customerId: closedCustomer.id,
           title: "Completed work",
+          serviceAddress: "42 Queensbridge Street, Southbank VIC 3006",
           status: JobStatus.COMPLETED,
           createdById: user.id,
         },
@@ -229,6 +229,7 @@ describeIfDb("customer service integration", () => {
           tenantId: auth.tenantId,
           customerId: closedCustomer.id,
           title: "Cancelled work",
+          serviceAddress: "7 Bourke Street, Docklands VIC 3008",
           status: JobStatus.CANCELLED,
           createdById: user.id,
         },
@@ -272,7 +273,6 @@ describeIfDb("customer service integration", () => {
       name: "Mia Clark",
       phone: "0412 000 006",
       email: "mia@example.com",
-      address: "55 Franklin St",
     });
 
     await prisma.job.createMany({
@@ -281,6 +281,7 @@ describeIfDb("customer service integration", () => {
           tenantId: auth.tenantId,
           customerId: customer.id,
           title: "Blocked drain",
+          serviceAddress: "63 Rathdowne Street, Carlton VIC 3053",
           status: JobStatus.SCHEDULED,
           createdById: user.id,
           assignedToId: staff.id,
@@ -289,6 +290,7 @@ describeIfDb("customer service integration", () => {
           tenantId: auth.tenantId,
           customerId: customer.id,
           title: "Leaking tap",
+          serviceAddress: "25 Gertrude Street, Fitzroy VIC 3065",
           status: JobStatus.NEW,
           createdById: user.id,
         },
@@ -326,14 +328,12 @@ describeIfDb("customer service integration", () => {
       name: "James Lee",
       phone: "0412 000 007",
       email: "james@example.com",
-      address: "72 Main North Rd",
     });
 
     const updated = await updateCustomer(primary.auth, customer.id, {
       name: "James Lee Updated",
       phone: "",
       email: "james.updated@example.com",
-      address: "74 Main North Rd",
     });
 
     expect(updated.name).toBe("James Lee Updated");
@@ -350,7 +350,6 @@ describeIfDb("customer service integration", () => {
         name: "Should Fail",
         phone: "",
         email: "",
-        address: "",
       }),
     ).rejects.toMatchObject({
       statusCode: 404,

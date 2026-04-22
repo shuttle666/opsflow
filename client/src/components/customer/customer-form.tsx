@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { FormActions, FormSection } from "@/components/ui/form-surface";
-import { inputClassName, primaryButtonClassName, textAreaClassName } from "@/components/ui/styles";
+import { inputClassName, primaryButtonClassName } from "@/components/ui/styles";
 import {
   customerFormSchema,
   type CustomerFormValues,
@@ -34,7 +34,6 @@ export function CustomerForm({
       name: "",
       phone: "",
       email: "",
-      address: "",
     },
   });
 
@@ -78,19 +77,6 @@ export function CustomerForm({
             />
             {errors.email ? (
               <p className="text-sm text-rose-600">{errors.email.message}</p>
-            ) : null}
-          </label>
-
-          <label className="block space-y-2 md:col-span-2">
-            <span className="text-sm font-medium text-[var(--color-text-secondary)]">Address</span>
-            <textarea
-              {...register("address")}
-              rows={4}
-              className={textAreaClassName}
-              placeholder="12 Glenview Rd, Adelaide"
-            />
-            {errors.address ? (
-              <p className="text-sm text-rose-600">{errors.address.message}</p>
             ) : null}
           </label>
         </div>

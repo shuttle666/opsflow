@@ -127,6 +127,7 @@ describeIfDb("activity api integration", () => {
         tenantId: owner.tenant.id,
         customerId: customer.id,
         title: "Activity Job",
+        serviceAddress: "18 Collins Street, Melbourne VIC 3000",
         status: JobStatus.NEW,
         createdById: owner.user.id,
       },

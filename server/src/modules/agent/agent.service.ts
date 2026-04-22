@@ -32,7 +32,6 @@ export type DispatchProposal = {
     name?: string;
     phone?: string;
     email?: string;
-    address?: string;
     notes?: string;
     matches?: Array<{
       id: string;
@@ -42,6 +41,7 @@ export type DispatchProposal = {
   jobDraft: {
     existingJobId?: string;
     title: string;
+    serviceAddress?: string;
     description?: string | null;
   };
   scheduleDraft: {
@@ -792,6 +792,15 @@ function normalizeOptionalTextValue(value?: string | null): string | null {
   return trimmed ? trimmed : null;
 }
 
+function normalizeRequiredTextValue(value: string | null | undefined, message: string) {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    throw new ApiError(400, message);
+  }
+
+  return trimmed;
+}
+
 function normalizeOptionalDateTimeValue(value?: string | null): Date | null {
   const trimmed = value?.trim();
   return trimmed ? new Date(trimmed) : null;
@@ -940,7 +949,6 @@ async function resolveCustomerForConfirmation(
       name: proposal.customer.name!.trim(),
       phone: normalizeOptionalTextValue(proposal.customer.phone),
       email: normalizeOptionalTextValue(proposal.customer.email),
-      address: normalizeOptionalTextValue(proposal.customer.address),
       notes: normalizeOptionalTextValue(proposal.customer.notes),
     },
     select: {
@@ -969,6 +977,10 @@ async function createJobForConfirmation(
       tenantId: auth.tenantId,
       customerId,
       title: proposal.jobDraft.title.trim(),
+      serviceAddress: normalizeRequiredTextValue(
+        proposal.jobDraft.serviceAddress,
+        "Service address is required before creating a job.",
+      ),
       description: normalizeOptionalTextValue(proposal.jobDraft.description),
       ...scheduling,
       createdById: auth.userId,

@@ -86,6 +86,7 @@ export default function DashboardPage() {
               id: job.id,
               customerName: job.customer.name,
               customerInitials: initialsFor(job.customer.name),
+              serviceAddress: job.serviceAddress,
               jobType: job.title,
               status: job.status,
               time: formatTimeRange(job.scheduledStartAt, job.scheduledEndAt),

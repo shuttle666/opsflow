@@ -353,6 +353,7 @@ export default function JobsPage() {
                       <tr>
                         <th className="px-4 py-2.5 font-semibold">Title</th>
                         <th className="px-4 py-2.5 font-semibold">Customer</th>
+                        <th className="px-4 py-2.5 font-semibold">Service address</th>
                         <th className="px-4 py-2.5 font-semibold">Status</th>
                         <th className="px-4 py-2.5 font-semibold">Scheduled</th>
                         <th className="px-4 py-2.5 font-semibold">Assigned</th>
@@ -378,6 +379,9 @@ export default function JobsPage() {
                           </td>
                           <td className="px-4 py-3">
                             {job.customer.name}
+                          </td>
+                          <td className="max-w-[240px] truncate px-4 py-3">
+                            {job.serviceAddress}
                           </td>
                           <td className="px-4 py-3">
                             <StatusBadge kind="job" value={job.status} />

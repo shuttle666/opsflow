@@ -68,7 +68,6 @@ export default function EditJobPage() {
               name: selected.name,
               phone: selected.phone ?? null,
               email: selected.email ?? null,
-              address: selected.address ?? null,
               notes: selected.notes ?? null,
               archivedAt: selected.archivedAt,
               createdAt: selected.createdAt,
@@ -82,6 +81,7 @@ export default function EditJobPage() {
           setDefaultValues({
             customerId: job.customer.id,
             title: job.title,
+            serviceAddress: job.serviceAddress,
             description: job.description ?? "",
             scheduledStartAt: toDateTimeLocal(job.scheduledStartAt),
             scheduledEndAt: toDateTimeLocal(job.scheduledEndAt),
@@ -137,6 +137,7 @@ export default function EditJobPage() {
                     updateJobRequest(accessToken, jobId, {
                       customerId: values.customerId,
                       title: values.title,
+                      serviceAddress: values.serviceAddress,
                       description: values.description,
                       scheduledStartAt: toApiDateTime(values.scheduledStartAt),
                       scheduledEndAt: toApiDateTime(values.scheduledEndAt),

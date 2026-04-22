@@ -85,6 +85,7 @@ function createScheduleResult() {
           {
             id: "job-1",
             title: "Assigned visit",
+            serviceAddress: "18 Collins Street, Melbourne VIC 3000",
             status: "SCHEDULED" as const,
             scheduledStartAt: dateTodayAt(9),
             scheduledEndAt: dateTodayAt(10),
@@ -102,6 +103,7 @@ function createScheduleResult() {
           {
             id: "job-2",
             title: "Conflict visit",
+            serviceAddress: "42 Queensbridge Street, Southbank VIC 3006",
             status: "SCHEDULED" as const,
             scheduledStartAt: dateTodayAt(9),
             scheduledEndAt: dateTodayAt(11),

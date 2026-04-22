@@ -46,7 +46,6 @@ export function CustomerNotesCard({
           name: customer.name,
           phone: customer.phone ?? undefined,
           email: customer.email ?? undefined,
-          address: customer.address ?? undefined,
           notes: draft.trim() || undefined,
         }),
       );

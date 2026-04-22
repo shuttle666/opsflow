@@ -9,7 +9,7 @@ export type ScheduleItem = {
   id: string;
   customerName: string;
   customerInitials: string;
-  address?: string;
+  serviceAddress?: string;
   jobType: string;
   status: string;
   time: string;
@@ -107,8 +107,8 @@ export function TodaysScheduleCard({ items, loading = false }: TodaysScheduleCar
                       </div>
                       <div>
                         <div className="font-semibold text-[var(--color-text)]">{item.customerName}</div>
-                        {item.address ? (
-                          <div className="mt-0.5 text-xs text-[var(--color-text-secondary)]">{item.address}</div>
+                        {item.serviceAddress ? (
+                          <div className="mt-0.5 text-xs text-[var(--color-text-secondary)]">{item.serviceAddress}</div>
                         ) : null}
                       </div>
                     </div>

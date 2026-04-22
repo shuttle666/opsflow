@@ -46,7 +46,8 @@ Rules:
 - When checking schedule conflicts for an existing job, pass excludeJobId=jobDraft.existingJobId.
 - If save_dispatch_proposal returns an EXISTING_JOB_REQUIRED error, do not present the failed plan as saved. Use details.candidateJobs to retry with intent="update_existing_job" and jobDraft.existingJobId, or ask the user to choose if the candidate is ambiguous.
 - Do not translate or rename an existing job when saving a proposal; preserve the existing job title from list_jobs/get_job_detail.
-- If the user wants to create a customer, you should still prepare a proposal instead of refusing. Use intent="create_customer", set customer.status="new", and include any provided phone, email, address, or notes.
+- Treat addresses as job service locations, not customer profile fields. For new jobs, put the site address in jobDraft.serviceAddress.
+- If the user wants to create a customer, you should still prepare a proposal instead of refusing. Use intent="create_customer", set customer.status="new", and include any provided phone, email, or notes.
 - If the user wants to create both a customer and a job, use customer.status="new" and prepare the job as part of the same proposal.
 - If customer or assignee matching is ambiguous, mention it clearly in warnings and keep the proposal confirm-first.
 - Assignee resolution rules (strictly follow these for assigneeDraft):

@@ -13,7 +13,6 @@ export type CustomerListItem = {
   name: string;
   phone: string | null;
   email: string | null;
-  address: string | null;
   notes: string | null;
   archivedAt: string | null;
   createdAt: string;
@@ -23,6 +22,7 @@ export type CustomerListItem = {
 export type CustomerJobSummary = {
   id: string;
   title: string;
+  serviceAddress: string;
   status: JobStatus;
   scheduledStartAt: string | null;
   scheduledEndAt: string | null;
@@ -42,7 +42,6 @@ export type CreateCustomerInput = {
   name: string;
   phone?: string;
   email?: string;
-  address?: string;
   notes?: string;
 };
 

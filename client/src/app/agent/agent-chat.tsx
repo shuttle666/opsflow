@@ -3,7 +3,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Markdown from "react-markdown";
-import { History, Send, Sparkles } from "@/components/ui/icons";
+import {
+  Briefcase,
+  Calendar,
+  CheckCircle2,
+  History,
+  Search,
+  Send,
+  ShieldCheck,
+  Sparkles,
+  Users,
+  type IconComponent,
+} from "@/components/ui/icons";
 import { LoadingPanel } from "@/components/ui/loading-panel";
 import {
   cn,
@@ -28,6 +39,11 @@ type ActiveToolCall = {
 };
 
 const TOOL_LABELS: Record<string, string> = {
+  classify_intent: "Classifying request",
+  resolve_customer_target: "Resolving customer",
+  resolve_job_target: "Resolving job",
+  resolve_staff_target: "Resolving staff",
+  resolve_time_window: "Resolving time",
   list_jobs: "Searching jobs",
   get_job_detail: "Loading job detail",
   list_customers: "Searching customers",
@@ -36,12 +52,41 @@ const TOOL_LABELS: Record<string, string> = {
   list_activity_feed: "Checking activity",
   check_schedule_conflicts: "Checking schedule conflicts",
   save_dispatch_proposal: "Saving dispatch plan",
+  save_typed_proposal: "Saving typed plan",
 };
 
 const PLANNER_SUGGESTIONS = [
-  "Optimize tomorrow's schedule",
-  "Reassign unassigned jobs",
-  "Show crew workload",
+  "Assign Archie Wright's dishwasher leak job to Alex Nguyen tomorrow 9-11",
+  "Which unassigned jobs should be scheduled tomorrow?",
+  "Update Leo Martin's phone to 0412 999 888",
+  "Show Harper Lee's workload this week",
+];
+
+const PLANNER_CAPABILITIES: Array<{
+  title: string;
+  description: string;
+  icon: IconComponent;
+}> = [
+  {
+    title: "Find the right record",
+    description: "Match customers, jobs, and staff before drafting changes.",
+    icon: Search,
+  },
+  {
+    title: "Plan job changes",
+    description: "Create jobs, update existing jobs, assign staff, and schedule time windows.",
+    icon: Briefcase,
+  },
+  {
+    title: "Check schedules",
+    description: "Review staff availability, workload, and overlapping appointments.",
+    icon: Calendar,
+  },
+  {
+    title: "Keep control",
+    description: "Prepare confirm-first proposals for owners and managers to approve.",
+    icon: ShieldCheck,
+  },
 ];
 
 const agentHeaderButtonClassName =
@@ -65,6 +110,52 @@ function latestProposal(messages: ChatMessage[]) {
     }
   }
   return null;
+}
+
+const ACTIVE_CONVERSATION_STORAGE_PREFIX = "opsflow:agent:activeConversation";
+
+function activeConversationStorageKey(userId: string | undefined, tenantId: string | undefined) {
+  if (!userId || !tenantId) {
+    return null;
+  }
+
+  return `${ACTIVE_CONVERSATION_STORAGE_PREFIX}:${tenantId}:${userId}`;
+}
+
+function readActiveConversationId(storageKey: string | null) {
+  if (!storageKey || typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.sessionStorage.getItem(storageKey);
+  } catch {
+    return null;
+  }
+}
+
+function writeActiveConversationId(storageKey: string | null, conversationId: string) {
+  if (!storageKey || typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(storageKey, conversationId);
+  } catch {
+    // Session storage can be unavailable in restricted browser modes.
+  }
+}
+
+function removeActiveConversationId(storageKey: string | null) {
+  if (!storageKey || typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.sessionStorage.removeItem(storageKey);
+  } catch {
+    // Session storage can be unavailable in restricted browser modes.
+  }
 }
 
 function formatRelativeTime(dateString: string): string {
@@ -148,8 +239,21 @@ function ProposalCard({
   confirming: boolean;
   result: ConfirmProposalResult | null;
 }) {
-  const isCustomerOnly = proposal.intent === "create_customer";
+  const proposalType = proposal.type ?? (
+    proposal.intent === "create_customer"
+      ? "CREATE_CUSTOMER"
+      : proposal.jobDraft.existingJobId
+        ? "UPDATE_JOB"
+        : "CREATE_JOB"
+  );
+  const isCustomerOnly = proposalType === "CREATE_CUSTOMER" || proposalType === "UPDATE_CUSTOMER";
+  const isCustomerUpdate = proposalType === "UPDATE_CUSTOMER";
   const isExistingJobUpdate = Boolean(proposal.jobDraft.existingJobId);
+  const proposalTitle = isCustomerUpdate
+    ? `Update customer: ${proposal.customer.name ?? proposal.customer.query ?? "Customer"}`
+    : isCustomerOnly
+      ? `Create customer: ${proposal.customer.name ?? "New customer"}`
+      : proposal.jobDraft.title;
 
   return (
     <div className="overflow-hidden rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] shadow-[var(--shadow-panel)]">
@@ -157,12 +261,10 @@ function ProposalCard({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-semibold uppercase text-[var(--color-brand)]">
-              Dispatch Proposal
+              {proposalType.replaceAll("_", " ")} Proposal
             </p>
             <h3 className="mt-1 text-lg font-bold text-[var(--color-text)]">
-              {isCustomerOnly
-                ? `Create customer: ${proposal.customer.name ?? "New customer"}`
-                : proposal.jobDraft.title}
+              {proposalTitle}
             </h3>
             <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
               {isExistingJobUpdate ? "Update existing job - " : ""}
@@ -204,10 +306,12 @@ function ProposalCard({
 
         <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4">
           <p className="text-xs font-semibold uppercase text-[var(--color-text-muted)]">
-            {isCustomerOnly ? "Intent" : "Schedule"}
+            {isCustomerUpdate ? "Profile changes" : isCustomerOnly ? "Intent" : "Schedule"}
           </p>
           <p className="mt-2 text-sm font-semibold text-[var(--color-text)]">
-            {isCustomerOnly
+            {isCustomerUpdate
+              ? `${proposal.changes?.length ?? 0} field${proposal.changes?.length === 1 ? "" : "s"}`
+              : isCustomerOnly
               ? "Create customer record"
               : formatScheduleRange(
                   proposal.scheduleDraft.scheduledStartAt ?? null,
@@ -215,10 +319,23 @@ function ProposalCard({
                 )}
           </p>
           <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-            {isCustomerOnly
+            {isCustomerUpdate
+              ? `Proposal type: ${proposalType}`
+              : isCustomerOnly
               ? `Proposal type: ${proposal.intent}`
               : `Timezone: ${proposal.scheduleDraft.timezone}`}
           </p>
+          {isCustomerUpdate && proposal.changes?.length ? (
+            <div className="mt-2 space-y-1 text-sm text-[var(--color-text-secondary)]">
+              {proposal.changes.map((change) => (
+                <p key={change.field}>
+                  <span className="font-semibold text-[var(--color-text)]">{change.field}</span>
+                  {": "}
+                  {change.from ?? "blank"} {"->"} {change.to ?? "blank"}
+                </p>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4">
@@ -226,7 +343,9 @@ function ProposalCard({
             {isCustomerOnly ? "Customer details" : "Assignee"}
           </p>
           <p className="mt-2 text-sm font-semibold text-[var(--color-text)]">
-            {isCustomerOnly
+            {isCustomerUpdate
+              ? proposal.customer.phone ?? proposal.customer.email ?? "Existing customer"
+              : isCustomerOnly
               ? proposal.customer.phone ?? proposal.customer.email ?? "No contact details provided"
               : proposal.assigneeDraft?.displayName ?? "Unassigned"}
           </p>
@@ -239,18 +358,26 @@ function ProposalCard({
 
         <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4">
           <p className="text-xs font-semibold uppercase text-[var(--color-text-muted)]">
-            {isCustomerOnly ? "Job draft" : "Notes"}
+            {isCustomerOnly ? "Job draft" : "Service address"}
           </p>
           <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
-            {isCustomerOnly
+            {isCustomerUpdate
+              ? "Confirming this proposal updates the customer profile only."
+              : isCustomerOnly
               ? "No job will be created. Confirming this proposal creates only the customer record."
-              : proposal.jobDraft.existingJobId
-                ? "Confirming this proposal updates the existing job instead of creating a duplicate."
-                : proposal.jobDraft.serviceAddress?.trim() || "No service address provided."}
+              : proposal.jobDraft.serviceAddress?.trim() ||
+                (proposal.jobDraft.existingJobId
+                  ? "Existing job address unchanged."
+                  : "No service address provided.")}
           </p>
-          {!isCustomerOnly && !proposal.jobDraft.existingJobId ? (
+          {!isCustomerOnly && proposal.jobDraft.existingJobId ? (
             <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-              {proposal.jobDraft.description?.trim() || "No extra description provided."}
+              Confirming this proposal updates the existing job instead of creating a duplicate.
+            </p>
+          ) : null}
+          {!isCustomerOnly && proposal.jobDraft.description?.trim() ? (
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+              {proposal.jobDraft.description}
             </p>
           ) : null}
         </div>
@@ -273,17 +400,17 @@ function ProposalCard({
         <div className="mt-4 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-success-soft)] p-4 text-sm text-[var(--color-success)]">
           {result.entityType === "customer" ? (
             <>
-              {result.usedExistingCustomer ? "Reused" : "Created"} <strong>{result.createdCustomerName ?? "customer"}</strong>.
+              {result.updatedCustomerId ? "Updated" : result.usedExistingCustomer ? "Reused" : "Created"} <strong>{result.updatedCustomerName ?? result.createdCustomerName ?? "customer"}</strong>.
               {" "}
-              {result.createdCustomerId ? (
-                <Link href={`/customers/${result.createdCustomerId}`} className="font-semibold underline">
+              {result.updatedCustomerId ?? result.createdCustomerId ? (
+                <Link href={`/customers/${result.updatedCustomerId ?? result.createdCustomerId}`} className="font-semibold underline">
                   Open customer
                 </Link>
               ) : null}
             </>
           ) : (
             <>
-              Created <strong>{result.createdJobTitle}</strong>.
+              {result.updatedExistingJob ? "Updated" : "Created"} <strong>{result.createdJobTitle}</strong>.
               {" "}
               {result.createdJobId ? (
                 <Link href={`/jobs/${result.createdJobId}`} className="font-semibold underline">
@@ -301,34 +428,110 @@ function ProposalCard({
 
 function EmptyState({ onSuggestion }: { onSuggestion?: (suggestion: string) => void }) {
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
-      <div className="flex gap-2.5 pr-12">
-        <AiAvatar />
-        <div className="max-w-[88%] rounded-[14px] rounded-bl bg-[var(--color-app-panel-muted)] px-4 py-3 text-[13px] leading-relaxed text-[var(--color-text)] sm:max-w-[80%] lg:max-w-[72%]">
-          <p>Hi! I&apos;m the OpsFlow AI Planner. I can help optimize scheduling, assign crew, and plan routes.</p>
-          <p className="mt-3">What would you like help with?</p>
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div className="max-w-2xl">
+          <div className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-brand-soft)] px-3 py-1.5 text-[12px] font-semibold text-[var(--color-brand)]">
+            <Sparkles className="h-3.5 w-3.5" />
+            AI Planner
+          </div>
+          <h2 className="mt-4 text-2xl font-bold tracking-normal text-[var(--color-text)] sm:text-3xl">
+            Dispatch planning with your live workspace data
+          </h2>
+          <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--color-text-secondary)]">
+            Ask for operational help in plain language. The planner checks records, resolves targets, and drafts changes for approval.
+          </p>
+        </div>
+
+        <div className="grid min-w-[240px] grid-cols-2 gap-2 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-3">
+          <div className="rounded-lg bg-[var(--color-app-panel)] px-3 py-2">
+            <p className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
+              Mode
+            </p>
+            <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">
+              Confirm-first
+            </p>
+          </div>
+          <div className="rounded-lg bg-[var(--color-app-panel)] px-3 py-2">
+            <p className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
+              Scope
+            </p>
+            <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">
+              Ops planning
+            </p>
+          </div>
         </div>
       </div>
-      {onSuggestion ? (
-        <div className="flex flex-wrap gap-2 pl-10">
-          {PLANNER_SUGGESTIONS.map((suggestion) => (
-            <button
-              key={suggestion}
-              type="button"
-              onClick={() => onSuggestion(suggestion)}
-              className="h-8 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3.5 text-[12px] font-medium text-[var(--color-text-secondary)] transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-soft)] hover:text-[var(--color-brand)]"
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {PLANNER_CAPABILITIES.map((capability) => {
+          const Icon = capability.icon;
+
+          return (
+            <div
+              key={capability.title}
+              className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4"
             >
-              {suggestion}
-            </button>
-          ))}
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--color-app-panel)] text-[var(--color-brand)]">
+                <Icon className="h-4 w-4" />
+              </div>
+              <h3 className="mt-3 text-sm font-semibold text-[var(--color-text)]">
+                {capability.title}
+              </h3>
+              <p className="mt-1 text-[13px] leading-5 text-[var(--color-text-secondary)]">
+                {capability.description}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+        {onSuggestion ? (
+          <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-[var(--color-success)]" />
+              <h3 className="text-sm font-semibold text-[var(--color-text)]">
+                Start with a task
+              </h3>
+            </div>
+            <div className="mt-3 grid gap-2">
+              {PLANNER_SUGGESTIONS.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => onSuggestion(suggestion)}
+                  className="group flex min-h-10 items-center justify-between gap-3 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3.5 py-2 text-left text-[13px] font-medium text-[var(--color-text)] transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-soft)]"
+                >
+                  <span>{suggestion}</span>
+                  <Send className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)] transition group-hover:text-[var(--color-brand)]" />
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-[var(--color-brand)]" />
+            <h3 className="text-sm font-semibold text-[var(--color-text)]">
+              Good for
+            </h3>
+          </div>
+          <div className="mt-3 space-y-2 text-[13px] leading-5 text-[var(--color-text-secondary)]">
+            <p>Scheduling work without double-booking staff.</p>
+            <p>Updating existing jobs instead of creating duplicates.</p>
+            <p>Changing customer profile details after matching the right customer.</p>
+          </div>
         </div>
-      ) : null}
+      </div>
     </div>
   );
 }
 
 export function AgentChat() {
   const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
+  const userId = useAuthStore((state) => state.user?.id);
   const currentTenant = useAuthStore((state) => state.currentTenant);
   const canUse = canUsePlanner(currentTenant?.role);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -346,6 +549,21 @@ export function AgentChat() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const activeConversationKey = useMemo(
+    () => activeConversationStorageKey(userId, currentTenant?.tenantId),
+    [currentTenant?.tenantId, userId],
+  );
+
+  const rememberActiveConversation = useCallback(
+    (id: string) => {
+      writeActiveConversationId(activeConversationKey, id);
+    },
+    [activeConversationKey],
+  );
+
+  const clearActiveConversation = useCallback(() => {
+    removeActiveConversationId(activeConversationKey);
+  }, [activeConversationKey]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -354,6 +572,22 @@ export function AgentChat() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, streamingText, activeToolCalls, scrollToBottom]);
+
+  const loadConversation = useCallback(
+    async (id: string, options?: { preserveConfirmResult?: boolean }) => {
+      const detail = await withAccessTokenRetry((token) => getConversationRequest(token, id));
+      setConversationId(id);
+      rememberActiveConversation(id);
+      setMessages(detail.messages);
+      setPendingProposal(latestProposal(detail.messages));
+      if (!options?.preserveConfirmResult) {
+        setConfirmResult(null);
+      }
+      setStreamingText("");
+      setActiveToolCalls([]);
+    },
+    [rememberActiveConversation, withAccessTokenRetry],
+  );
 
   const refreshConversations = useCallback(async () => {
     try {
@@ -378,6 +612,24 @@ export function AgentChat() {
         if (!cancelled) {
           setConversations(list);
         }
+
+        const rememberedConversationId = readActiveConversationId(activeConversationKey);
+        if (!rememberedConversationId || cancelled) {
+          return;
+        }
+
+        if (!list.some((conversation) => conversation.id === rememberedConversationId)) {
+          clearActiveConversation();
+          return;
+        }
+
+        try {
+          await loadConversation(rememberedConversationId);
+        } catch {
+          if (!cancelled) {
+            clearActiveConversation();
+          }
+        }
       } finally {
         if (!cancelled) {
           setIsLoadingConversations(false);
@@ -388,22 +640,13 @@ export function AgentChat() {
     return () => {
       cancelled = true;
     };
-  }, [canUse, withAccessTokenRetry]);
-
-  const loadConversation = useCallback(
-    async (id: string, options?: { preserveConfirmResult?: boolean }) => {
-      const detail = await withAccessTokenRetry((token) => getConversationRequest(token, id));
-      setConversationId(id);
-      setMessages(detail.messages);
-      setPendingProposal(latestProposal(detail.messages));
-      if (!options?.preserveConfirmResult) {
-        setConfirmResult(null);
-      }
-      setStreamingText("");
-      setActiveToolCalls([]);
-    },
-    [withAccessTokenRetry],
-  );
+  }, [
+    activeConversationKey,
+    canUse,
+    clearActiveConversation,
+    loadConversation,
+    withAccessTokenRetry,
+  ]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -434,6 +677,7 @@ export function AgentChat() {
         const created = await withAccessTokenRetry((accessToken) => createConversationRequest(accessToken));
         activeConversationId = created.id;
         setConversationId(created.id);
+        rememberActiveConversation(created.id);
       }
 
       let fullText = "";
@@ -546,7 +790,8 @@ export function AgentChat() {
     setError(null);
     setStreamingText("");
     setActiveToolCalls([]);
-  }, []);
+    clearActiveConversation();
+  }, [clearActiveConversation]);
 
   if (!canUse) {
     return (
@@ -602,10 +847,12 @@ export function AgentChat() {
         <div
           className={cn(
             "min-h-0 flex-1 overflow-y-auto px-5 py-5",
-            isEmptyConversation && "flex items-center",
+            (isLoadingConversations || isEmptyConversation) && "flex items-center",
           )}
         >
-          {isEmptyConversation ? (
+          {isLoadingConversations ? (
+            <LoadingPanel label="Loading planner conversation..." compact />
+          ) : isEmptyConversation ? (
             <EmptyState onSuggestion={setInput} />
           ) : (
             <div className="flex w-full flex-col gap-4">
@@ -664,11 +911,15 @@ export function AgentChat() {
             <div className="mx-auto w-full max-w-6xl rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-5 py-4 text-sm text-[var(--color-success)] shadow-sm">
               {confirmResult.entityType === "customer" ? (
                 <>
-                  {confirmResult.usedExistingCustomer ? "Reused" : "Created"}{" "}
-                  <strong>{confirmResult.createdCustomerName ?? "customer"}</strong>.
+                  {confirmResult.updatedCustomerId
+                    ? "Updated"
+                    : confirmResult.usedExistingCustomer
+                      ? "Reused"
+                      : "Created"}{" "}
+                  <strong>{confirmResult.updatedCustomerName ?? confirmResult.createdCustomerName ?? "customer"}</strong>.
                   {" "}
-                  {confirmResult.createdCustomerId ? (
-                    <Link href={`/customers/${confirmResult.createdCustomerId}`} className="font-semibold underline">
+                  {confirmResult.updatedCustomerId ?? confirmResult.createdCustomerId ? (
+                    <Link href={`/customers/${confirmResult.updatedCustomerId ?? confirmResult.createdCustomerId}`} className="font-semibold underline">
                       Open customer
                     </Link>
                   ) : null}

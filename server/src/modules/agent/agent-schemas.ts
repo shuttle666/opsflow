@@ -21,6 +21,18 @@ const optionalProposalDateTimeSchema = z
   .optional()
   .transform((value) => (typeof value === "string" && value ? value : null));
 
+const agentIntentSchema = z.enum([
+  "READ_ONLY_QUERY",
+  "CREATE_CUSTOMER",
+  "UPDATE_CUSTOMER",
+  "CREATE_JOB",
+  "UPDATE_JOB",
+  "ASSIGN_JOB",
+  "SCHEDULE_JOB",
+  "CHANGE_JOB_STATUS",
+  "CANCEL_JOB",
+]);
+
 export const conversationIdParamSchema = z.object({
   conversationId: z.uuid(),
 });
@@ -103,6 +115,46 @@ export const checkScheduleConflictsToolInputSchema = z
       });
     }
   });
+
+export const classifyIntentToolInputSchema = z
+  .object({
+    content: z.string().trim().min(1).max(4000),
+  })
+  .strict();
+
+export const resolveCustomerTargetToolInputSchema = z
+  .object({
+    q: optionalTrimmedStringSchema,
+    name: optionalTrimmedStringSchema,
+    phone: z.string().trim().max(50).optional(),
+    email: z.string().trim().email().optional().or(z.literal("")),
+  })
+  .strict();
+
+export const resolveJobTargetToolInputSchema = z
+  .object({
+    q: optionalTrimmedStringSchema,
+    title: optionalTrimmedStringSchema,
+    description: optionalTrimmedStringSchema,
+    serviceAddress: z.string().trim().max(500).optional(),
+    customerId: optionalUuidSchema,
+    includeClosed: z.boolean().optional().default(false),
+  })
+  .strict();
+
+export const resolveStaffTargetToolInputSchema = z
+  .object({
+    q: z.string().trim().min(1).max(200),
+  })
+  .strict();
+
+export const resolveTimeWindowToolInputSchema = z
+  .object({
+    scheduledStartAt: optionalProposalDateTimeSchema,
+    scheduledEndAt: optionalProposalDateTimeSchema,
+    timezone: z.string().trim().min(1).max(100),
+  })
+  .strict();
 
 const dispatchCustomerMatchSchema = z
   .object({
@@ -267,9 +319,148 @@ export const saveDispatchProposalToolInputSchema = z
     }
   });
 
+const proposalChangeSchema = z
+  .object({
+    field: z.enum(["name", "phone", "email", "notes"]),
+    from: z.union([z.string(), z.null()]),
+    to: z.union([z.string(), z.null()]),
+  })
+  .strict();
+
+const typedProposalTargetSchema = z
+  .object({
+    customerId: optionalUuidSchema,
+    jobId: optionalUuidSchema,
+  })
+  .strict();
+
+const typedStatusDraftSchema = z
+  .object({
+    toStatus: z.nativeEnum(JobStatus),
+    reason: z.string().trim().max(1000).optional().or(z.literal("")),
+  })
+  .strict();
+
+export const saveTypedProposalToolInputSchema = z
+  .object({
+    type: agentIntentSchema.exclude(["READ_ONLY_QUERY"]),
+    intent: z.string().trim().min(1).max(100).optional(),
+    target: typedProposalTargetSchema.optional(),
+    customer: dispatchCustomerSchema,
+    jobDraft: z
+      .object({
+        existingJobId: optionalUuidSchema,
+        title: z.string().trim().min(1, "Job title is required.").max(200),
+        serviceAddress: z.string().trim().max(500).optional(),
+        description: optionalProposalStringSchema,
+      })
+      .strict()
+      .optional(),
+    scheduleDraft: dispatchScheduleDraftSchema.optional(),
+    assigneeDraft: dispatchAssigneeDraftSchema.optional(),
+    statusDraft: typedStatusDraftSchema.optional(),
+    changes: z.array(proposalChangeSchema).max(10).optional(),
+    warnings: z.array(z.string().trim().max(1000)).max(20).default([]),
+    confidence: z.number().min(0).max(1),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const type = value.type;
+    const existingJobId = value.jobDraft?.existingJobId ?? value.target?.jobId;
+
+    if (type === "UPDATE_CUSTOMER") {
+      if (!value.target?.customerId && !value.customer.matchedCustomerId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["target", "customerId"],
+          message: "Customer update proposals require a target customer ID.",
+        });
+      }
+
+      if (!value.changes?.length) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["changes"],
+          message: "Customer update proposals require at least one field change.",
+        });
+      }
+      return;
+    }
+
+    if (type === "CREATE_CUSTOMER") {
+      if (value.jobDraft?.existingJobId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["jobDraft", "existingJobId"],
+          message: "Customer-only proposals cannot update an existing job.",
+        });
+      }
+      return;
+    }
+
+    if (!value.jobDraft) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["jobDraft"],
+        message: "Job proposal types require jobDraft.",
+      });
+      return;
+    }
+
+    if (type === "CREATE_JOB" && !value.jobDraft.serviceAddress?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["jobDraft", "serviceAddress"],
+        message: "New job proposals require jobDraft.serviceAddress.",
+      });
+    }
+
+    if (
+      ["UPDATE_JOB", "ASSIGN_JOB", "SCHEDULE_JOB", "CHANGE_JOB_STATUS", "CANCEL_JOB"].includes(type) &&
+      !existingJobId
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["jobDraft", "existingJobId"],
+        message: `${type} proposals require an existing job ID.`,
+      });
+    }
+
+    if (
+      ["ASSIGN_JOB", "SCHEDULE_JOB"].includes(type) &&
+      value.assigneeDraft?.status === "matched" &&
+      !value.assigneeDraft.membershipId
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["assigneeDraft", "membershipId"],
+        message: "Matched assignees require membershipId.",
+      });
+    }
+
+    if (type === "CHANGE_JOB_STATUS" && !value.statusDraft) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["statusDraft"],
+        message: "Status change proposals require statusDraft.",
+      });
+    }
+
+    if (type === "CANCEL_JOB" && value.statusDraft && value.statusDraft.toStatus !== JobStatus.CANCELLED) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["statusDraft", "toStatus"],
+        message: "Cancel proposals must transition the job to CANCELLED.",
+      });
+    }
+  });
+
 export type ConversationIdParamInput = z.infer<typeof conversationIdParamSchema>;
 export type ProposalIdParamInput = z.infer<typeof proposalIdParamSchema>;
 export type SendMessageInput = z.infer<typeof sendMessageSchema>;
 export type SaveDispatchProposalToolInput = z.infer<
   typeof saveDispatchProposalToolInputSchema
+>;
+export type SaveTypedProposalToolInput = z.infer<
+  typeof saveTypedProposalToolInputSchema
 >;

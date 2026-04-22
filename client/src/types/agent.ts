@@ -1,9 +1,30 @@
 export type ChatMessageRole = "user" | "assistant";
 
+export type AgentProposalType =
+  | "CREATE_CUSTOMER"
+  | "UPDATE_CUSTOMER"
+  | "CREATE_JOB"
+  | "UPDATE_JOB"
+  | "ASSIGN_JOB"
+  | "SCHEDULE_JOB"
+  | "CHANGE_JOB_STATUS"
+  | "CANCEL_JOB";
+
+export type AgentProposalChange = {
+  field: "name" | "phone" | "email" | "notes";
+  from: string | null;
+  to: string | null;
+};
+
 export type DispatchProposal = {
   id: string;
   conversationId: string;
+  type?: AgentProposalType;
   intent: string;
+  target?: {
+    customerId?: string;
+    jobId?: string;
+  };
   customer: {
     status: "matched" | "new" | "missing" | "ambiguous";
     query?: string;
@@ -39,6 +60,11 @@ export type DispatchProposal = {
       displayName: string;
     }>;
   };
+  statusDraft?: {
+    toStatus: string;
+    reason?: string | null;
+  };
+  changes?: AgentProposalChange[];
   warnings: string[];
   confidence: number;
   createdAt: string;
@@ -75,9 +101,12 @@ export type ConversationDetail = {
 
 export type ConfirmProposalResult = {
   proposalId: string;
+  proposalType?: AgentProposalType;
   entityType: "customer" | "job";
   createdCustomerId?: string;
   createdCustomerName?: string;
+  updatedCustomerId?: string;
+  updatedCustomerName?: string;
   usedExistingCustomer?: boolean;
   createdJobId?: string;
   createdJobTitle?: string;

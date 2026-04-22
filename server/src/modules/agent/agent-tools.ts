@@ -1,23 +1,35 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { MembershipRole } from "@prisma/client";
-import { z } from "zod";
 import type { AuthContext } from "../../types/auth";
-import { ApiError } from "../../utils/api-error";
+import { safeExecuteWithSchema } from "../ai";
 import * as auditService from "../audit/audit.service";
 import * as customerService from "../customer/customer.service";
 import * as jobService from "../job/job.service";
 import * as membershipService from "../membership/membership.service";
 import {
   checkScheduleConflictsToolInputSchema,
+  classifyIntentToolInputSchema,
   getCustomerDetailToolInputSchema,
   getJobDetailToolInputSchema,
   listActivityFeedToolInputSchema,
   listCustomersToolInputSchema,
   listJobsToolInputSchema,
   listMembershipsToolInputSchema,
+  resolveCustomerTargetToolInputSchema,
+  resolveJobTargetToolInputSchema,
+  resolveStaffTargetToolInputSchema,
+  resolveTimeWindowToolInputSchema,
   saveDispatchProposalToolInputSchema,
+  saveTypedProposalToolInputSchema,
 } from "./agent-schemas";
-import { storeDispatchProposal } from "./agent.service";
+import { classifyAgentIntent } from "./intent-router";
+import { storeDispatchProposal, storeTypedProposal } from "./agent.service";
+import {
+  resolveCustomerTarget,
+  resolveJobTarget,
+  resolveStaffTarget,
+  resolveTimeWindow,
+} from "./target-resolvers";
 
 type ToolContext = {
   conversationId?: string;
@@ -39,7 +51,10 @@ const managerOnlyReadTools = new Set([
   "list_memberships",
   "list_activity_feed",
   "check_schedule_conflicts",
+  "resolve_job_target",
+  "resolve_staff_target",
   "save_dispatch_proposal",
+  "save_typed_proposal",
 ]);
 
 function canAccessTool(auth: AuthContext, toolName: string): boolean {
@@ -50,46 +65,25 @@ function canAccessTool(auth: AuthContext, toolName: string): boolean {
   return true;
 }
 
-async function safeExecute(fn: () => Promise<unknown>): Promise<unknown> {
-  try {
-    return await fn();
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "An unexpected error occurred.";
-    return {
-      error: true,
-      message,
-      ...(error instanceof ApiError && error.details ? { details: error.details } : {}),
-    };
-  }
-}
-
-function formatToolValidationError(error: z.ZodError) {
-  return {
-    error: true,
-    message: "Tool input validation failed.",
-    details: error.issues.map((issue) => ({
-      path: issue.path.length ? issue.path.join(".") : "(root)",
-      message: issue.message,
-    })),
-  };
-}
-
-async function safeExecuteWithSchema<T>(
-  schema: z.ZodType<T>,
-  input: Record<string, unknown>,
-  fn: (validatedInput: T) => Promise<unknown>,
-): Promise<unknown> {
-  const parsed = schema.safeParse(input);
-
-  if (!parsed.success) {
-    return formatToolValidationError(parsed.error);
-  }
-
-  return safeExecute(() => fn(parsed.data));
-}
-
 const toolMap = new Map<string, AgentTool>();
+
+toolMap.set("classify_intent", {
+  definition: {
+    name: "classify_intent",
+    description: "Classify the user's latest request into an OpsFlow agent intent.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        content: { type: "string" },
+      },
+      required: ["content"],
+    },
+  },
+  execute: (_auth, input) =>
+    safeExecuteWithSchema(classifyIntentToolInputSchema, input, (validatedInput) =>
+      Promise.resolve(classifyAgentIntent(validatedInput.content)),
+    ),
+});
 
 toolMap.set("list_jobs", {
   definition: {
@@ -196,6 +190,50 @@ toolMap.set("get_customer_detail", {
     ),
 });
 
+toolMap.set("resolve_customer_target", {
+  definition: {
+    name: "resolve_customer_target",
+    description: "Resolve a customer mention to one active customer, ambiguous candidates, or a new-customer candidate. Customer addresses are not supported.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        q: { type: "string" },
+        name: { type: "string" },
+        phone: { type: "string" },
+        email: { type: "string" },
+      },
+      required: [],
+    },
+  },
+  execute: (auth, input) =>
+    safeExecuteWithSchema(resolveCustomerTargetToolInputSchema, input, (validatedInput) =>
+      resolveCustomerTarget(auth, validatedInput),
+    ),
+});
+
+toolMap.set("resolve_job_target", {
+  definition: {
+    name: "resolve_job_target",
+    description: "Resolve whether a user is referring to an existing job or a new job. Uses title, description, customer, status, and job serviceAddress.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        q: { type: "string" },
+        title: { type: "string" },
+        description: { type: "string" },
+        serviceAddress: { type: "string" },
+        customerId: { type: "string" },
+        includeClosed: { type: "boolean" },
+      },
+      required: [],
+    },
+  },
+  execute: (auth, input) =>
+    safeExecuteWithSchema(resolveJobTargetToolInputSchema, input, (validatedInput) =>
+      resolveJobTarget(auth, validatedInput),
+    ),
+});
+
 toolMap.set("list_memberships", {
   definition: {
     name: "list_memberships",
@@ -230,6 +268,24 @@ toolMap.set("list_memberships", {
     ),
 });
 
+toolMap.set("resolve_staff_target", {
+  definition: {
+    name: "resolve_staff_target",
+    description: "Resolve a staff member mention to one active staff membership or ambiguous candidates.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        q: { type: "string" },
+      },
+      required: ["q"],
+    },
+  },
+  execute: (auth, input) =>
+    safeExecuteWithSchema(resolveStaffTargetToolInputSchema, input, (validatedInput) =>
+      resolveStaffTarget(auth, validatedInput),
+    ),
+});
+
 toolMap.set("list_activity_feed", {
   definition: {
     name: "list_activity_feed",
@@ -249,6 +305,26 @@ toolMap.set("list_activity_feed", {
         page: validatedInput.page,
         pageSize: validatedInput.pageSize,
       }),
+    ),
+});
+
+toolMap.set("resolve_time_window", {
+  definition: {
+    name: "resolve_time_window",
+    description: "Validate a proposed schedule time window after the model has converted natural language into ISO date-times.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        scheduledStartAt: { type: "string" },
+        scheduledEndAt: { type: "string" },
+        timezone: { type: "string" },
+      },
+      required: ["timezone"],
+    },
+  },
+  execute: (_auth, input) =>
+    safeExecuteWithSchema(resolveTimeWindowToolInputSchema, input, (validatedInput) =>
+      Promise.resolve(resolveTimeWindow(validatedInput)),
     ),
 });
 
@@ -394,6 +470,174 @@ toolMap.set("save_dispatch_proposal", {
           warnings: validatedInput.warnings,
           confidence: validatedInput.confidence,
         });
+
+        return {
+          saved: true,
+          proposalId: proposal.id,
+          proposal,
+        };
+      },
+    );
+  },
+});
+
+toolMap.set("save_typed_proposal", {
+  definition: {
+    name: "save_typed_proposal",
+    description: "Save a typed OpsFlow proposal for manager confirmation. Use this for new agent workflows instead of the legacy dispatch proposal tool.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        type: {
+          type: "string",
+          enum: [
+            "CREATE_CUSTOMER",
+            "UPDATE_CUSTOMER",
+            "CREATE_JOB",
+            "UPDATE_JOB",
+            "ASSIGN_JOB",
+            "SCHEDULE_JOB",
+            "CHANGE_JOB_STATUS",
+            "CANCEL_JOB",
+          ],
+        },
+        intent: { type: "string" },
+        target: {
+          type: "object",
+          properties: {
+            customerId: { type: "string" },
+            jobId: { type: "string" },
+          },
+          required: [],
+        },
+        customer: {
+          type: "object",
+          properties: {
+            status: {
+              type: "string",
+              enum: ["matched", "new", "missing", "ambiguous"],
+            },
+            query: { type: "string" },
+            matchedCustomerId: { type: "string" },
+            name: { type: "string" },
+            phone: { type: "string" },
+            email: { type: "string" },
+            notes: { type: "string" },
+            matches: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "string" },
+                  name: { type: "string" },
+                },
+                required: ["id", "name"],
+              },
+            },
+          },
+          required: ["status"],
+        },
+        jobDraft: {
+          type: "object",
+          properties: {
+            existingJobId: { type: "string" },
+            title: { type: "string" },
+            serviceAddress: { type: "string" },
+            description: { type: "string" },
+          },
+          required: ["title"],
+        },
+        scheduleDraft: {
+          type: "object",
+          properties: {
+            scheduledStartAt: { type: "string" },
+            scheduledEndAt: { type: "string" },
+            timezone: { type: "string" },
+          },
+          required: ["timezone"],
+        },
+        assigneeDraft: {
+          type: "object",
+          properties: {
+            status: {
+              type: "string",
+              enum: ["matched", "missing", "ambiguous"],
+            },
+            membershipId: { type: "string" },
+            userId: { type: "string" },
+            displayName: { type: "string" },
+            matches: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  membershipId: { type: "string" },
+                  userId: { type: "string" },
+                  displayName: { type: "string" },
+                },
+                required: ["membershipId", "userId", "displayName"],
+              },
+            },
+          },
+          required: ["status"],
+        },
+        statusDraft: {
+          type: "object",
+          properties: {
+            toStatus: {
+              type: "string",
+              enum: [
+                "NEW",
+                "SCHEDULED",
+                "IN_PROGRESS",
+                "PENDING_REVIEW",
+                "COMPLETED",
+                "CANCELLED",
+              ],
+            },
+            reason: { type: "string" },
+          },
+          required: ["toStatus"],
+        },
+        changes: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              field: {
+                type: "string",
+                enum: ["name", "phone", "email", "notes"],
+              },
+              from: { type: ["string", "null"] },
+              to: { type: ["string", "null"] },
+            },
+            required: ["field", "from", "to"],
+          },
+        },
+        warnings: {
+          type: "array",
+          items: { type: "string" },
+        },
+        confidence: { type: "number" },
+      },
+      required: ["type", "customer", "confidence"],
+    },
+  },
+  execute: async (auth, input, context) => {
+    if (!context?.conversationId) {
+      return {
+        error: true,
+        message: "Conversation context is missing.",
+      };
+    }
+
+    const conversationId = context.conversationId;
+
+    return safeExecuteWithSchema(
+      saveTypedProposalToolInputSchema,
+      input,
+      async (validatedInput) => {
+        const proposal = await storeTypedProposal(auth, conversationId, validatedInput);
 
         return {
           saved: true,

@@ -18,13 +18,35 @@ import {
   type NotificationDeliveryItem,
 } from "../notification/notification.service";
 import { transitionJobStatusInTransaction } from "../job/job-status.service";
+import type { SaveTypedProposalToolInput } from "./agent-schemas";
+
+export type AgentProposalType =
+  | "CREATE_CUSTOMER"
+  | "UPDATE_CUSTOMER"
+  | "CREATE_JOB"
+  | "UPDATE_JOB"
+  | "ASSIGN_JOB"
+  | "SCHEDULE_JOB"
+  | "CHANGE_JOB_STATUS"
+  | "CANCEL_JOB";
+
+export type AgentProposalChange = {
+  field: "name" | "phone" | "email" | "notes";
+  from: string | null;
+  to: string | null;
+};
 
 export type DispatchProposal = {
   id: string;
   conversationId: string;
   tenantId: string;
   userId: string;
+  type?: AgentProposalType;
   intent: string;
+  target?: {
+    customerId?: string;
+    jobId?: string;
+  };
   customer: {
     status: "matched" | "new" | "missing" | "ambiguous";
     query?: string;
@@ -60,6 +82,11 @@ export type DispatchProposal = {
       displayName: string;
     }>;
   };
+  statusDraft?: {
+    toStatus: JobStatus;
+    reason?: string | null;
+  };
+  changes?: AgentProposalChange[];
   warnings: string[];
   confidence: number;
   createdAt: Date;
@@ -98,9 +125,12 @@ type DispatchProposalPayload = Omit<
 
 type ConfirmedProposalResult = {
   proposalId: string;
+  proposalType?: AgentProposalType;
   entityType: "customer" | "job";
   createdCustomerId?: string;
   createdCustomerName?: string;
+  updatedCustomerId?: string;
+  updatedCustomerName?: string;
   usedExistingCustomer?: boolean;
   createdJobId?: string;
   createdJobTitle?: string;
@@ -169,12 +199,22 @@ function proposalPayloadFromJson(value: Prisma.JsonValue): DispatchProposalPaylo
     typeof payload.confidence === "number" ? payload.confidence : Number(payload.confidence ?? 0.5);
 
   return {
+    type: typeof payload.type === "string" ? (payload.type as AgentProposalType) : undefined,
     intent: String(payload.intent ?? "dispatch_plan"),
+    target: isRecord(payload.target)
+      ? (payload.target as DispatchProposalPayload["target"])
+      : undefined,
     customer,
     jobDraft,
     scheduleDraft,
     assigneeDraft: isRecord(payload.assigneeDraft)
       ? (payload.assigneeDraft as DispatchProposalPayload["assigneeDraft"])
+      : undefined,
+    statusDraft: isRecord(payload.statusDraft)
+      ? (payload.statusDraft as DispatchProposalPayload["statusDraft"])
+      : undefined,
+    changes: Array.isArray(payload.changes)
+      ? (payload.changes as DispatchProposalPayload["changes"])
       : undefined,
     warnings,
     confidence: Number.isFinite(confidence) ? confidence : 0.5,
@@ -384,12 +424,79 @@ export async function storeDispatchProposal(
   return proposalFromRecord(proposal);
 }
 
+function typedProposalIntent(type: AgentProposalType) {
+  return type.toLowerCase();
+}
+
+function typedProposalTitle(type: AgentProposalType, input: SaveTypedProposalToolInput) {
+  if (input.jobDraft?.title) {
+    return input.jobDraft.title;
+  }
+
+  if (type === "UPDATE_CUSTOMER") {
+    return `Update customer: ${input.customer.name ?? input.customer.query ?? "Customer"}`;
+  }
+
+  return type.replace(/_/gu, " ").toLowerCase();
+}
+
+function typedProposalToDispatchPayload(
+  input: SaveTypedProposalToolInput,
+): DispatchProposalPayload {
+  const type = input.type;
+  const targetCustomerId = input.target?.customerId ?? input.customer.matchedCustomerId;
+  const targetJobId = input.target?.jobId ?? input.jobDraft?.existingJobId;
+
+  return {
+    type,
+    intent: input.intent ?? typedProposalIntent(type),
+    target: {
+      ...(targetCustomerId ? { customerId: targetCustomerId } : {}),
+      ...(targetJobId ? { jobId: targetJobId } : {}),
+    },
+    customer: {
+      ...input.customer,
+      ...(targetCustomerId ? { matchedCustomerId: targetCustomerId } : {}),
+    },
+    jobDraft: {
+      existingJobId: targetJobId,
+      title: typedProposalTitle(type, input),
+      serviceAddress: input.jobDraft?.serviceAddress,
+      description: input.jobDraft?.description ?? null,
+    },
+    scheduleDraft: input.scheduleDraft ?? {
+      timezone: "UTC",
+    },
+    assigneeDraft: input.assigneeDraft,
+    statusDraft:
+      type === "CANCEL_JOB" && !input.statusDraft
+        ? { toStatus: JobStatus.CANCELLED }
+        : input.statusDraft
+          ? {
+              toStatus: input.statusDraft.toStatus,
+              reason: input.statusDraft.reason || null,
+            }
+          : undefined,
+    changes: input.changes,
+    warnings: input.warnings,
+    confidence: input.confidence,
+  };
+}
+
+export async function storeTypedProposal(
+  auth: AuthContext,
+  conversationId: string,
+  input: SaveTypedProposalToolInput,
+): Promise<DispatchProposal> {
+  return storeDispatchProposal(auth, conversationId, typedProposalToDispatchPayload(input));
+}
+
 function findLatestProposal(
   toolCalls?: Array<{ name: string; input: unknown; result: unknown }>,
 ): DispatchProposal | undefined {
   for (let index = (toolCalls?.length ?? 0) - 1; index >= 0; index -= 1) {
     const call = toolCalls?.[index];
-    if (call?.name !== "save_dispatch_proposal") {
+    if (call?.name !== "save_dispatch_proposal" && call?.name !== "save_typed_proposal") {
       continue;
     }
 
@@ -523,6 +630,14 @@ function resolveMembershipIdFromProposal(proposal: DispatchProposal): string | u
 
 function isCreateCustomerOnlyIntent(intent: string): boolean {
   return intent.trim().toLowerCase() === "create_customer";
+}
+
+function isCustomerOnlyProposal(proposal: ProposalJobTargetInput & { type?: AgentProposalType }) {
+  return (
+    isCreateCustomerOnlyIntent(proposal.intent) ||
+    proposal.type === "CREATE_CUSTOMER" ||
+    proposal.type === "UPDATE_CUSTOMER"
+  );
 }
 
 function isUpdateExistingJobIntent(intent: string): boolean {
@@ -661,14 +776,14 @@ function formatExistingJobCandidate(job: {
 async function assertProposalJobTargetIsSafe(
   tx: Prisma.TransactionClient,
   auth: AuthContext,
-  proposal: ProposalJobTargetInput,
+  proposal: ProposalJobTargetInput & { type?: AgentProposalType; target?: { jobId?: string } },
 ) {
-  if (isCreateCustomerOnlyIntent(proposal.intent)) {
+  if (isCustomerOnlyProposal(proposal)) {
     return;
   }
 
   const customerId = resolveCustomerIdFromCustomer(proposal.customer);
-  const existingJobId = proposal.jobDraft.existingJobId;
+  const existingJobId = proposal.jobDraft.existingJobId ?? proposal.target?.jobId;
 
   if (existingJobId) {
     const job = await tx.job.findFirst({
@@ -1007,6 +1122,8 @@ async function getExistingJobForConfirmation(
     select: {
       id: true,
       title: true,
+      serviceAddress: true,
+      description: true,
       status: true,
       assignedToId: true,
       customer: {
@@ -1048,6 +1165,39 @@ async function updateExistingJobScheduleForConfirmation(
       id: job.id,
     },
     data: scheduling,
+  });
+}
+
+async function updateExistingJobDraftForConfirmation(
+  tx: Prisma.TransactionClient,
+  proposal: DispatchProposal,
+  job: { id: string },
+) {
+  const data: Prisma.JobUpdateInput = {};
+  const title = proposal.jobDraft.title?.trim();
+  const serviceAddress = proposal.jobDraft.serviceAddress?.trim();
+
+  if (title) {
+    data.title = title;
+  }
+
+  if (serviceAddress) {
+    data.serviceAddress = serviceAddress;
+  }
+
+  if (proposal.jobDraft.description !== undefined) {
+    data.description = normalizeOptionalTextValue(proposal.jobDraft.description);
+  }
+
+  if (Object.keys(data).length === 0) {
+    return;
+  }
+
+  await tx.job.update({
+    where: {
+      id: job.id,
+    },
+    data,
   });
 }
 
@@ -1253,6 +1403,328 @@ function rethrowConfirmationFailure(error: unknown, message: string): never {
   throw new ApiError(500, message);
 }
 
+function existingJobIdFromProposal(proposal: DispatchProposal): string | undefined {
+  return proposal.jobDraft.existingJobId ?? proposal.target?.jobId;
+}
+
+function customerIdFromProposalTarget(proposal: DispatchProposal): string | undefined {
+  return proposal.target?.customerId ?? resolveCustomerIdFromProposal(proposal);
+}
+
+async function confirmCustomerUpdateInTransaction(
+  tx: Prisma.TransactionClient,
+  auth: AuthContext,
+  proposal: DispatchProposal,
+  conversationId: string,
+) {
+  const customerId = customerIdFromProposalTarget(proposal);
+
+  if (!customerId) {
+    throw new ApiError(400, "Customer update proposals require a target customer.");
+  }
+
+  const customer = await tx.customer.findFirst({
+    where: {
+      id: customerId,
+      tenantId: auth.tenantId,
+      archivedAt: null,
+    },
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      email: true,
+      notes: true,
+    },
+  });
+
+  if (!customer) {
+    throw new ApiError(404, "Customer not found.");
+  }
+
+  if (!proposal.changes?.length) {
+    throw new ApiError(400, "Customer update proposals require at least one change.");
+  }
+
+  const data: Prisma.CustomerUpdateInput = {};
+
+  for (const change of proposal.changes) {
+    if (change.field === "name") {
+      data.name = normalizeRequiredTextValue(change.to, "Customer name is required.");
+    } else {
+      data[change.field] = normalizeOptionalTextValue(change.to);
+    }
+  }
+
+  const updated = await tx.customer.update({
+    where: { id: customer.id },
+    data,
+    select: {
+      id: true,
+      name: true,
+    },
+  });
+
+  const result: ConfirmedProposalResult = {
+    proposalId: proposal.id,
+    proposalType: proposal.type,
+    entityType: "customer",
+    updatedCustomerId: updated.id,
+    updatedCustomerName: updated.name,
+    createdCustomerId: updated.id,
+    createdCustomerName: updated.name,
+    usedExistingCustomer: true,
+  };
+
+  await completeProposalConfirmationInTransaction(
+    tx,
+    proposal.id,
+    auth.userId,
+    result,
+    conversationId,
+    `Plan confirmed. Updated customer **${updated.name}**.`,
+  );
+
+  return {
+    result,
+    notifications: [] as NotificationDeliveryItem[],
+  };
+}
+
+async function confirmTypedCreateCustomerInTransaction(
+  tx: Prisma.TransactionClient,
+  auth: AuthContext,
+  proposal: DispatchProposal,
+  conversationId: string,
+) {
+  const customer = await resolveCustomerForConfirmation(tx, auth, proposal);
+  const result: ConfirmedProposalResult = {
+    proposalId: proposal.id,
+    proposalType: proposal.type,
+    entityType: "customer",
+    createdCustomerId: customer.customerId,
+    ...(customer.customerName ? { createdCustomerName: customer.customerName } : {}),
+    ...(customer.usedExistingCustomer ? { usedExistingCustomer: true } : {}),
+  };
+
+  await completeProposalConfirmationInTransaction(
+    tx,
+    proposal.id,
+    auth.userId,
+    result,
+    conversationId,
+    customer.usedExistingCustomer
+      ? `Plan confirmed. Reused existing customer **${customer.customerName ?? "Existing customer"}**.`
+      : `Plan confirmed. Created customer **${customer.customerName ?? "New customer"}**.`,
+  );
+
+  return {
+    result,
+    notifications: [] as NotificationDeliveryItem[],
+  };
+}
+
+async function confirmTypedCreateJobInTransaction(
+  tx: Prisma.TransactionClient,
+  auth: AuthContext,
+  proposal: DispatchProposal,
+  conversationId: string,
+) {
+  const customer = await resolveCustomerForConfirmation(tx, auth, proposal);
+  const membershipId = resolveMembershipIdFromProposal(proposal);
+  const shouldAssign = proposal.assigneeDraft?.status === "matched" && membershipId;
+  const shouldSchedule =
+    shouldAssign &&
+    proposal.scheduleDraft.scheduledStartAt &&
+    proposal.scheduleDraft.scheduledEndAt;
+  const notifications: NotificationDeliveryItem[] = [];
+  const createdJob = await createJobForConfirmation(
+    tx,
+    auth,
+    proposal,
+    customer.customerId,
+  );
+  let assignedToName: string | undefined;
+  let transitionedTo: JobStatus | undefined;
+
+  if (shouldAssign && membershipId) {
+    const assigned = await assignJobForConfirmation(tx, auth, createdJob, membershipId);
+    assignedToName = assigned.assignedToName;
+    notifications.push(...assigned.notifications);
+
+    if (shouldSchedule) {
+      const scheduled = await scheduleJobForConfirmation(
+        tx,
+        auth,
+        createdJob,
+        assigned.assigneeUserId,
+      );
+      transitionedTo = scheduled.transitionedTo;
+      notifications.push(...scheduled.notifications);
+    }
+  }
+
+  const result: ConfirmedProposalResult = {
+    proposalId: proposal.id,
+    proposalType: proposal.type,
+    entityType: "job",
+    ...(customer.usedExistingCustomer ? { usedExistingCustomer: true } : {}),
+    createdCustomerId: customer.customerId,
+    ...(customer.customerName ? { createdCustomerName: customer.customerName } : {}),
+    createdJobId: createdJob.id,
+    createdJobTitle: createdJob.title,
+    ...(assignedToName ? { assignedToName } : {}),
+    ...(transitionedTo ? { transitionedTo } : {}),
+  };
+
+  await completeProposalConfirmationInTransaction(
+    tx,
+    proposal.id,
+    auth.userId,
+    result,
+    conversationId,
+    `Plan confirmed. Created job **${createdJob.title}**${assignedToName ? ` and assigned it to **${assignedToName}**` : ""}${transitionedTo ? `, then moved it to **${transitionedTo}**.` : "."}`,
+  );
+
+  return {
+    result,
+    notifications,
+  };
+}
+
+async function confirmTypedExistingJobInTransaction(
+  tx: Prisma.TransactionClient,
+  auth: AuthContext,
+  proposal: DispatchProposal,
+  conversationId: string,
+) {
+  const existingJobId = existingJobIdFromProposal(proposal);
+
+  if (!existingJobId) {
+    throw new ApiError(400, "Existing job proposal requires a job target.");
+  }
+
+  const job = await getExistingJobForConfirmation(tx, auth, existingJobId);
+  const membershipId = resolveMembershipIdFromProposal(proposal);
+  const shouldAssign = proposal.assigneeDraft?.status === "matched" && membershipId;
+  const shouldSchedule =
+    proposal.type === "SCHEDULE_JOB" ||
+    Boolean(proposal.scheduleDraft.scheduledStartAt || proposal.scheduleDraft.scheduledEndAt);
+  const notifications: NotificationDeliveryItem[] = [];
+  let assignedToName: string | undefined;
+  let assignedToUserId = job.assignedToId ?? undefined;
+  let transitionedTo: JobStatus | undefined;
+
+  if (proposal.type === "UPDATE_JOB") {
+    await updateExistingJobDraftForConfirmation(tx, proposal, job);
+  }
+
+  if (shouldSchedule) {
+    await updateExistingJobScheduleForConfirmation(tx, proposal, job);
+  }
+
+  if (shouldAssign && membershipId) {
+    const assigned = await assignJobForConfirmation(tx, auth, job, membershipId);
+    assignedToName = assigned.assignedToName;
+    assignedToUserId = assigned.assigneeUserId;
+    notifications.push(...assigned.notifications);
+  }
+
+  if (
+    shouldSchedule &&
+    assignedToUserId &&
+    job.status === JobStatus.NEW &&
+    proposal.scheduleDraft.scheduledStartAt &&
+    proposal.scheduleDraft.scheduledEndAt
+  ) {
+    const scheduled = await scheduleJobForConfirmation(tx, auth, job, assignedToUserId);
+    transitionedTo = scheduled.transitionedTo;
+    notifications.push(...scheduled.notifications);
+  } else if (proposal.type === "CHANGE_JOB_STATUS" || proposal.type === "CANCEL_JOB") {
+    const toStatus =
+      proposal.type === "CANCEL_JOB"
+        ? JobStatus.CANCELLED
+        : proposal.statusDraft?.toStatus;
+
+    if (!toStatus) {
+      throw new ApiError(400, "Status change proposals require statusDraft.toStatus.");
+    }
+
+    const transitioned = await transitionJobStatusInTransaction(tx, {
+      tenantId: auth.tenantId,
+      jobId: job.id,
+      toStatus,
+      changedById: auth.userId,
+      reason: proposal.statusDraft?.reason ?? undefined,
+    });
+    const statusNotifications = await createJobStatusChangedNotification(tx, {
+      tenantId: auth.tenantId,
+      actorUserId: auth.userId,
+      recipientUserId: job.assignedToId,
+      jobId: job.id,
+      jobTitle: job.title,
+      fromStatus: transitioned.history.fromStatus,
+      toStatus: transitioned.history.toStatus,
+    });
+    transitionedTo = transitioned.history.toStatus;
+    notifications.push(...statusNotifications);
+  }
+
+  const effectiveTitle = proposal.type === "UPDATE_JOB" && proposal.jobDraft.title
+    ? proposal.jobDraft.title
+    : job.title;
+  const result: ConfirmedProposalResult = {
+    proposalId: proposal.id,
+    proposalType: proposal.type,
+    entityType: "job",
+    createdCustomerId: job.customer.id,
+    createdCustomerName: job.customer.name,
+    createdJobId: job.id,
+    createdJobTitle: effectiveTitle,
+    updatedExistingJob: true,
+    ...(assignedToName ? { assignedToName } : {}),
+    ...(transitionedTo ? { transitionedTo } : {}),
+  };
+
+  await completeProposalConfirmationInTransaction(
+    tx,
+    proposal.id,
+    auth.userId,
+    result,
+    conversationId,
+    `Plan confirmed. Updated job **${effectiveTitle}**${assignedToName ? ` and assigned it to **${assignedToName}**` : ""}${transitionedTo ? `, then moved it to **${transitionedTo}**.` : "."}`,
+  );
+
+  return {
+    result,
+    notifications,
+  };
+}
+
+async function confirmTypedProposalInTransaction(
+  tx: Prisma.TransactionClient,
+  auth: AuthContext,
+  proposal: DispatchProposal,
+  conversationId: string,
+) {
+  switch (proposal.type) {
+    case "CREATE_CUSTOMER":
+      return confirmTypedCreateCustomerInTransaction(tx, auth, proposal, conversationId);
+    case "UPDATE_CUSTOMER":
+      return confirmCustomerUpdateInTransaction(tx, auth, proposal, conversationId);
+    case "CREATE_JOB":
+      return confirmTypedCreateJobInTransaction(tx, auth, proposal, conversationId);
+    case "UPDATE_JOB":
+    case "ASSIGN_JOB":
+    case "SCHEDULE_JOB":
+    case "CHANGE_JOB_STATUS":
+    case "CANCEL_JOB":
+      return confirmTypedExistingJobInTransaction(tx, auth, proposal, conversationId);
+    default:
+      throw new ApiError(400, "Unsupported proposal type.");
+  }
+}
+
 export async function confirmDispatchProposal(
   auth: AuthContext,
   conversationId: string,
@@ -1296,6 +1768,16 @@ export async function confirmDispatchProposal(
   const proposal = proposalFromRecord(proposalRecord);
 
   try {
+    if (proposal.type) {
+      const { result, notifications } = await prisma.$transaction(async (tx) => {
+        await assertProposalJobTargetIsSafe(tx, auth, proposal);
+        return confirmTypedProposalInTransaction(tx, auth, proposal, conversationId);
+      });
+
+      await publishConfirmationNotifications(notifications);
+      return result;
+    }
+
     const createCustomerOnly = isCreateCustomerOnlyIntent(proposal.intent);
     const updateExistingJob = isUpdateExistingJobIntent(proposal.intent);
 

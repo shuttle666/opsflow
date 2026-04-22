@@ -8,6 +8,7 @@ const serviceMocks = vi.hoisted(() => ({
   listMemberships: vi.fn(),
   listActivityFeed: vi.fn(),
   storeDispatchProposal: vi.fn(),
+  storeTypedProposal: vi.fn(),
 }));
 
 vi.mock("../src/modules/job/job.service", () => ({
@@ -35,6 +36,7 @@ vi.mock("../src/modules/audit/audit.service", () => ({
 
 vi.mock("../src/modules/agent/agent.service", () => ({
   storeDispatchProposal: serviceMocks.storeDispatchProposal,
+  storeTypedProposal: serviceMocks.storeTypedProposal,
 }));
 
 import {
@@ -103,9 +105,25 @@ describe("agent tools", () => {
     const definitions = getToolDefinitions(buildAuth(MembershipRole.MANAGER));
     const toolNames = definitions.map((tool) => tool.name);
 
+    expect(toolNames).toContain("classify_intent");
     expect(toolNames).toContain("list_jobs");
     expect(toolNames).toContain("list_memberships");
     expect(toolNames).toContain("list_activity_feed");
+    expect(toolNames).toContain("resolve_job_target");
+    expect(toolNames).toContain("save_typed_proposal");
+  });
+
+  it("classifies common write intents before tool orchestration", async () => {
+    const result = await executeTool(buildAuth(MembershipRole.MANAGER), "classify_intent", {
+      content: "把 Leo Martin 的电话改成 0412 999 888",
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        intent: "UPDATE_CUSTOMER",
+        confidence: expect.any(Number),
+      }),
+    );
   });
 
   it("rejects restricted tools for staff before calling the service", async () => {
@@ -257,6 +275,7 @@ describe("agent tools", () => {
 
     expect(result).toEqual({
       error: true,
+      code: "EXISTING_JOB_REQUIRED",
       message: "Existing job ID is required.",
       details: expect.objectContaining({
         code: "EXISTING_JOB_REQUIRED",
@@ -268,6 +287,183 @@ describe("agent tools", () => {
         ],
       }),
     });
+  });
+
+  it("saves a typed customer update proposal", async () => {
+    const input = {
+      type: "UPDATE_CUSTOMER",
+      target: {
+        customerId: "11111111-1111-4111-8111-111111111111",
+      },
+      customer: {
+        status: "matched",
+        matchedCustomerId: "11111111-1111-4111-8111-111111111111",
+        matches: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            name: "Noah Thompson",
+          },
+        ],
+      },
+      changes: [
+        {
+          field: "phone",
+          from: "0412 000 000",
+          to: "0412 999 888",
+        },
+      ],
+      warnings: [],
+      confidence: 0.91,
+    };
+    const proposal = {
+      id: "44444444-4444-4444-8444-444444444444",
+      conversationId: "55555555-5555-4555-8555-555555555555",
+      tenantId: "tenant-1",
+      userId: "user-1",
+      ...input,
+      intent: "update_customer",
+      jobDraft: { title: "Update customer: Noah Thompson" },
+      scheduleDraft: { timezone: "UTC" },
+      createdAt: new Date("2026-04-22T00:00:00.000Z"),
+    };
+    serviceMocks.storeTypedProposal.mockResolvedValueOnce(proposal);
+
+    const result = await executeTool(
+      buildAuth(MembershipRole.MANAGER),
+      "save_typed_proposal",
+      input,
+      { conversationId: proposal.conversationId },
+    );
+
+    expect(serviceMocks.storeTypedProposal).toHaveBeenCalledWith(
+      buildAuth(MembershipRole.MANAGER),
+      proposal.conversationId,
+      expect.objectContaining({
+        type: "UPDATE_CUSTOMER",
+        changes: [
+          expect.objectContaining({
+            field: "phone",
+            to: "0412 999 888",
+          }),
+        ],
+      }),
+    );
+    expect(result).toEqual({
+      saved: true,
+      proposalId: proposal.id,
+      proposal,
+    });
+  });
+
+  function buildValidTypedScheduleProposalInput() {
+    return {
+      type: "SCHEDULE_JOB",
+      target: {
+        customerId: "11111111-1111-4111-8111-111111111111",
+        jobId: "66666666-6666-4666-8666-666666666666",
+      },
+      customer: {
+        status: "matched",
+        matchedCustomerId: "11111111-1111-4111-8111-111111111111",
+        matches: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            name: "Noah Thompson",
+          },
+        ],
+      },
+      jobDraft: {
+        existingJobId: "66666666-6666-4666-8666-666666666666",
+        title: "Leaking tap repair",
+      },
+      scheduleDraft: {
+        scheduledStartAt: "2026-04-23T00:00:00.000Z",
+        scheduledEndAt: "2026-04-23T02:00:00.000Z",
+        timezone: "Australia/Adelaide",
+      },
+      assigneeDraft: {
+        status: "matched",
+        membershipId: "22222222-2222-4222-8222-222222222222",
+        userId: "33333333-3333-4333-8333-333333333333",
+        displayName: "Agent Staff",
+      },
+      warnings: [],
+      confidence: 0.9,
+    };
+  }
+
+  it.each([
+    {
+      name: "customer address is not accepted",
+      mutate: (input: ReturnType<typeof buildValidTypedScheduleProposalInput>) => {
+        input.type = "UPDATE_CUSTOMER";
+        input.target = {
+          customerId: "11111111-1111-4111-8111-111111111111",
+          jobId: undefined,
+        };
+        input.customer = {
+          ...input.customer,
+          address: "Should stay on job.serviceAddress",
+        } as typeof input.customer;
+        Object.assign(input, {
+          changes: [
+            {
+              field: "phone",
+              from: "0412 000 000",
+              to: "0412 999 888",
+            },
+          ],
+        });
+      },
+      path: "customer",
+    },
+    {
+      name: "create job without serviceAddress",
+      mutate: (input: ReturnType<typeof buildValidTypedScheduleProposalInput>) => {
+        input.type = "CREATE_JOB";
+        delete input.target.jobId;
+        input.jobDraft = {
+          title: "Leaking tap repair",
+        };
+      },
+      path: "jobDraft.serviceAddress",
+    },
+    {
+      name: "existing job action without job ID",
+      mutate: (input: ReturnType<typeof buildValidTypedScheduleProposalInput>) => {
+        delete input.target.jobId;
+        delete input.jobDraft.existingJobId;
+      },
+      path: "jobDraft.existingJobId",
+    },
+    {
+      name: "matched assignee without membershipId",
+      mutate: (input: ReturnType<typeof buildValidTypedScheduleProposalInput>) => {
+        delete input.assigneeDraft.membershipId;
+      },
+      path: "assigneeDraft.membershipId",
+    },
+  ])("rejects invalid typed proposal input: $name", async ({ mutate, path }) => {
+    const input = buildValidTypedScheduleProposalInput();
+    mutate(input);
+
+    const result = await executeTool(
+      buildAuth(MembershipRole.MANAGER),
+      "save_typed_proposal",
+      input,
+      { conversationId: "55555555-5555-4555-8555-555555555555" },
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        error: true,
+        message: "Tool input validation failed.",
+        details: expect.arrayContaining([
+          expect.objectContaining({ path }),
+        ]),
+      }),
+    );
+    expect(serviceMocks.storeTypedProposal).not.toHaveBeenCalled();
   });
 
   it.each([

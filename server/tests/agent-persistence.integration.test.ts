@@ -17,7 +17,9 @@ import {
   getConversation,
   listConversations,
   storeDispatchProposal,
+  storeTypedProposal,
 } from "../src/modules/agent/agent.service";
+import { resolveJobTarget } from "../src/modules/agent/target-resolvers";
 import { describeIfDb, resetDatabase } from "./helpers/db";
 
 describeIfDb("agent persistence integration", () => {
@@ -348,6 +350,372 @@ describeIfDb("agent persistence integration", () => {
     );
     expect(jobs[0]?.scheduledStartAt?.toISOString()).toBe("2026-04-23T00:00:00.000Z");
     expect(jobs[0]?.scheduledEndAt?.toISOString()).toBe("2026-04-23T02:00:00.000Z");
+  });
+
+  it("confirms a typed customer update proposal without creating jobs", async () => {
+    const owner = await seedTenantUser({
+      email: "owner-typed-customer-update@agent-persistence.test",
+      displayName: "Typed Customer Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Typed Customer Update Tenant",
+      tenantSlug: "typed-customer-update-tenant",
+    });
+    const customer = await prisma.customer.create({
+      data: {
+        tenantId: owner.tenant.id,
+        createdById: owner.user.id,
+        name: "Mia Carter",
+        phone: "0412 000 100",
+        email: "mia.old@example.test",
+        notes: "Prefers morning appointments.",
+      },
+    });
+
+    const conversation = await createConversation(owner.auth);
+    const proposal = await storeTypedProposal(owner.auth, conversation.id, {
+      type: "UPDATE_CUSTOMER",
+      target: {
+        customerId: customer.id,
+      },
+      customer: {
+        status: "matched",
+        matchedCustomerId: customer.id,
+        matches: [{ id: customer.id, name: customer.name }],
+      },
+      changes: [
+        {
+          field: "phone",
+          from: "0412 000 100",
+          to: "0412 999 888",
+        },
+        {
+          field: "email",
+          from: "mia.old@example.test",
+          to: "mia.new@example.test",
+        },
+      ],
+      warnings: [],
+      confidence: 0.93,
+    });
+
+    const result = await confirmDispatchProposal(
+      owner.auth,
+      conversation.id,
+      proposal.id,
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        proposalType: "UPDATE_CUSTOMER",
+        entityType: "customer",
+        updatedCustomerId: customer.id,
+        updatedCustomerName: customer.name,
+      }),
+    );
+
+    const updated = await prisma.customer.findUniqueOrThrow({
+      where: { id: customer.id },
+    });
+    expect(updated).toEqual(
+      expect.objectContaining({
+        name: "Mia Carter",
+        phone: "0412 999 888",
+        email: "mia.new@example.test",
+        notes: "Prefers morning appointments.",
+      }),
+    );
+    await expect(
+      prisma.job.count({
+        where: { tenantId: owner.tenant.id },
+      }),
+    ).resolves.toBe(0);
+  });
+
+  it("confirms a typed create job proposal with serviceAddress", async () => {
+    const owner = await seedTenantUser({
+      email: "owner-typed-create-job@agent-persistence.test",
+      displayName: "Typed Create Job Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Typed Create Job Tenant",
+      tenantSlug: "typed-create-job-tenant",
+    });
+    const customer = await prisma.customer.create({
+      data: {
+        tenantId: owner.tenant.id,
+        createdById: owner.user.id,
+        name: "Leo Martin",
+      },
+    });
+
+    const conversation = await createConversation(owner.auth);
+    const proposal = await storeTypedProposal(owner.auth, conversation.id, {
+      type: "CREATE_JOB",
+      target: {
+        customerId: customer.id,
+      },
+      customer: {
+        status: "matched",
+        matchedCustomerId: customer.id,
+        matches: [{ id: customer.id, name: customer.name }],
+      },
+      jobDraft: {
+        title: "Air conditioner maintenance - Glenelg",
+        serviceAddress: "12 Jetty Road, Glenelg SA 5045",
+        description: "Seasonal maintenance before summer.",
+      },
+      scheduleDraft: {
+        timezone: "Australia/Adelaide",
+      },
+      warnings: [],
+      confidence: 0.87,
+    });
+
+    const result = await confirmDispatchProposal(
+      owner.auth,
+      conversation.id,
+      proposal.id,
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        proposalType: "CREATE_JOB",
+        entityType: "job",
+        createdCustomerId: customer.id,
+        createdJobTitle: "Air conditioner maintenance - Glenelg",
+      }),
+    );
+
+    const job = await prisma.job.findUniqueOrThrow({
+      where: { id: result.createdJobId },
+    });
+    expect(job).toEqual(
+      expect.objectContaining({
+        customerId: customer.id,
+        title: "Air conditioner maintenance - Glenelg",
+        serviceAddress: "12 Jetty Road, Glenelg SA 5045",
+        status: JobStatus.NEW,
+      }),
+    );
+  });
+
+  it("confirms a typed update job proposal against the existing job only", async () => {
+    const owner = await seedTenantUser({
+      email: "owner-typed-update-job@agent-persistence.test",
+      displayName: "Typed Update Job Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Typed Update Job Tenant",
+      tenantSlug: "typed-update-job-tenant",
+    });
+    const customer = await prisma.customer.create({
+      data: {
+        tenantId: owner.tenant.id,
+        createdById: owner.user.id,
+        name: "Archie Wright",
+      },
+    });
+    const existingJob = await prisma.job.create({
+      data: {
+        tenantId: owner.tenant.id,
+        customerId: customer.id,
+        createdById: owner.user.id,
+        title: "Dishwasher leak investigation - Stirling",
+        serviceAddress: "8 Mount Barker Road, Stirling SA 5152",
+        description: "Original description.",
+      },
+    });
+
+    const conversation = await createConversation(owner.auth);
+    const proposal = await storeTypedProposal(owner.auth, conversation.id, {
+      type: "UPDATE_JOB",
+      target: {
+        customerId: customer.id,
+        jobId: existingJob.id,
+      },
+      customer: {
+        status: "matched",
+        matchedCustomerId: customer.id,
+        matches: [{ id: customer.id, name: customer.name }],
+      },
+      jobDraft: {
+        existingJobId: existingJob.id,
+        title: "Dishwasher leak investigation - Stirling",
+        serviceAddress: "10 Mount Barker Road, Stirling SA 5152",
+        description: "Updated access note: side gate is open.",
+      },
+      scheduleDraft: {
+        timezone: "Australia/Adelaide",
+      },
+      warnings: [],
+      confidence: 0.91,
+    });
+
+    const result = await confirmDispatchProposal(
+      owner.auth,
+      conversation.id,
+      proposal.id,
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        proposalType: "UPDATE_JOB",
+        entityType: "job",
+        createdJobId: existingJob.id,
+        updatedExistingJob: true,
+      }),
+    );
+
+    const jobs = await prisma.job.findMany({
+      where: {
+        tenantId: owner.tenant.id,
+        customerId: customer.id,
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]).toEqual(
+      expect.objectContaining({
+        id: existingJob.id,
+        serviceAddress: "10 Mount Barker Road, Stirling SA 5152",
+        description: "Updated access note: side gate is open.",
+      }),
+    );
+  });
+
+  it("resolves an existing customer job from a natural full sentence", async () => {
+    const owner = await seedTenantUser({
+      email: "owner-resolve-existing-job@agent-persistence.test",
+      displayName: "Resolve Existing Job Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Resolve Existing Job Tenant",
+      tenantSlug: "resolve-existing-job-tenant",
+    });
+    const customer = await prisma.customer.create({
+      data: {
+        tenantId: owner.tenant.id,
+        createdById: owner.user.id,
+        name: "Leo Martin",
+      },
+    });
+    const existingJob = await prisma.job.create({
+      data: {
+        tenantId: owner.tenant.id,
+        customerId: customer.id,
+        createdById: owner.user.id,
+        title: "Leaking kitchen tap - Adelaide",
+        serviceAddress: "36 Greenhill Rd, Port Adelaide SA",
+        description: "Kitchen tap leaking under the sink.",
+      },
+    });
+
+    const resolved = await resolveJobTarget(owner.auth, {
+      customerId: customer.id,
+      q: "Leaking kitchen tap - Adelaide, Leo Martin 这份工作分配给 Harper Lee",
+    });
+
+    expect(resolved).toEqual(
+      expect.objectContaining({
+        status: "matched",
+        job: expect.objectContaining({
+          id: existingJob.id,
+          serviceAddress: "36 Greenhill Rd, Port Adelaide SA",
+        }),
+      }),
+    );
+  });
+
+  it("rolls back typed schedule changes when assignment fails", async () => {
+    const owner = await seedTenantUser({
+      email: "owner-typed-schedule-rollback@agent-persistence.test",
+      displayName: "Typed Schedule Rollback Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Typed Schedule Rollback Tenant",
+      tenantSlug: "typed-schedule-rollback-tenant",
+    });
+    const passwordHash = await hashPassword("password123");
+    const [disabledStaff, customer] = await Promise.all([
+      prisma.user.create({
+        data: {
+          email: "disabled-typed-schedule@agent-persistence.test",
+          passwordHash,
+          displayName: "Disabled Typed Staff",
+        },
+      }),
+      prisma.customer.create({
+        data: {
+          tenantId: owner.tenant.id,
+          createdById: owner.user.id,
+          name: "Noah Thompson",
+        },
+      }),
+    ]);
+    const [disabledMembership, existingJob] = await Promise.all([
+      prisma.membership.create({
+        data: {
+          userId: disabledStaff.id,
+          tenantId: owner.tenant.id,
+          role: MembershipRole.STAFF,
+          status: MembershipStatus.DISABLED,
+        },
+      }),
+      prisma.job.create({
+        data: {
+          tenantId: owner.tenant.id,
+          customerId: customer.id,
+          createdById: owner.user.id,
+          title: "Ceiling fan installation - Henley Beach",
+          serviceAddress: "20 Seaview Road, Henley Beach SA 5022",
+          description: "Install customer supplied fan.",
+        },
+      }),
+    ]);
+
+    const conversation = await createConversation(owner.auth);
+    const proposal = await storeTypedProposal(owner.auth, conversation.id, {
+      type: "SCHEDULE_JOB",
+      target: {
+        customerId: customer.id,
+        jobId: existingJob.id,
+      },
+      customer: {
+        status: "matched",
+        matchedCustomerId: customer.id,
+        matches: [{ id: customer.id, name: customer.name }],
+      },
+      jobDraft: {
+        existingJobId: existingJob.id,
+        title: existingJob.title,
+      },
+      scheduleDraft: {
+        scheduledStartAt: "2026-04-23T00:00:00.000Z",
+        scheduledEndAt: "2026-04-23T02:00:00.000Z",
+        timezone: "Australia/Adelaide",
+      },
+      assigneeDraft: {
+        status: "matched",
+        membershipId: disabledMembership.id,
+        userId: disabledStaff.id,
+        displayName: disabledStaff.displayName,
+      },
+      warnings: [],
+      confidence: 0.76,
+    });
+
+    await expect(
+      confirmDispatchProposal(owner.auth, conversation.id, proposal.id),
+    ).rejects.toThrow("No customer or job was created or updated");
+
+    const jobAfterFailure = await prisma.job.findUniqueOrThrow({
+      where: { id: existingJob.id },
+    });
+    expect(jobAfterFailure).toEqual(
+      expect.objectContaining({
+        status: JobStatus.NEW,
+        assignedToId: null,
+        scheduledAt: null,
+        scheduledStartAt: null,
+        scheduledEndAt: null,
+      }),
+    );
   });
 
   it("rejects duplicate-looking new job proposals when an existing open job should be updated", async () => {

@@ -1564,11 +1564,21 @@ async function withProposalReview(
     blockers.push("Resolve the customer before confirming.");
   }
 
-  if (isExistingJobProposalType(proposal.type) && !existingJobId) {
+  if (
+    (isExistingJobProposalType(proposal.type) || isUpdateExistingJobIntent(proposal.intent)) &&
+    !existingJobId
+  ) {
     blockers.push("Select the existing job this proposal should update.");
   }
 
-  if (proposal.type === "CREATE_JOB" && !existingJobId && jobCandidates.length > 0) {
+  if (
+    !existingJobId &&
+    jobCandidates.length > 0 &&
+    (proposal.type === "CREATE_JOB" ||
+      (!proposal.type &&
+        !isCustomerOnlyProposal(proposal) &&
+        !isUpdateExistingJobIntent(proposal.intent)))
+  ) {
     blockers.push("This looks like an existing job. Select the existing job before confirming.");
   }
 
@@ -2469,6 +2479,18 @@ export async function confirmDispatchProposal(
     throw new ApiError(409, "Dispatch proposal has already been resolved.");
   }
 
+  const proposal = proposalFromRecord(proposalRecord);
+  if (proposal.review?.status === "NEEDS_RESOLUTION") {
+    throw new ApiError(
+      409,
+      proposal.review.blockers[0] ?? "Resolve the proposal before confirming.",
+      {
+        code: "PROPOSAL_REVIEW_REQUIRED",
+        blockers: proposal.review.blockers,
+      },
+    );
+  }
+
   const locked = await prisma.agentProposal.updateMany({
     where: {
       id: proposalRecord.id,
@@ -2481,18 +2503,6 @@ export async function confirmDispatchProposal(
 
   if (locked.count !== 1) {
     throw new ApiError(409, "Dispatch proposal is already being confirmed.");
-  }
-
-  const proposal = proposalFromRecord(proposalRecord);
-  if (proposal.review?.status === "NEEDS_RESOLUTION") {
-    throw new ApiError(
-      409,
-      proposal.review.blockers[0] ?? "Resolve the proposal before confirming.",
-      {
-        code: "PROPOSAL_REVIEW_REQUIRED",
-        blockers: proposal.review.blockers,
-      },
-    );
   }
 
   try {

@@ -624,7 +624,7 @@ describeIfDb("agent persistence integration", () => {
     );
   });
 
-  it("rolls back typed schedule changes when assignment fails", async () => {
+  it("rejects saving typed schedule changes when the assignee is not active staff", async () => {
     const owner = await seedTenantUser({
       email: "owner-typed-schedule-rollback@agent-persistence.test",
       displayName: "Typed Schedule Rollback Owner",
@@ -671,39 +671,37 @@ describeIfDb("agent persistence integration", () => {
     ]);
 
     const conversation = await createConversation(owner.auth);
-    const proposal = await storeTypedProposal(owner.auth, conversation.id, {
-      type: "SCHEDULE_JOB",
-      target: {
-        customerId: customer.id,
-        jobId: existingJob.id,
-      },
-      customer: {
-        status: "matched",
-        matchedCustomerId: customer.id,
-        matches: [{ id: customer.id, name: customer.name }],
-      },
-      jobDraft: {
-        existingJobId: existingJob.id,
-        title: existingJob.title,
-      },
-      scheduleDraft: {
-        scheduledStartAt: "2026-04-23T00:00:00.000Z",
-        scheduledEndAt: "2026-04-23T02:00:00.000Z",
-        timezone: "Australia/Adelaide",
-      },
-      assigneeDraft: {
-        status: "matched",
-        membershipId: disabledMembership.id,
-        userId: disabledStaff.id,
-        displayName: disabledStaff.displayName,
-      },
-      warnings: [],
-      confidence: 0.76,
-    });
-
     await expect(
-      confirmDispatchProposal(owner.auth, conversation.id, proposal.id),
-    ).rejects.toThrow("No customer or job was created or updated");
+      storeTypedProposal(owner.auth, conversation.id, {
+        type: "SCHEDULE_JOB",
+        target: {
+          customerId: customer.id,
+          jobId: existingJob.id,
+        },
+        customer: {
+          status: "matched",
+          matchedCustomerId: customer.id,
+          matches: [{ id: customer.id, name: customer.name }],
+        },
+        jobDraft: {
+          existingJobId: existingJob.id,
+          title: existingJob.title,
+        },
+        scheduleDraft: {
+          scheduledStartAt: "2026-04-23T00:00:00.000Z",
+          scheduledEndAt: "2026-04-23T02:00:00.000Z",
+          timezone: "Australia/Adelaide",
+        },
+        assigneeDraft: {
+          status: "matched",
+          membershipId: disabledMembership.id,
+          userId: disabledStaff.id,
+          displayName: disabledStaff.displayName,
+        },
+        warnings: [],
+        confidence: 0.76,
+      }),
+    ).rejects.toThrow("Jobs can only be assigned to active staff members.");
 
     const jobAfterFailure = await prisma.job.findUniqueOrThrow({
       where: { id: existingJob.id },
@@ -717,6 +715,13 @@ describeIfDb("agent persistence integration", () => {
         scheduledEndAt: null,
       }),
     );
+    await expect(
+      prisma.agentProposal.count({
+        where: {
+          conversationId: conversation.id,
+        },
+      }),
+    ).resolves.toBe(0);
   });
 
   it("saves duplicate-looking new job proposals for review and lets the user select the existing job", async () => {
@@ -937,7 +942,7 @@ describeIfDb("agent persistence integration", () => {
     expect(reviewed.review?.status).toBe("READY");
   });
 
-  it("rolls back new customer and job creation when proposal assignment fails", async () => {
+  it("rejects saving a proposal when the selected assignee is not active staff", async () => {
     const owner = await seedTenantUser({
       email: "owner-rollback-new@agent-persistence.test",
       displayName: "Rollback New Owner",
@@ -964,34 +969,32 @@ describeIfDb("agent persistence integration", () => {
     });
 
     const conversation = await createConversation(owner.auth);
-    const proposal = await storeDispatchProposal(owner.auth, conversation.id, {
-      intent: "dispatch_plan",
-      customer: {
-        status: "new",
-        name: "Rollback Customer",
-      },
-      jobDraft: {
-        title: "Rollback job",
-        serviceAddress: "25 Gertrude Street, Fitzroy VIC 3065",
-      },
-      scheduleDraft: {
-        scheduledStartAt: "2026-04-23T00:00:00.000Z",
-        scheduledEndAt: "2026-04-23T02:00:00.000Z",
-        timezone: "Australia/Adelaide",
-      },
-      assigneeDraft: {
-        status: "matched",
-        membershipId: disabledMembership.id,
-        userId: disabledStaff.id,
-        displayName: disabledStaff.displayName,
-      },
-      warnings: [],
-      confidence: 0.71,
-    });
-
     await expect(
-      confirmDispatchProposal(owner.auth, conversation.id, proposal.id),
-    ).rejects.toThrow("No customer or job was created");
+      storeDispatchProposal(owner.auth, conversation.id, {
+        intent: "dispatch_plan",
+        customer: {
+          status: "new",
+          name: "Rollback Customer",
+        },
+        jobDraft: {
+          title: "Rollback job",
+          serviceAddress: "25 Gertrude Street, Fitzroy VIC 3065",
+        },
+        scheduleDraft: {
+          scheduledStartAt: "2026-04-23T00:00:00.000Z",
+          scheduledEndAt: "2026-04-23T02:00:00.000Z",
+          timezone: "Australia/Adelaide",
+        },
+        assigneeDraft: {
+          status: "matched",
+          membershipId: disabledMembership.id,
+          userId: disabledStaff.id,
+          displayName: disabledStaff.displayName,
+        },
+        warnings: [],
+        confidence: 0.71,
+      }),
+    ).rejects.toThrow("Jobs can only be assigned to active staff members.");
 
     await expect(
       prisma.customer.findFirst({
@@ -1009,21 +1012,16 @@ describeIfDb("agent persistence integration", () => {
         },
       }),
     ).resolves.toBeNull();
-
-    const failedProposal = await prisma.agentProposal.findUniqueOrThrow({
-      where: { id: proposal.id },
-    });
-    expect(failedProposal.status).toBe(AgentProposalStatus.FAILED);
-    expect(failedProposal.failureMessage).toContain("No customer or job was created");
-    expect(failedProposal.confirmationResult).toEqual(
-      expect.objectContaining({
-        error: true,
-        message: expect.stringContaining("No customer or job was created"),
+    await expect(
+      prisma.agentProposal.count({
+        where: {
+          conversationId: conversation.id,
+        },
       }),
-    );
+    ).resolves.toBe(0);
   });
 
-  it("does not create a job for an existing customer when proposal assignment fails", async () => {
+  it("rejects saving a proposal for an existing customer when the selected assignee is inactive", async () => {
     const owner = await seedTenantUser({
       email: "owner-rollback-existing@agent-persistence.test",
       displayName: "Rollback Existing Owner",
@@ -1059,35 +1057,33 @@ describeIfDb("agent persistence integration", () => {
     });
 
     const conversation = await createConversation(owner.auth);
-    const proposal = await storeDispatchProposal(owner.auth, conversation.id, {
-      intent: "dispatch_plan",
-      customer: {
-        status: "matched",
-        matchedCustomerId: customer.id,
-        matches: [{ id: customer.id, name: customer.name }],
-      },
-      jobDraft: {
-        title: "Existing rollback job",
-        serviceAddress: "89 Smith Street, Collingwood VIC 3066",
-      },
-      scheduleDraft: {
-        scheduledStartAt: "2026-04-23T00:00:00.000Z",
-        scheduledEndAt: "2026-04-23T02:00:00.000Z",
-        timezone: "Australia/Adelaide",
-      },
-      assigneeDraft: {
-        status: "matched",
-        membershipId: disabledMembership.id,
-        userId: disabledStaff.id,
-        displayName: disabledStaff.displayName,
-      },
-      warnings: [],
-      confidence: 0.72,
-    });
-
     await expect(
-      confirmDispatchProposal(owner.auth, conversation.id, proposal.id),
-    ).rejects.toThrow("No customer or job was created");
+      storeDispatchProposal(owner.auth, conversation.id, {
+        intent: "dispatch_plan",
+        customer: {
+          status: "matched",
+          matchedCustomerId: customer.id,
+          matches: [{ id: customer.id, name: customer.name }],
+        },
+        jobDraft: {
+          title: "Existing rollback job",
+          serviceAddress: "89 Smith Street, Collingwood VIC 3066",
+        },
+        scheduleDraft: {
+          scheduledStartAt: "2026-04-23T00:00:00.000Z",
+          scheduledEndAt: "2026-04-23T02:00:00.000Z",
+          timezone: "Australia/Adelaide",
+        },
+        assigneeDraft: {
+          status: "matched",
+          membershipId: disabledMembership.id,
+          userId: disabledStaff.id,
+          displayName: disabledStaff.displayName,
+        },
+        warnings: [],
+        confidence: 0.72,
+      }),
+    ).rejects.toThrow("Jobs can only be assigned to active staff members.");
 
     await expect(
       prisma.customer.findUnique({
@@ -1102,11 +1098,13 @@ describeIfDb("agent persistence integration", () => {
         },
       }),
     ).resolves.toBeNull();
-
-    const failedProposal = await prisma.agentProposal.findUniqueOrThrow({
-      where: { id: proposal.id },
-    });
-    expect(failedProposal.status).toBe(AgentProposalStatus.FAILED);
+    await expect(
+      prisma.agentProposal.count({
+        where: {
+          conversationId: conversation.id,
+        },
+      }),
+    ).resolves.toBe(0);
   });
 
   it("rolls back customer, job, and assignment when proposal status transition fails", async () => {

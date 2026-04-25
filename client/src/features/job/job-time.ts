@@ -26,9 +26,25 @@ export function formatDateTime(value: string | null) {
   return new Date(value).toLocaleString();
 }
 
+function sameLocalDate(left: Date, right: Date, timeZone?: string) {
+  if (!timeZone) {
+    return left.toDateString() === right.toDateString();
+  }
+
+  const formatter = new Intl.DateTimeFormat(undefined, {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  return formatter.format(left) === formatter.format(right);
+}
+
 export function formatScheduleRange(
   scheduledStartAt: string | null,
   scheduledEndAt: string | null,
+  timeZone?: string,
 ) {
   if (!scheduledStartAt || !scheduledEndAt) {
     return "-";
@@ -36,24 +52,27 @@ export function formatScheduleRange(
 
   const start = new Date(scheduledStartAt);
   const end = new Date(scheduledEndAt);
-  const sameDay = start.toDateString() === end.toDateString();
+  const sameDay = sameLocalDate(start, end, timeZone);
+  const dateOptions: Intl.DateTimeFormatOptions = timeZone
+    ? { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }
+    : {};
+  const timeOptions: Intl.DateTimeFormatOptions = {
+    ...dateOptions,
+    hour: "2-digit",
+    minute: "2-digit",
+  };
 
   if (sameDay) {
-    return `${start.toLocaleDateString()} ${start.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    })} - ${end.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    })}`;
+    return `${start.toLocaleDateString([], dateOptions)} ${start.toLocaleTimeString([], timeOptions)} - ${end.toLocaleTimeString([], timeOptions)}`;
   }
 
-  return `${start.toLocaleString()} - ${end.toLocaleString()}`;
+  return `${start.toLocaleDateString([], dateOptions)} ${start.toLocaleTimeString([], timeOptions)} - ${end.toLocaleDateString([], dateOptions)} ${end.toLocaleTimeString([], timeOptions)}`;
 }
 
 export function formatTimeRange(
   scheduledStartAt: string | null,
   scheduledEndAt: string | null,
+  timeZone?: string,
 ) {
   if (!scheduledStartAt || !scheduledEndAt) {
     return "-";
@@ -61,12 +80,11 @@ export function formatTimeRange(
 
   const start = new Date(scheduledStartAt);
   const end = new Date(scheduledEndAt);
+  const options: Intl.DateTimeFormatOptions = {
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(timeZone ? { timeZone } : {}),
+  };
 
-  return `${start.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  })} - ${end.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  })}`;
+  return `${start.toLocaleTimeString([], options)} - ${end.toLocaleTimeString([], options)}`;
 }

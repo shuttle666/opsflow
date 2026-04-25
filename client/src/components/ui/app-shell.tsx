@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { NotificationBell } from "@/components/notification/notification-bell";
+import { useScrollReveal } from "@/hooks/use-scroll-reveal";
 import { useAuthStore } from "@/store/auth-store";
 import { useThemeStore, type ThemeMode, type ThemeScheme } from "@/store/theme-store";
 import { BrandMark } from "@/components/ui/brand-mark";
@@ -36,6 +37,7 @@ import {
 type PublicShellProps = {
   children: React.ReactNode;
   className?: string;
+  variant?: "default" | "immersive";
 };
 
 type WorkspaceShellProps = {
@@ -54,9 +56,7 @@ type AppShellProps = {
 };
 
 const publicNavigation = [
-  { href: "/", label: "Home" },
-  { href: "/login", label: "Login" },
-  { href: "/register", label: "Register" },
+  { href: "/login", label: "Sign in" },
 ];
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "opsflow-sidebar-collapsed";
@@ -206,7 +206,7 @@ function SidebarNav({
   );
 }
 
-function ThemeToggle() {
+export function ThemeToggle() {
   const mode = useThemeStore((state) => state.mode);
   const scheme = useThemeStore((state) => state.scheme);
   const setMode = useThemeStore((state) => state.setMode);
@@ -357,42 +357,85 @@ function themeSchemeLabel(scheme: ThemeScheme) {
   }
 }
 
-export function PublicShell({ children, className }: PublicShellProps) {
+export function PublicShell({
+  children,
+  className,
+  variant = "default",
+}: PublicShellProps) {
   const status = useAuthStore((state) => state.status);
+  const isImmersive = variant === "immersive";
+  const isFloatingHeaderVisible = useScrollReveal();
+
+  const header = (
+    <header
+      className={cn(
+        "flex flex-wrap items-center justify-between gap-3",
+        isImmersive
+          ? "mx-auto max-w-[1240px] rounded-[22px] border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-app-panel)_72%,transparent)] px-4 py-3 shadow-[0_18px_60px_-42px_rgba(15,23,42,0.58)] backdrop-blur-xl sm:px-5"
+          : "border-b border-[var(--color-app-border)] py-3",
+      )}
+    >
+      <Link href="/" className="flex items-center gap-3" aria-label="OpsFlow home">
+        <BrandMark
+          variant="wordmark"
+          decorative={false}
+          className={cn(
+            isImmersive
+              ? "h-8 w-[148px] sm:h-9 sm:w-[166px]"
+              : "h-10 w-[190px] sm:h-11 sm:w-[208px]",
+          )}
+        />
+      </Link>
+
+      <nav className="flex flex-wrap items-center gap-2">
+        {publicNavigation.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={cn(
+              isImmersive
+                ? "inline-flex h-9 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--color-text)_14%,transparent)] bg-[color-mix(in_srgb,var(--color-app-panel)_34%,transparent)] px-3.5 text-[13px] font-semibold text-[var(--color-text)] shadow-sm backdrop-blur transition hover:border-[color-mix(in_srgb,var(--color-text)_24%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-app-panel)_58%,transparent)]"
+                : cn(subtleButtonClassName, "inline-flex px-4"),
+            )}
+          >
+            {item.label}
+          </Link>
+        ))}
+
+        <ThemeToggle />
+
+        {status === "authenticated" ? (
+          <Link href="/dashboard" className={secondaryButtonClassName}>
+            Open workspace
+          </Link>
+        ) : null}
+      </nav>
+    </header>
+  );
+
+  if (isImmersive) {
+    return (
+      <div className={cn("relative min-h-screen bg-[var(--color-app)]", className)}>
+        <div
+          className={cn(
+            "fixed inset-x-0 top-0 z-50 px-4 py-4 transition-[opacity,transform] duration-300 ease-out sm:px-6",
+            isFloatingHeaderVisible
+              ? "visible translate-y-0 opacity-100"
+              : "pointer-events-none invisible -translate-y-4 opacity-0",
+          )}
+          aria-hidden={!isFloatingHeaderVisible}
+        >
+          {header}
+        </div>
+        {children}
+      </div>
+    );
+  }
 
   return (
     <div className={cn("min-h-screen bg-[var(--color-app)] px-4 py-4 sm:px-6", className)}>
       <div className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-[1240px] flex-col">
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-app-border)] py-3">
-          <Link href="/" className="flex items-center gap-3">
-            <BrandMark />
-            <span className="text-xl font-bold text-[var(--color-text)]">OpsFlow</span>
-          </Link>
-
-          <nav className="flex flex-wrap items-center gap-2">
-            {publicNavigation.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  subtleButtonClassName,
-                  "px-4",
-                  item.href === "/" ? "hidden sm:inline-flex" : "inline-flex",
-                )}
-              >
-                {item.label}
-              </Link>
-            ))}
-
-            <ThemeToggle />
-
-            {status === "authenticated" ? (
-              <Link href="/dashboard" className={secondaryButtonClassName}>
-                Open workspace
-              </Link>
-            ) : null}
-          </nav>
-        </header>
+        {header}
 
         <div className="flex-1">{children}</div>
       </div>
@@ -451,7 +494,7 @@ export function WorkspaceShell({
     <div className="min-h-screen bg-[var(--color-app)] text-[var(--color-text)]">
       <aside
         className={cn(
-          "fixed left-0 top-0 z-40 hidden h-screen flex-col overflow-hidden border-r border-white/10 bg-[linear-gradient(180deg,#020617_0%,#030712_100%)] text-white shadow-[var(--shadow-panel)] transition-[width] duration-200 xl:flex",
+          "fixed left-0 top-0 z-40 hidden h-screen flex-col overflow-hidden border-r border-white/10 bg-[image:var(--color-sidebar)] text-white shadow-[var(--shadow-panel)] transition-[width] duration-200 xl:flex",
           isSidebarCollapsed ? "w-16" : "w-[230px]",
         )}
       >
@@ -462,9 +505,7 @@ export function WorkspaceShell({
             isSidebarCollapsed ? "justify-center px-3" : "px-5",
           )}
         >
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[image:var(--gradient-brand)] text-sm font-extrabold text-white shadow-[0_10px_24px_-16px_var(--color-brand-glow)]">
-            O
-          </span>
+          <BrandMark variant="icon" className="h-8 w-8" />
           {isSidebarCollapsed ? null : (
             <span className="text-[17px] font-extrabold text-white">OpsFlow</span>
           )}

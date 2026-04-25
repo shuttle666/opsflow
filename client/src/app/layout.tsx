@@ -18,6 +18,13 @@ const dmMono = DM_Mono({
 export const metadata: Metadata = {
   title: "OpsFlow",
   description: "Operations management platform foundation",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.png", type: "image/png", sizes: "512x512" },
+    ],
+    apple: [{ url: "/icon.png", type: "image/png", sizes: "512x512" }],
+  },
 };
 
 export default function RootLayout({

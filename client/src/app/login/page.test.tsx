@@ -30,27 +30,42 @@ describe("login page", () => {
     });
   });
 
-  it("renders the centered auth card and fills credentials from test accounts", async () => {
+  it("renders the tabbed auth card and fills credentials from demo accounts", async () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
     expect(screen.getByRole("heading", { name: "Welcome back" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Login" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("tab", { name: "Register" })).toBeInTheDocument();
     expect(screen.getByLabelText("Email")).toHaveValue("");
     expect(screen.getByLabelText("Password")).toHaveValue("");
-    expect(screen.getByPlaceholderText("name@company.com")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("••••••••")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Work email")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Password")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign In" })).toBeInTheDocument();
-    expect(screen.getByText("Test accounts")).toBeInTheDocument();
-    expect(screen.getByText("Test accounts").closest("details")).toHaveAttribute("open");
+    expect(screen.getByText("Demo accounts")).toBeInTheDocument();
 
-    expect(screen.getByText("owner@acme.example")).toBeInTheDocument();
-    expect(screen.getByText("owner-password-123")).toBeInTheDocument();
-    expect(screen.getByText("manager@acme.example")).toBeInTheDocument();
+    await user.click(screen.getByText("Demo accounts"));
+    expect(screen.getByRole("button", { name: /Owner/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Manager/ })).toBeInTheDocument();
 
-    await user.click(screen.getAllByRole("button", { name: "Fill in" })[0]);
+    await user.click(screen.getByRole("button", { name: /Owner/ }));
 
     expect(screen.getByLabelText("Email")).toHaveValue("owner@acme.example");
     expect(screen.getByLabelText("Password")).toHaveValue("owner-password-123");
+  });
+
+  it("switches to registration without leaving the auth page", async () => {
+    const user = userEvent.setup();
+    render(<LoginPage />);
+
+    await user.click(screen.getByRole("tab", { name: "Register" }));
+
+    expect(screen.getByRole("heading", { name: "Create your workspace" })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Full name")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create workspace" })).toBeInTheDocument();
   });
 
   it("submits credentials entered by the user and redirects to dashboard", async () => {

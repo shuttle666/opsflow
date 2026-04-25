@@ -48,6 +48,67 @@ button {
   background: var(--color-brand-soft);
 }
 
+.brand-wordmark-dark {
+  display: none;
+}
+
+:root[data-theme="dark"] .brand-wordmark-light {
+  display: none;
+}
+
+:root[data-theme="dark"] .brand-wordmark-dark {
+  display: block;
+}
+
+.landing-video-media {
+  object-position: center center;
+  transform: rotate(180deg) scale(1.04);
+}
+
+.landing-video-tint {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+:root[data-theme="dark"] .landing-video-tint {
+  background: rgba(0, 0, 0, 0.34);
+}
+
+.auth-video-tint {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-app-panel) 7%, transparent),
+      color-mix(in srgb, var(--color-app-panel) 18%, transparent) 44%,
+      color-mix(in srgb, var(--color-app-panel) 82%, transparent) 100%
+    );
+  pointer-events: none;
+}
+
+:root[data-theme="dark"] .auth-video-tint {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.34),
+      rgba(0, 0, 0, 0.58) 48%,
+      rgba(0, 0, 0, 0.82) 100%
+    );
+}
+
+.landing-video-title,
+.landing-video-copy {
+  text-shadow: 0 1px 18px rgba(255, 255, 255, 0.72);
+}
+
+:root[data-theme="dark"] .landing-video-title,
+:root[data-theme="dark"] .landing-video-copy {
+  text-shadow: 0 1px 22px rgba(0, 0, 0, 0.65);
+}
+
 @keyframes proposalGlowRotate {
   to {
     transform: translate(-50%, -50%) rotate(1turn);

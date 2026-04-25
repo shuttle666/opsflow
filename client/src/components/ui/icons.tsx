@@ -186,6 +186,25 @@ export function Search(props: IconProps) {
   );
 }
 
+export function Mail(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3 7 9 6 9-6" />
+    </IconBase>
+  );
+}
+
+export function LockKeyhole(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect x="5" y="10" width="14" height="11" rx="2" />
+      <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+      <path d="M12 15v2" />
+    </IconBase>
+  );
+}
+
 export function UserPlus(props: IconProps) {
   return (
     <IconBase {...props}>

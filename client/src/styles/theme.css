@@ -1,11 +1,11 @@
 :root {
   color-scheme: light;
-  --color-app: #f6f8fb;
+  --color-app: #f6f5f3;
   --color-app-panel: #ffffff;
   --color-app-panel-strong: #ffffff;
-  --color-app-panel-muted: #f0f4f8;
-  --color-app-border: #e2e8f0;
-  --color-app-border-strong: #cbd5e1;
+  --color-app-panel-muted: #f0efed;
+  --color-app-border: #e8e6e1;
+  --color-app-border-strong: #d8d5ce;
   --color-text: #18181b;
   --color-text-secondary: #52525b;
   --color-text-muted: #a1a1aa;
@@ -22,7 +22,7 @@
   --color-warning-soft: #fffbeb;
   --color-danger: #dc2626;
   --color-danger-soft: #fef2f2;
-  --color-sidebar: linear-gradient(180deg, #020617 0%, #030712 100%);
+  --color-sidebar: linear-gradient(180deg, #1a1235 0%, #0f0a1e 100%);
   --color-sidebar-active: rgba(255, 255, 255, 0.1);
   --color-sidebar-text: rgba(255, 255, 255, 0.9);
   --color-sidebar-muted: rgba(255, 255, 255, 0.5);
@@ -57,7 +57,7 @@
   --color-warning-soft: rgba(245, 158, 11, 0.13);
   --color-danger: #f87171;
   --color-danger-soft: rgba(239, 68, 68, 0.13);
-  --color-sidebar: linear-gradient(180deg, #020617 0%, #030712 100%);
+  --color-sidebar: linear-gradient(180deg, #1a1235 0%, #0f0a1e 100%);
   --color-sidebar-active: rgba(167, 139, 250, 0.16);
   --color-sidebar-text: rgba(255, 255, 255, 0.9);
   --color-sidebar-muted: rgba(255, 255, 255, 0.5);
@@ -77,6 +77,7 @@
   --color-accent: #f97316;
   --color-accent-surface: #fff7ed;
   --color-sidebar-accent: #a78bfa;
+  --color-sidebar: linear-gradient(180deg, #1a1235 0%, #0f0a1e 100%);
   --gradient-brand: linear-gradient(135deg, #7c5cfc 0%, #a78bfa 50%, #c4b5fd 100%);
 }
 
@@ -95,6 +96,7 @@
   --color-accent: #f59e0b;
   --color-accent-surface: #fffbeb;
   --color-sidebar-accent: #60a5fa;
+  --color-sidebar: linear-gradient(180deg, #0c1929 0%, #070f1a 100%);
   --gradient-brand: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
 }
 
@@ -113,6 +115,7 @@
   --color-accent: #7c3aed;
   --color-accent-surface: #f5f3ff;
   --color-sidebar-accent: #fb923c;
+  --color-sidebar: linear-gradient(180deg, #1c1210 0%, #120b08 100%);
   --gradient-brand: linear-gradient(135deg, #e04f16 0%, #f97316 50%, #fb923c 100%);
 }
 

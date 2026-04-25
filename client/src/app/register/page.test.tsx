@@ -19,6 +19,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/components/ui/app-shell", () => ({
   AppShell: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   PublicShell: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  ThemeToggle: () => <button type="button" aria-label="Theme: Light, Electric Violet" />,
   primaryButtonClassName: "primary-button",
 }));
 
@@ -47,7 +48,12 @@ describe("register page", () => {
     const user = userEvent.setup();
     render(<RegisterPage />);
 
-    await user.click(screen.getByRole("button", { name: "Create account" }));
+    expect(screen.getByRole("tab", { name: "Register" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Create workspace" }));
 
     expect(await screen.findByText("Email is required")).toBeInTheDocument();
     expect(
@@ -63,14 +69,14 @@ describe("register page", () => {
     const user = userEvent.setup();
     render(<RegisterPage />);
 
-    await user.type(screen.getByPlaceholderText("owner@acme.example"), "owner@acme.example");
-    await user.type(screen.getByPlaceholderText("minimum 8 characters"), "owner-password-123");
-    await user.type(screen.getByPlaceholderText("Avery Owner"), "Avery Owner");
+    await user.type(screen.getByPlaceholderText("Work email"), "owner@acme.example");
+    await user.type(screen.getByPlaceholderText("Password"), "owner-password-123");
+    await user.type(screen.getByPlaceholderText("Full name"), "Avery Owner");
     await user.type(
-      screen.getByPlaceholderText("Acme Home Services"),
+      screen.getByPlaceholderText("Workspace name"),
       "Acme Home Services",
     );
-    await user.click(screen.getByRole("button", { name: "Create account" }));
+    await user.click(screen.getByRole("button", { name: "Create workspace" }));
 
     await waitFor(() => {
       expect(register).toHaveBeenCalledWith({

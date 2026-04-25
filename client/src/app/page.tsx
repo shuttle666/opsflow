@@ -1,137 +1,171 @@
 import Link from "next/link";
 import { PublicShell } from "@/components/ui/app-shell";
-import { ArrowRight, Briefcase, ShieldCheck, Users } from "@/components/ui/icons";
-import { SummaryCard } from "@/components/ui/info-cards";
 import {
-  cn,
-  strongSurfaceClassName,
-  surfaceClassName,
-} from "@/components/ui/styles";
+  ArrowRight,
+  Briefcase,
+  Calendar,
+  CheckCircle2,
+  ShieldCheck,
+  Sparkles,
+  Users,
+} from "@/components/ui/icons";
 
-const frontendModules = [
-  "Customer and contact directory",
-  "Job scheduling and workflow history",
-  "Team access, invitations, and roles",
-  "Tenant-aware session and workspace context",
-];
+const heroVideoUrl = "/opsflow-hero-bg.mp4";
 
-const neutralPrimaryButtonClassName =
-  "inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-text)] bg-[var(--color-text)] px-3.5 text-[13px] font-semibold !text-[var(--color-app-panel)] shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60";
+const heroHighlights = [
+  "Job scheduling",
+  "Crew visibility",
+  "AI-assisted planning",
+] as const;
 
-const neutralSecondaryButtonClassName =
-  "inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-app-border-strong)] bg-[var(--color-app-panel)] px-3.5 text-[13px] font-semibold text-[var(--color-text)] shadow-sm transition hover:bg-[var(--color-app-panel-muted)] disabled:cursor-not-allowed disabled:opacity-60";
-
-const heroModuleCardClassName =
-  "rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-5";
+const modules = [
+  {
+    title: "Customer records",
+    description: "Contact details, notes, and job history stay linked from the first request.",
+    icon: Users,
+  },
+  {
+    title: "Dispatch workflow",
+    description: "Create, schedule, assign, review, and complete jobs from one workspace.",
+    icon: Briefcase,
+  },
+  {
+    title: "Schedule planning",
+    description: "See crew availability and route pressure before the day starts drifting.",
+    icon: Calendar,
+  },
+  {
+    title: "Team access",
+    description: "Invite members with role-aware visibility for owners, managers, and staff.",
+    icon: ShieldCheck,
+  },
+] as const;
 
 export default function HomePage() {
   return (
-    <PublicShell>
-      <div className="flex min-h-[calc(100vh-7rem)] items-center py-6">
-        <div className="grid w-full gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-          <section className={`${strongSurfaceClassName} overflow-hidden p-8 sm:p-10`}>
-            <div className="space-y-6">
-              <div className="space-y-3">
-                <p className="text-xs font-semibold uppercase text-[var(--color-text-muted)]">
-                  Field operations platform
-                </p>
-                <h1 className="max-w-3xl text-4xl font-extrabold text-[var(--color-text)] sm:text-5xl">
-                  Keep customers, jobs, and team activity in one calm workspace.
-                </h1>
-                <p className="max-w-2xl text-base leading-8 text-[var(--color-text-secondary)]">
-                  OpsFlow gives service teams a lightweight control center for
-                  daily dispatch, customer records, and member access without
-                  burying the product under admin noise.
-                </p>
+    <PublicShell variant="immersive">
+      <div className="space-y-10 pb-10">
+        <section className="relative left-1/2 isolate min-h-[calc(100svh-1.5rem)] w-screen -translate-x-1/2 overflow-hidden bg-white">
+          <video
+            className="landing-video-media absolute inset-0 h-full w-full object-cover"
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+          >
+            <source src={heroVideoUrl} type="video/mp4" />
+          </video>
+          <div className="landing-video-tint" />
+
+          <div className="relative mx-auto flex min-h-[calc(100svh-1.5rem)] max-w-[1240px] flex-col items-center justify-center px-4 pb-24 pt-40 text-center sm:px-6 lg:pb-28 lg:pt-44">
+            <div className="max-w-3xl">
+              <div className="mx-auto inline-flex w-fit items-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-app-panel)_72%,transparent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text)] shadow-[0_12px_32px_-24px_rgba(0,0,0,0.38)] backdrop-blur">
+                <Sparkles className="h-4 w-4 text-[var(--color-sidebar-accent)]" />
+                Field operations command center
               </div>
 
-              <div className="flex flex-wrap gap-3">
+              <h1 className="landing-video-title mt-5 text-5xl font-extrabold leading-[1.02] text-[var(--color-text)] sm:text-7xl lg:text-8xl">
+                OpsFlow
+              </h1>
+              <p className="landing-video-copy mx-auto mt-5 max-w-2xl text-base leading-8 text-[var(--color-text-secondary)] sm:text-lg">
+                A focused workspace for service teams to coordinate customers,
+                jobs, schedules, team access, and AI-assisted planning without
+                losing the day in admin noise.
+              </p>
+
+              <div className="mt-7 flex flex-wrap justify-center gap-3">
                 <Link
-                  href="/register"
-                  className={cn(neutralPrimaryButtonClassName, "min-w-[11.5rem] px-6")}
+                  href="/login?mode=register"
+                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-5 text-[13px] font-semibold text-white shadow-[0_16px_34px_-24px_var(--color-brand-glow)] transition hover:bg-[var(--color-brand-strong)]"
                 >
                   Create account
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
                   href="/login"
-                  className={neutralSecondaryButtonClassName}
+                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-app-panel)_64%,transparent)] px-5 text-[13px] font-semibold text-[var(--color-text)] backdrop-blur transition hover:bg-[color-mix(in_srgb,var(--color-app-panel)_82%,transparent)]"
                 >
                   Sign in
                 </Link>
                 <Link
                   href="/dashboard"
-                  className={neutralSecondaryButtonClassName}
+                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg px-3.5 text-[13px] font-semibold text-[var(--color-text-secondary)] transition hover:bg-[color-mix(in_srgb,var(--color-app-panel)_54%,transparent)] hover:text-[var(--color-text)]"
                 >
                   Open workspace
+                  <ArrowRight className="h-4 w-4" />
                 </Link>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className={heroModuleCardClassName}>
-                  <Users className="h-5 w-5 text-[var(--color-text-secondary)]" />
-                  <p className="mt-4 text-sm font-semibold text-[var(--color-text)]">Customers</p>
-                  <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-                    Directory views, detail pages, and quick job handoff.
-                  </p>
-                </div>
-                <div className={heroModuleCardClassName}>
-                  <Briefcase className="h-5 w-5 text-[var(--color-text-secondary)]" />
-                  <p className="mt-4 text-sm font-semibold text-[var(--color-text)]">Jobs</p>
-                  <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-                    Work orders, assignment context, and lifecycle tracking.
-                  </p>
-                </div>
-                <div className={heroModuleCardClassName}>
-                  <ShieldCheck className="h-5 w-5 text-[var(--color-text-secondary)]" />
-                  <p className="mt-4 text-sm font-semibold text-[var(--color-text)]">Team Access</p>
-                  <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-                    Roles, invitations, and tenant-aware visibility controls.
-                  </p>
-                </div>
+              <div className="mt-8 flex flex-wrap justify-center gap-2">
+                {heroHighlights.map((item) => (
+                  <span
+                    key={item}
+                    className="rounded-full border border-[color-mix(in_srgb,var(--color-text)_14%,transparent)] bg-[color-mix(in_srgb,var(--color-app-panel)_54%,transparent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-secondary)] backdrop-blur"
+                  >
+                    {item}
+                  </span>
+                ))}
               </div>
             </div>
+          </div>
+        </section>
+
+        <div className="mx-auto max-w-[1240px] space-y-10 px-4 sm:px-6">
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {modules.map((module) => {
+              const Icon = module.icon;
+
+              return (
+                <article
+                  key={module.title}
+                  className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] p-5 shadow-[var(--shadow-panel)] transition hover:border-[var(--color-brand)] hover:shadow-[var(--shadow-panel-hover)]"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--color-brand-soft)] text-[var(--color-brand)]">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <h2 className="mt-5 text-base font-bold text-[var(--color-text)]">
+                    {module.title}
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
+                    {module.description}
+                  </p>
+                </article>
+              );
+            })}
           </section>
 
-          <div className="space-y-6">
-            <SummaryCard
-              eyebrow="Workspace modules"
-              title="Everything follows one visual system"
-              description="The product UI now shares the same card language, spacing, and palette across each workspace surface."
-            >
-              <ul className="space-y-3 text-sm text-[var(--color-text-secondary)]">
-                {frontendModules.map((item) => (
-                  <li key={item} className="flex items-start gap-3">
-                    <span className="mt-1.5 h-2.5 w-2.5 rounded-full bg-[var(--color-text)]" />
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </SummaryCard>
+          <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+            <div>
+              <p className="text-xs font-semibold uppercase text-[var(--color-brand)]">
+                Start the day aligned
+              </p>
+              <h2 className="mt-3 text-3xl font-extrabold text-[var(--color-text)]">
+                Every route leads back to the work that needs attention.
+              </h2>
+              <p className="mt-3 max-w-xl text-sm leading-7 text-[var(--color-text-secondary)]">
+                Owners can create the workspace, managers can dispatch the day,
+                and staff can stay focused on assigned jobs without digging
+                through disconnected tools.
+              </p>
+            </div>
 
-            <SummaryCard
-              eyebrow="Start here"
-              title="Choose your next step"
-              description="Use the public routes for authentication, then move into the workspace shell."
-            >
-              <div className="space-y-3">
-                <Link
-                  href="/register"
-                  className={cn(surfaceClassName, "flex items-center justify-between px-4 py-3 text-sm font-semibold transition hover:border-[var(--color-app-border-strong)] hover:bg-[var(--color-app-panel-muted)]")}
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[
+                "Customer timeline ready",
+                "Crew workload visible",
+                "Planner recommendations",
+              ].map((item) => (
+                <div
+                  key={item}
+                  className="flex items-center gap-2 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-4 py-3 text-sm font-semibold text-[var(--color-text-secondary)] shadow-[var(--shadow-panel)]"
                 >
-                  Create the first tenant workspace
-                  <ArrowRight className="h-4 w-4 text-[var(--color-text-muted)]" />
-                </Link>
-                <Link
-                  href="/login"
-                  className={cn(surfaceClassName, "flex items-center justify-between px-4 py-3 text-sm font-semibold transition hover:border-[var(--color-app-border-strong)] hover:bg-[var(--color-app-panel-muted)]")}
-                >
-                  Sign in with an existing account
-                  <ArrowRight className="h-4 w-4 text-[var(--color-text-muted)]" />
-                </Link>
-              </div>
-            </SummaryCard>
-          </div>
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--color-success)]" />
+                  {item}
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
       </div>
     </PublicShell>

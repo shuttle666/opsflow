@@ -18,6 +18,7 @@ import {
   listConversations,
   storeDispatchProposal,
   storeTypedProposal,
+  updateProposalReview,
 } from "../src/modules/agent/agent.service";
 import { resolveJobTarget } from "../src/modules/agent/target-resolvers";
 import { describeIfDb, resetDatabase } from "./helpers/db";
@@ -718,7 +719,7 @@ describeIfDb("agent persistence integration", () => {
     );
   });
 
-  it("rejects duplicate-looking new job proposals when an existing open job should be updated", async () => {
+  it("saves duplicate-looking new job proposals for review and lets the user select the existing job", async () => {
     const owner = await seedTenantUser({
       email: "owner-existing-required@agent-persistence.test",
       displayName: "Existing Required Owner",
@@ -748,39 +749,62 @@ describeIfDb("agent persistence integration", () => {
 
     const conversation = await createConversation(owner.auth);
 
-    await expect(
-      storeDispatchProposal(owner.auth, conversation.id, {
-        intent: "dispatch_plan",
-        customer: {
-          status: "matched",
-          matchedCustomerId: customer.id,
-          matches: [{ id: customer.id, name: customer.name }],
-        },
-        jobDraft: {
-          title: "厨房水龙头漏水维修",
-          serviceAddress: "63 Rathdowne Street, Carlton VIC 3053",
-          description: "安排 Harper Lee 上门维修。",
-        },
-        scheduleDraft: {
-          scheduledStartAt: "2026-04-23T04:30:00.000Z",
-          scheduledEndAt: "2026-04-23T06:30:00.000Z",
-          timezone: "Australia/Adelaide",
-        },
-        warnings: [],
-        confidence: 0.82,
+    const proposal = await storeDispatchProposal(owner.auth, conversation.id, {
+      intent: "dispatch_plan",
+      customer: {
+        status: "matched",
+        matchedCustomerId: customer.id,
+        matches: [{ id: customer.id, name: customer.name }],
+      },
+      jobDraft: {
+        title: "厨房水龙头漏水维修",
+        serviceAddress: "63 Rathdowne Street, Carlton VIC 3053",
+        description: "安排 Harper Lee 上门维修。",
+      },
+      scheduleDraft: {
+        scheduledStartAt: "2026-04-23T04:30:00.000Z",
+        scheduledEndAt: "2026-04-23T06:30:00.000Z",
+        timezone: "Australia/Adelaide",
+      },
+      warnings: [],
+      confidence: 0.82,
+    });
+
+    expect(proposal.review).toEqual(
+      expect.objectContaining({
+        status: "NEEDS_RESOLUTION",
+        candidates: expect.objectContaining({
+          jobs: [
+            expect.objectContaining({
+              id: existingJob.id,
+              title: existingJob.title,
+            }),
+          ],
+        }),
       }),
+    );
+    await expect(
+      confirmDispatchProposal(owner.auth, conversation.id, proposal.id),
     ).rejects.toMatchObject({
-      message: expect.stringContaining("existing open job"),
+      message: expect.stringContaining("existing job"),
       details: expect.objectContaining({
-        code: "EXISTING_JOB_REQUIRED",
-        candidateJobs: [
-          expect.objectContaining({
-            id: existingJob.id,
-            title: existingJob.title,
-          }),
-        ],
+        code: "PROPOSAL_REVIEW_REQUIRED",
       }),
     });
+
+    const reviewed = await updateProposalReview(owner.auth, conversation.id, proposal.id, {
+      jobId: existingJob.id,
+    });
+    expect(reviewed.jobDraft.existingJobId).toBe(existingJob.id);
+    expect(reviewed.review?.status).toBe("READY");
+
+    const result = await confirmDispatchProposal(owner.auth, conversation.id, proposal.id);
+    expect(result).toEqual(
+      expect.objectContaining({
+        createdJobId: existingJob.id,
+        updatedExistingJob: true,
+      }),
+    );
 
     await expect(
       prisma.agentProposal.count({
@@ -788,7 +812,129 @@ describeIfDb("agent persistence integration", () => {
           conversationId: conversation.id,
         },
       }),
-    ).resolves.toBe(0);
+    ).resolves.toBe(1);
+  });
+
+  it("persists resolver job candidates from unresolved typed proposals", async () => {
+    const owner = await seedTenantUser({
+      email: "owner-typed-candidates@agent-persistence.test",
+      displayName: "Typed Candidates Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Typed Candidates Tenant",
+      tenantSlug: "typed-candidates-tenant",
+    });
+
+    const customer = await prisma.customer.create({
+      data: {
+        tenantId: owner.tenant.id,
+        createdById: owner.user.id,
+        name: "Mia Chen",
+        phone: "0412 009 120",
+      },
+    });
+    const firstJob = await prisma.job.create({
+      data: {
+        tenantId: owner.tenant.id,
+        customerId: customer.id,
+        createdById: owner.user.id,
+        title: "Aircon maintenance - Glenelg",
+        serviceAddress: "12 Jetty Road, Glenelg SA 5045",
+        description: "Seasonal air conditioner maintenance.",
+      },
+    });
+    const secondJob = await prisma.job.create({
+      data: {
+        tenantId: owner.tenant.id,
+        customerId: customer.id,
+        createdById: owner.user.id,
+        title: "Aircon service - Glenelg",
+        serviceAddress: "14 Jetty Road, Glenelg SA 5045",
+        description: "Air conditioner service request.",
+      },
+    });
+
+    const conversation = await createConversation(owner.auth);
+    const proposal = await storeTypedProposal(owner.auth, conversation.id, {
+      type: "SCHEDULE_JOB",
+      customer: {
+        status: "missing",
+        query: "aircon maintenance",
+      },
+      jobDraft: {
+        title: "Aircon maintenance",
+      },
+      scheduleDraft: {
+        scheduledStartAt: "2026-04-23T04:30:00.000Z",
+        scheduledEndAt: "2026-04-23T06:30:00.000Z",
+        timezone: "Australia/Adelaide",
+      },
+      review: {
+        candidates: {
+          jobs: [
+            {
+              id: firstJob.id,
+              title: firstJob.title,
+              serviceAddress: firstJob.serviceAddress,
+              status: firstJob.status,
+              scheduledStartAt: null,
+              scheduledEndAt: null,
+              assignedToName: null,
+              customer: {
+                id: customer.id,
+                name: customer.name,
+              },
+            },
+            {
+              id: secondJob.id,
+              title: secondJob.title,
+              serviceAddress: secondJob.serviceAddress,
+              status: secondJob.status,
+              scheduledStartAt: null,
+              scheduledEndAt: null,
+              assignedToName: null,
+              customer: {
+                id: customer.id,
+                name: customer.name,
+              },
+            },
+          ],
+        },
+      },
+      warnings: [],
+      confidence: 0.68,
+    });
+
+    expect(proposal.review).toEqual(
+      expect.objectContaining({
+        status: "NEEDS_RESOLUTION",
+        candidates: expect.objectContaining({
+          jobs: [
+            expect.objectContaining({
+              id: firstJob.id,
+              title: firstJob.title,
+            }),
+            expect.objectContaining({
+              id: secondJob.id,
+              title: secondJob.title,
+            }),
+          ],
+        }),
+      }),
+    );
+    await expect(
+      confirmDispatchProposal(owner.auth, conversation.id, proposal.id),
+    ).rejects.toMatchObject({
+      details: expect.objectContaining({
+        code: "PROPOSAL_REVIEW_REQUIRED",
+      }),
+    });
+
+    const reviewed = await updateProposalReview(owner.auth, conversation.id, proposal.id, {
+      jobId: firstJob.id,
+    });
+    expect(reviewed.target?.jobId).toBe(firstJob.id);
+    expect(reviewed.target?.customerId).toBe(customer.id);
+    expect(reviewed.review?.status).toBe("READY");
   });
 
   it("rolls back new customer and job creation when proposal assignment fails", async () => {
@@ -1094,6 +1240,124 @@ describeIfDb("agent persistence integration", () => {
     ).rejects.toThrow("Proposal not found.");
   });
 
+  it("requires ambiguous staff proposals to be resolved before confirmation", async () => {
+    const owner = await seedTenantUser({
+      email: "owner-review-staff@agent-persistence.test",
+      displayName: "Review Staff Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Review Staff Tenant",
+      tenantSlug: "review-staff-tenant",
+    });
+    const passwordHash = await hashPassword("password123");
+    const [customer, staffA, staffB] = await Promise.all([
+      prisma.customer.create({
+        data: {
+          tenantId: owner.tenant.id,
+          createdById: owner.user.id,
+          name: "Archie Wright",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "staff-a-review@agent-persistence.test",
+          passwordHash,
+          displayName: "Alex Nguyen",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "staff-b-review@agent-persistence.test",
+          passwordHash,
+          displayName: "Alex N.",
+        },
+      }),
+    ]);
+    const [membershipA, membershipB, existingJob] = await Promise.all([
+      prisma.membership.create({
+        data: {
+          userId: staffA.id,
+          tenantId: owner.tenant.id,
+          role: MembershipRole.STAFF,
+          status: MembershipStatus.ACTIVE,
+        },
+      }),
+      prisma.membership.create({
+        data: {
+          userId: staffB.id,
+          tenantId: owner.tenant.id,
+          role: MembershipRole.STAFF,
+          status: MembershipStatus.ACTIVE,
+        },
+      }),
+      prisma.job.create({
+        data: {
+          tenantId: owner.tenant.id,
+          customerId: customer.id,
+          createdById: owner.user.id,
+          title: "Dishwasher leak investigation - Stirling",
+          serviceAddress: "8 Mount Barker Road, Stirling SA 5152",
+        },
+      }),
+    ]);
+
+    const conversation = await createConversation(owner.auth);
+    const proposal = await storeTypedProposal(owner.auth, conversation.id, {
+      type: "SCHEDULE_JOB",
+      target: {
+        customerId: customer.id,
+        jobId: existingJob.id,
+      },
+      customer: {
+        status: "matched",
+        matchedCustomerId: customer.id,
+        matches: [{ id: customer.id, name: customer.name }],
+      },
+      jobDraft: {
+        existingJobId: existingJob.id,
+        title: existingJob.title,
+      },
+      scheduleDraft: {
+        scheduledStartAt: "2026-04-23T00:00:00.000Z",
+        scheduledEndAt: "2026-04-23T02:00:00.000Z",
+        timezone: "Australia/Adelaide",
+      },
+      assigneeDraft: {
+        status: "ambiguous",
+        matches: [
+          {
+            membershipId: membershipA.id,
+            userId: staffA.id,
+            displayName: staffA.displayName,
+          },
+          {
+            membershipId: membershipB.id,
+            userId: staffB.id,
+            displayName: staffB.displayName,
+          },
+        ],
+      },
+      warnings: [],
+      confidence: 0.74,
+    });
+
+    expect(proposal.review?.status).toBe("NEEDS_RESOLUTION");
+    expect(proposal.review?.candidates?.staff).toHaveLength(2);
+    await expect(
+      confirmDispatchProposal(owner.auth, conversation.id, proposal.id),
+    ).rejects.toThrow("Select the staff member");
+
+    const reviewed = await updateProposalReview(owner.auth, conversation.id, proposal.id, {
+      membershipId: membershipA.id,
+    });
+    expect(reviewed.assigneeDraft).toEqual(
+      expect.objectContaining({
+        status: "matched",
+        membershipId: membershipA.id,
+      }),
+    );
+    expect(reviewed.review?.status).toBe("READY");
+  });
+
   it("rejects staff confirmation before resolving a persisted proposal", async () => {
     const owner = await seedTenantUser({
       email: "owner-staff-confirm@agent-persistence.test",
@@ -1130,6 +1394,12 @@ describeIfDb("agent persistence integration", () => {
     await expect(
       confirmDispatchProposal(staff.auth, conversation.id, proposal.id),
     ).rejects.toThrow("Only owners and managers can confirm dispatch plans.");
+
+    await expect(
+      updateProposalReview(staff.auth, conversation.id, proposal.id, {
+        customerId: owner.user.id,
+      }),
+    ).rejects.toThrow("Only owners and managers can update dispatch plans.");
 
     const stillPending = await prisma.agentProposal.findUniqueOrThrow({
       where: { id: proposal.id },

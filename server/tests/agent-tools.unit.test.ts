@@ -126,6 +126,26 @@ describe("agent tools", () => {
     );
   });
 
+  it("resolves local wall-clock schedule windows in the provided timezone", async () => {
+    const result = await executeTool(buildAuth(MembershipRole.MANAGER), "resolve_time_window", {
+      localDate: "2026-04-24",
+      localStartTime: "14:00",
+      localEndTime: "16:00",
+      timezone: "Australia/Adelaide",
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: "matched",
+        scheduledStartAt: "2026-04-24T04:30:00.000Z",
+        scheduledEndAt: "2026-04-24T06:30:00.000Z",
+        localDate: "2026-04-24",
+        localStartTime: "14:00",
+        localEndTime: "16:00",
+      }),
+    );
+  });
+
   it("rejects restricted tools for staff before calling the service", async () => {
     const result = await executeTool(buildAuth(MembershipRole.STAFF), "list_jobs", {});
 
@@ -429,14 +449,6 @@ describe("agent tools", () => {
       path: "jobDraft.serviceAddress",
     },
     {
-      name: "existing job action without job ID",
-      mutate: (input: ReturnType<typeof buildValidTypedScheduleProposalInput>) => {
-        delete input.target.jobId;
-        delete input.jobDraft.existingJobId;
-      },
-      path: "jobDraft.existingJobId",
-    },
-    {
       name: "matched assignee without membershipId",
       mutate: (input: ReturnType<typeof buildValidTypedScheduleProposalInput>) => {
         delete input.assigneeDraft.membershipId;
@@ -464,6 +476,231 @@ describe("agent tools", () => {
       }),
     );
     expect(serviceMocks.storeTypedProposal).not.toHaveBeenCalled();
+  });
+
+  it("allows existing job actions without a job ID to be saved for review resolution", async () => {
+    const input = buildValidTypedScheduleProposalInput();
+    delete input.target.jobId;
+    delete input.jobDraft.existingJobId;
+    const proposal = {
+      id: "44444444-4444-4444-8444-444444444444",
+      conversationId: "55555555-5555-4555-8555-555555555555",
+      tenantId: "tenant-1",
+      userId: "user-1",
+      ...input,
+      intent: "schedule_job",
+      review: {
+        status: "NEEDS_RESOLUTION",
+        blockers: ["Select the existing job this proposal should update."],
+        warnings: [],
+      },
+      createdAt: new Date("2026-04-22T00:00:00.000Z"),
+    };
+    serviceMocks.storeTypedProposal.mockResolvedValueOnce(proposal);
+
+    const result = await executeTool(
+      buildAuth(MembershipRole.MANAGER),
+      "save_typed_proposal",
+      input,
+      { conversationId: proposal.conversationId },
+    );
+
+    expect(serviceMocks.storeTypedProposal).toHaveBeenCalledWith(
+      buildAuth(MembershipRole.MANAGER),
+      proposal.conversationId,
+      expect.objectContaining({
+        type: "SCHEDULE_JOB",
+        jobDraft: expect.not.objectContaining({
+          existingJobId: expect.any(String),
+        }),
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        saved: true,
+        proposalId: proposal.id,
+        proposal: expect.objectContaining({
+          review: expect.objectContaining({
+            status: "NEEDS_RESOLUTION",
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("accepts ambiguous job resolver candidates on unresolved typed proposals", async () => {
+    const input = buildValidTypedScheduleProposalInput();
+    delete input.target.jobId;
+    delete input.jobDraft.existingJobId;
+    const unresolvedInput = {
+      ...input,
+      review: {
+        candidates: {
+          jobs: [
+            {
+              id: "66666666-6666-4666-8666-666666666666",
+              title: "Leaking tap repair",
+              serviceAddress: "18 Collins Street, Melbourne VIC 3000",
+              status: "NEW",
+              customer: {
+                id: "11111111-1111-4111-8111-111111111111",
+                name: "Noah Thompson",
+              },
+              score: 0.84,
+            },
+            {
+              id: "77777777-7777-4777-8777-777777777777",
+              title: "Kitchen tap inspection",
+              serviceAddress: "20 Collins Street, Melbourne VIC 3000",
+              status: "NEW",
+              scheduledStartAt: null,
+              scheduledEndAt: null,
+              assignedToName: null,
+              customer: {
+                id: "11111111-1111-4111-8111-111111111111",
+                name: "Noah Thompson",
+              },
+              score: 0.8,
+            },
+          ],
+        },
+      },
+    };
+    const proposal = {
+      id: "44444444-4444-4444-8444-444444444444",
+      conversationId: "55555555-5555-4555-8555-555555555555",
+      tenantId: "tenant-1",
+      userId: "user-1",
+      ...unresolvedInput,
+      intent: "schedule_job",
+      review: {
+        status: "NEEDS_RESOLUTION",
+        blockers: ["Select the existing job this proposal should update."],
+        warnings: [],
+        candidates: unresolvedInput.review.candidates,
+      },
+      createdAt: new Date("2026-04-22T00:00:00.000Z"),
+    };
+    serviceMocks.storeTypedProposal.mockResolvedValueOnce(proposal);
+
+    const result = await executeTool(
+      buildAuth(MembershipRole.MANAGER),
+      "save_typed_proposal",
+      unresolvedInput,
+      { conversationId: proposal.conversationId },
+    );
+
+    expect(serviceMocks.storeTypedProposal).toHaveBeenCalledWith(
+      buildAuth(MembershipRole.MANAGER),
+      proposal.conversationId,
+      expect.objectContaining({
+        type: "SCHEDULE_JOB",
+        review: expect.objectContaining({
+          candidates: expect.objectContaining({
+            jobs: [
+              expect.objectContaining({
+                id: "66666666-6666-4666-8666-666666666666",
+                scheduledStartAt: null,
+                scheduledEndAt: null,
+                assignedToName: null,
+              }),
+              expect.objectContaining({
+                id: "77777777-7777-4777-8777-777777777777",
+              }),
+            ],
+          }),
+        }),
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        saved: true,
+        proposal: expect.objectContaining({
+          review: expect.objectContaining({
+            status: "NEEDS_RESOLUTION",
+            candidates: expect.objectContaining({
+              jobs: expect.arrayContaining([
+                expect.objectContaining({
+                  id: "66666666-6666-4666-8666-666666666666",
+                }),
+              ]),
+            }),
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("allows ambiguous customer update proposals to be saved for review resolution", async () => {
+    const input = {
+      type: "UPDATE_CUSTOMER",
+      customer: {
+        status: "ambiguous",
+        query: "Leo Martin",
+        matches: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            name: "Leo Martin",
+          },
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            name: "Leo Martin",
+          },
+        ],
+      },
+      changes: [
+        {
+          field: "phone",
+          from: null,
+          to: "0412 999 888",
+        },
+      ],
+      warnings: [],
+      confidence: 0.7,
+    };
+    const proposal = {
+      id: "44444444-4444-4444-8444-444444444444",
+      conversationId: "55555555-5555-4555-8555-555555555555",
+      tenantId: "tenant-1",
+      userId: "user-1",
+      ...input,
+      intent: "update_customer",
+      jobDraft: { title: "Update customer: Leo Martin" },
+      scheduleDraft: { timezone: "UTC" },
+      review: {
+        status: "NEEDS_RESOLUTION",
+        blockers: ["Select the customer this proposal should use."],
+        warnings: [],
+      },
+      createdAt: new Date("2026-04-22T00:00:00.000Z"),
+    };
+    serviceMocks.storeTypedProposal.mockResolvedValueOnce(proposal);
+
+    const result = await executeTool(
+      buildAuth(MembershipRole.MANAGER),
+      "save_typed_proposal",
+      input,
+      { conversationId: proposal.conversationId },
+    );
+
+    expect(serviceMocks.storeTypedProposal).toHaveBeenCalledWith(
+      buildAuth(MembershipRole.MANAGER),
+      proposal.conversationId,
+      expect.objectContaining({
+        type: "UPDATE_CUSTOMER",
+        customer: expect.objectContaining({ status: "ambiguous" }),
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        saved: true,
+        proposal: expect.objectContaining({
+          review: expect.objectContaining({
+            status: "NEEDS_RESOLUTION",
+          }),
+        }),
+      }),
+    );
   });
 
   it.each([

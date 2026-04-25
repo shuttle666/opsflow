@@ -5,6 +5,7 @@ import {
 } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import type { AuthContext } from "../../types/auth";
+import { normalizeScheduleDraftTimezone } from "./agent-time";
 
 type ResolverStatus = "matched" | "ambiguous" | "missing" | "new_candidate";
 
@@ -57,6 +58,19 @@ const stopWords = new Set([
   "services",
 ]);
 
+const jobConceptPatterns = [
+  ["leak", /leak|漏水|渗漏|漏/iu],
+  ["tap", /\btaps?\b|\bfaucets?\b|水龙头|龙头/iu],
+  ["kitchen", /\bkitchen\b|厨房/iu],
+  ["dishwasher", /\bdish\s*washer\b|\bdishwasher\b|洗碗机/iu],
+  ["investigation", /investigat|inspect|diagnos|调查|检查/iu],
+  ["installation", /install|安装/iu],
+  ["ceiling", /\bceiling\b|天花板|吊顶/iu],
+  ["fan", /\bfans?\b|风扇|吊扇/iu],
+  ["aircon", /\bair\s*con\b|\bac\b|\bair\s*condition|空调/iu],
+  ["maintenance", /mainten|service|维护|保养/iu],
+] satisfies Array<[string, RegExp]>;
+
 function normalize(value?: string | null) {
   return (value ?? "")
     .toLowerCase()
@@ -91,6 +105,36 @@ function sharedTokenScore(query: string, candidate: string) {
   return shared / Math.max(queryTokens.size, 1);
 }
 
+function extractJobConcepts(value: string) {
+  const concepts = new Set<string>();
+
+  for (const [concept, pattern] of jobConceptPatterns) {
+    if (pattern.test(value)) {
+      concepts.add(concept);
+    }
+  }
+
+  return concepts;
+}
+
+function sharedConceptScore(query: string, candidate: string) {
+  const queryConcepts = extractJobConcepts(query);
+  const candidateConcepts = extractJobConcepts(candidate);
+
+  if (queryConcepts.size === 0 || candidateConcepts.size === 0) {
+    return 0;
+  }
+
+  let shared = 0;
+  for (const concept of queryConcepts) {
+    if (candidateConcepts.has(concept)) {
+      shared += 1;
+    }
+  }
+
+  return shared / Math.max(queryConcepts.size, 1);
+}
+
 function scoreJob(input: ResolveJobTargetInput, job: {
   title: string;
   description: string | null;
@@ -113,6 +157,7 @@ function scoreJob(input: ResolveJobTargetInput, job: {
   }
 
   score += sharedTokenScore(queryText, jobText) * 0.35;
+  score += sharedConceptScore(queryText, jobText) * 0.4;
 
   if (input.serviceAddress) {
     const addressScore = sharedTokenScore(input.serviceAddress, job.serviceAddress);
@@ -480,19 +525,24 @@ export async function resolveStaffTarget(
 export type ResolveTimeWindowInput = {
   scheduledStartAt?: string | null;
   scheduledEndAt?: string | null;
+  localDate?: string | null;
+  localEndDate?: string | null;
+  localStartTime?: string | null;
+  localEndTime?: string | null;
   timezone: string;
 };
 
 export function resolveTimeWindow(input: ResolveTimeWindowInput) {
-  const start = input.scheduledStartAt?.trim();
-  const end = input.scheduledEndAt?.trim();
+  const normalized = normalizeScheduleDraftTimezone(input);
+  const start = normalized.scheduledStartAt?.trim();
+  const end = normalized.scheduledEndAt?.trim();
 
   if (!start && !end) {
     return {
       status: "missing" as const,
       confidence: 0,
       reason: "No time window was provided.",
-      timezone: input.timezone,
+      timezone: normalized.timezone,
       scheduledStartAt: null,
       scheduledEndAt: null,
     };
@@ -503,7 +553,7 @@ export function resolveTimeWindow(input: ResolveTimeWindowInput) {
       status: "ambiguous" as const,
       confidence: 0.4,
       reason: "A complete start and end time are required.",
-      timezone: input.timezone,
+      timezone: normalized.timezone,
       scheduledStartAt: start ?? null,
       scheduledEndAt: end ?? null,
     };
@@ -521,7 +571,7 @@ export function resolveTimeWindow(input: ResolveTimeWindowInput) {
       status: "ambiguous" as const,
       confidence: 0.35,
       reason: "The supplied time window is invalid.",
-      timezone: input.timezone,
+      timezone: normalized.timezone,
       scheduledStartAt: start,
       scheduledEndAt: end,
     };
@@ -531,7 +581,11 @@ export function resolveTimeWindow(input: ResolveTimeWindowInput) {
     status: "matched" as const,
     confidence: 0.9,
     reason: "A valid time window was supplied.",
-    timezone: input.timezone,
+    timezone: normalized.timezone,
+    localDate: normalized.localDate ?? null,
+    localEndDate: normalized.localEndDate ?? null,
+    localStartTime: normalized.localStartTime ?? null,
+    localEndTime: normalized.localEndTime ?? null,
     scheduledStartAt: startDate.toISOString(),
     scheduledEndAt: endDate.toISOString(),
   };

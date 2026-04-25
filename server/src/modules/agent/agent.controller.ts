@@ -7,6 +7,7 @@ import {
   conversationIdParamSchema,
   proposalIdParamSchema,
   sendMessageSchema,
+  updateProposalReviewSchema,
 } from "./agent-schemas";
 import {
   createConversation,
@@ -15,6 +16,7 @@ import {
   listConversations,
   addUserMessage,
   appendAssistantMessage,
+  updateProposalReview,
 } from "./agent.service";
 import { runAgentLoop } from "./agent-loop";
 
@@ -151,5 +153,19 @@ export const confirmProposalHandler: RequestHandler = asyncHandler(async (req, r
     statusCode: 201,
     message: "Dispatch proposal confirmed.",
     data: result,
+  });
+});
+
+export const updateProposalReviewHandler: RequestHandler = asyncHandler(async (req, res) => {
+  if (!req.auth) throw new ApiError(401, "Authentication is required.");
+
+  const { conversationId, proposalId } = proposalIdParamSchema.parse(req.params);
+  const input = updateProposalReviewSchema.parse(req.body);
+
+  const proposal = await updateProposalReview(req.auth, conversationId, proposalId, input);
+
+  sendSuccess(res, {
+    message: "Dispatch proposal updated.",
+    data: proposal,
   });
 });

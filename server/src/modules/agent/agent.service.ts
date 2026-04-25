@@ -18,7 +18,14 @@ import {
   type NotificationDeliveryItem,
 } from "../notification/notification.service";
 import { transitionJobStatusInTransaction } from "../job/job-status.service";
-import type { SaveTypedProposalToolInput } from "./agent-schemas";
+import type {
+  SaveTypedProposalToolInput,
+  UpdateProposalReviewInput,
+} from "./agent-schemas";
+import {
+  normalizeScheduleDraftTimezone,
+  type ScheduleDraftWithLocalTime,
+} from "./agent-time";
 
 export type AgentProposalType =
   | "CREATE_CUSTOMER"
@@ -34,6 +41,94 @@ export type AgentProposalChange = {
   field: "name" | "phone" | "email" | "notes";
   from: string | null;
   to: string | null;
+};
+
+export type ProposalReviewStatus = "READY" | "NEEDS_RESOLUTION" | "HAS_WARNINGS";
+
+type ProposalReviewCustomerSnapshot = {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  notes: string | null;
+};
+
+type ProposalReviewJobSnapshot = {
+  id: string;
+  title: string;
+  serviceAddress: string;
+  description: string | null;
+  status: JobStatus;
+  scheduledStartAt: string | null;
+  scheduledEndAt: string | null;
+  assignedToName: string | null;
+  customer: {
+    id: string;
+    name: string;
+  };
+};
+
+type ProposalReviewStaffSnapshot = {
+  membershipId: string;
+  userId: string;
+  displayName: string;
+  email: string;
+};
+
+type ProposalReviewCustomerCandidate = {
+  id: string;
+  name: string;
+};
+
+type ProposalReviewJobCandidate = {
+  id: string;
+  title: string;
+  serviceAddress?: string;
+  status: JobStatus;
+  scheduledStartAt: string | null;
+  scheduledEndAt: string | null;
+  assignedToName: string | null;
+  customer?: {
+    id: string;
+    name: string;
+  };
+};
+
+type ProposalReviewStaffCandidate = {
+  membershipId: string;
+  userId: string;
+  displayName: string;
+};
+
+export type ProposalReview = {
+  status: ProposalReviewStatus;
+  blockers: string[];
+  warnings: string[];
+  snapshots?: {
+    customer?: ProposalReviewCustomerSnapshot;
+    job?: ProposalReviewJobSnapshot;
+    assignee?: ProposalReviewStaffSnapshot;
+  };
+  candidates?: {
+    customers?: ProposalReviewCustomerCandidate[];
+    jobs?: ProposalReviewJobCandidate[];
+    staff?: ProposalReviewStaffCandidate[];
+  };
+  scheduleConflicts?: {
+    hasConflict: boolean;
+    conflicts: Array<{
+      id: string;
+      title: string;
+      serviceAddress: string;
+      status: JobStatus;
+      scheduledStartAt: string;
+      scheduledEndAt: string;
+      customer: {
+        id: string;
+        name: string;
+      };
+    }>;
+  };
 };
 
 export type DispatchProposal = {
@@ -69,6 +164,10 @@ export type DispatchProposal = {
   scheduleDraft: {
     scheduledStartAt?: string | null;
     scheduledEndAt?: string | null;
+    localDate?: string | null;
+    localEndDate?: string | null;
+    localStartTime?: string | null;
+    localEndTime?: string | null;
     timezone: string;
   };
   assigneeDraft?: {
@@ -87,6 +186,7 @@ export type DispatchProposal = {
     reason?: string | null;
   };
   changes?: AgentProposalChange[];
+  review?: ProposalReview;
   warnings: string[];
   confidence: number;
   createdAt: Date;
@@ -150,6 +250,7 @@ const openDispatchJobStatuses: JobStatus[] = [
   JobStatus.IN_PROGRESS,
   JobStatus.PENDING_REVIEW,
 ];
+const scheduleConflictWarningPrefix = "Schedule overlaps ";
 
 const conversationInclude = {
   messages: {
@@ -215,6 +316,9 @@ function proposalPayloadFromJson(value: Prisma.JsonValue): DispatchProposalPaylo
       : undefined,
     changes: Array.isArray(payload.changes)
       ? (payload.changes as DispatchProposalPayload["changes"])
+      : undefined,
+    review: isRecord(payload.review)
+      ? (payload.review as DispatchProposalPayload["review"])
       : undefined,
     warnings,
     confidence: Number.isFinite(confidence) ? confidence : 0.5,
@@ -400,15 +504,19 @@ export async function storeDispatchProposal(
   }
 
   const proposal = await prisma.$transaction(async (tx) => {
-    await assertProposalJobTargetIsSafe(tx, auth, input);
+    const payload = await withProposalReview(
+      tx,
+      auth,
+      normalizeProposalPayloadSchedule(input),
+    );
 
     const createdProposal = await tx.agentProposal.create({
       data: {
         conversationId,
         tenantId: auth.tenantId,
         userId: auth.userId,
-        intent: input.intent,
-        payload: toJsonValue(input),
+        intent: payload.intent,
+        payload: toJsonValue(payload),
         status: AgentProposalStatus.PENDING,
       },
     });
@@ -440,12 +548,39 @@ function typedProposalTitle(type: AgentProposalType, input: SaveTypedProposalToo
   return type.replace(/_/gu, " ").toLowerCase();
 }
 
+function normalizeProposalPayloadSchedule<T extends DispatchProposalPayload>(input: T): T {
+  return {
+    ...input,
+    scheduleDraft: normalizeScheduleDraftTimezone(
+      input.scheduleDraft as ScheduleDraftWithLocalTime,
+    ),
+  };
+}
+
+function typedProposalReviewCandidates(
+  input: SaveTypedProposalToolInput,
+): ProposalReview["candidates"] | undefined {
+  const jobs = input.review?.candidates?.jobs?.map((job) => ({
+    id: job.id,
+    title: job.title,
+    ...(job.serviceAddress ? { serviceAddress: job.serviceAddress } : {}),
+    status: job.status,
+    scheduledStartAt: job.scheduledStartAt,
+    scheduledEndAt: job.scheduledEndAt,
+    assignedToName: job.assignedToName,
+    ...(job.customer ? { customer: job.customer } : {}),
+  }));
+
+  return jobs?.length ? { jobs } : undefined;
+}
+
 function typedProposalToDispatchPayload(
   input: SaveTypedProposalToolInput,
 ): DispatchProposalPayload {
   const type = input.type;
   const targetCustomerId = input.target?.customerId ?? input.customer.matchedCustomerId;
   const targetJobId = input.target?.jobId ?? input.jobDraft?.existingJobId;
+  const reviewCandidates = typedProposalReviewCandidates(input);
 
   return {
     type,
@@ -478,6 +613,16 @@ function typedProposalToDispatchPayload(
             }
           : undefined,
     changes: input.changes,
+    ...(reviewCandidates
+      ? {
+          review: {
+            status: "READY",
+            blockers: [],
+            warnings: [],
+            candidates: reviewCandidates,
+          },
+        }
+      : {}),
     warnings: input.warnings,
     confidence: input.confidence,
   };
@@ -596,6 +741,188 @@ export async function getProposal(
   });
 
   return proposal ? proposalFromRecord(proposal) : null;
+}
+
+export async function updateProposalReview(
+  auth: AuthContext,
+  conversationId: string,
+  proposalId: string,
+  input: UpdateProposalReviewInput,
+): Promise<DispatchProposal> {
+  if (auth.role === MembershipRole.STAFF) {
+    throw new ApiError(403, "Only owners and managers can update dispatch plans.");
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const proposalRecord = await tx.agentProposal.findFirst({
+      where: {
+        id: proposalId,
+        conversationId,
+        tenantId: auth.tenantId,
+        userId: auth.userId,
+        status: AgentProposalStatus.PENDING,
+      },
+    });
+
+    if (!proposalRecord) {
+      throw new ApiError(404, "Proposal not found.");
+    }
+
+    let payload = proposalPayloadFromJson(proposalRecord.payload);
+
+    if (input.customerId) {
+      const customer = await getCustomerSnapshot(tx, auth, input.customerId);
+
+      if (!customer) {
+        throw new ApiError(404, "Customer not found.");
+      }
+
+      payload = {
+        ...payload,
+        target: {
+          ...payload.target,
+          customerId: customer.id,
+        },
+        customer: {
+          ...payload.customer,
+          status: "matched",
+          matchedCustomerId: customer.id,
+          name: customer.name,
+          matches: [{ id: customer.id, name: customer.name }],
+        },
+      };
+    }
+
+    if (input.jobId) {
+      const job = await getJobSnapshot(tx, auth, input.jobId);
+
+      if (!job) {
+        throw new ApiError(404, "Job not found.");
+      }
+
+      const existingCustomerId = payload.target?.customerId ?? resolveCustomerIdFromCustomer(payload.customer);
+      if (existingCustomerId && existingCustomerId !== job.customer.id) {
+        throw new ApiError(400, "Selected job belongs to a different customer.");
+      }
+
+      const nextType = payload.type === "CREATE_JOB"
+        ? inferExistingJobType(payload)
+        : payload.type;
+
+      payload = {
+        ...payload,
+        ...(nextType ? { type: nextType, intent: typedProposalIntent(nextType) } : { intent: "update_existing_job" }),
+        target: {
+          ...payload.target,
+          customerId: job.customer.id,
+          jobId: job.id,
+        },
+        customer: {
+          ...payload.customer,
+          status: "matched",
+          matchedCustomerId: job.customer.id,
+          name: job.customer.name,
+          matches: [{ id: job.customer.id, name: job.customer.name }],
+        },
+        jobDraft: {
+          ...payload.jobDraft,
+          existingJobId: job.id,
+          title:
+            payload.type === "UPDATE_JOB" && payload.jobDraft.title?.trim()
+              ? payload.jobDraft.title
+              : job.title,
+        },
+      };
+    }
+
+    if (input.membershipId) {
+      const staff = await getStaffSnapshot(tx, auth, input.membershipId);
+
+      if (!staff) {
+        throw new ApiError(404, "Membership not found.");
+      }
+
+      payload = {
+        ...payload,
+        assigneeDraft: {
+          status: "matched",
+          membershipId: staff.membershipId,
+          userId: staff.userId,
+          displayName: staff.displayName,
+          matches: [
+            {
+              membershipId: staff.membershipId,
+              userId: staff.userId,
+              displayName: staff.displayName,
+            },
+          ],
+        },
+      };
+    }
+
+    if (input.scheduleDraft) {
+      const hasLocalUpdate =
+        input.scheduleDraft.localDate !== undefined ||
+        input.scheduleDraft.localEndDate !== undefined ||
+        input.scheduleDraft.localStartTime !== undefined ||
+        input.scheduleDraft.localEndTime !== undefined;
+      const hasIsoUpdate =
+        input.scheduleDraft.scheduledStartAt !== undefined ||
+        input.scheduleDraft.scheduledEndAt !== undefined;
+
+      payload = {
+        ...payload,
+        scheduleDraft: {
+          ...payload.scheduleDraft,
+          ...(hasIsoUpdate && !hasLocalUpdate
+            ? {
+                localDate: null,
+                localEndDate: null,
+                localStartTime: null,
+                localEndTime: null,
+              }
+            : {}),
+          ...(input.scheduleDraft.scheduledStartAt !== undefined
+            ? { scheduledStartAt: input.scheduleDraft.scheduledStartAt }
+            : {}),
+          ...(input.scheduleDraft.scheduledEndAt !== undefined
+            ? { scheduledEndAt: input.scheduleDraft.scheduledEndAt }
+            : {}),
+          ...(hasLocalUpdate
+            ? {
+                localDate: input.scheduleDraft.localDate ?? null,
+                localEndDate: input.scheduleDraft.localEndDate ?? null,
+                localStartTime: input.scheduleDraft.localStartTime ?? null,
+                localEndTime: input.scheduleDraft.localEndTime ?? null,
+              }
+            : {}),
+          ...(input.scheduleDraft.timezone ? { timezone: input.scheduleDraft.timezone } : {}),
+        },
+      };
+    }
+
+    const reviewed = await withProposalReview(
+      tx,
+      auth,
+      normalizeProposalPayloadSchedule(payload),
+    );
+    const saved = await tx.agentProposal.update({
+      where: { id: proposalRecord.id },
+      data: {
+        intent: reviewed.intent,
+        payload: toJsonValue(reviewed),
+      },
+    });
+
+    await tx.agentConversation.update({
+      where: { id: conversationId },
+      data: { updatedAt: new Date() },
+    });
+
+    return saved;
+  });
+
+  return proposalFromRecord(updated);
 }
 
 function resolveCustomerIdFromCustomer(
@@ -758,28 +1085,32 @@ function looksLikeSameJob(
 function formatExistingJobCandidate(job: {
   id: string;
   title: string;
+  serviceAddress?: string;
   status: JobStatus;
   scheduledStartAt: Date | null;
   scheduledEndAt: Date | null;
   assignedTo: { displayName: string } | null;
+  customer?: { id: string; name: string };
 }) {
   return {
     id: job.id,
     title: job.title,
+    ...(job.serviceAddress ? { serviceAddress: job.serviceAddress } : {}),
     status: job.status,
     scheduledStartAt: job.scheduledStartAt?.toISOString() ?? null,
     scheduledEndAt: job.scheduledEndAt?.toISOString() ?? null,
     assignedToName: job.assignedTo?.displayName ?? null,
+    ...(job.customer ? { customer: job.customer } : {}),
   };
 }
 
-async function assertProposalJobTargetIsSafe(
+async function findExistingJobCandidatesForReview(
   tx: Prisma.TransactionClient,
   auth: AuthContext,
   proposal: ProposalJobTargetInput & { type?: AgentProposalType; target?: { jobId?: string } },
 ) {
   if (isCustomerOnlyProposal(proposal)) {
-    return;
+    return [];
   }
 
   const customerId = resolveCustomerIdFromCustomer(proposal.customer);
@@ -794,6 +1125,7 @@ async function assertProposalJobTargetIsSafe(
       select: {
         id: true,
         title: true,
+        serviceAddress: true,
         status: true,
         customerId: true,
         scheduledStartAt: true,
@@ -801,6 +1133,12 @@ async function assertProposalJobTargetIsSafe(
         assignedTo: {
           select: {
             displayName: true,
+          },
+        },
+        customer: {
+          select: {
+            id: true,
+            name: true,
           },
         },
       },
@@ -836,11 +1174,11 @@ async function assertProposalJobTargetIsSafe(
       );
     }
 
-    return;
+    return [];
   }
 
   if (!customerId || proposal.customer.status === "new") {
-    return;
+    return [];
   }
 
   const openJobs = await tx.job.findMany({
@@ -859,6 +1197,7 @@ async function assertProposalJobTargetIsSafe(
       id: true,
       title: true,
       description: true,
+      serviceAddress: true,
       status: true,
       scheduledStartAt: true,
       scheduledEndAt: true,
@@ -867,11 +1206,17 @@ async function assertProposalJobTargetIsSafe(
           displayName: true,
         },
       },
+      customer: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
     },
   });
 
   if (openJobs.length === 0) {
-    return;
+    return [];
   }
 
   const likelyMatches = openJobs.filter((job) => looksLikeSameJob(job, proposal));
@@ -883,6 +1228,20 @@ async function assertProposalJobTargetIsSafe(
         : [];
 
   if (blockingJobs.length === 0) {
+    return [];
+  }
+
+  return blockingJobs.map(formatExistingJobCandidate);
+}
+
+async function assertProposalJobTargetIsSafe(
+  tx: Prisma.TransactionClient,
+  auth: AuthContext,
+  proposal: ProposalJobTargetInput & { type?: AgentProposalType; target?: { jobId?: string } },
+) {
+  const blockingJobs = await findExistingJobCandidatesForReview(tx, auth, proposal);
+
+  if (blockingJobs.length === 0) {
     return;
   }
 
@@ -891,10 +1250,369 @@ async function assertProposalJobTargetIsSafe(
     "This proposal appears to target an existing open job. Do not create a duplicate job; save the proposal with intent=\"update_existing_job\" and jobDraft.existingJobId.",
     {
       code: "EXISTING_JOB_REQUIRED",
-      customerId,
-      candidateJobs: blockingJobs.map(formatExistingJobCandidate),
+      customerId: resolveCustomerIdFromCustomer(proposal.customer),
+      candidateJobs: blockingJobs,
     },
   );
+}
+
+function uniqueStrings(values: string[]) {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function isExistingJobProposalType(type?: AgentProposalType) {
+  return Boolean(
+    type &&
+      ["UPDATE_JOB", "ASSIGN_JOB", "SCHEDULE_JOB", "CHANGE_JOB_STATUS", "CANCEL_JOB"].includes(
+        type,
+      ),
+  );
+}
+
+function normalizeReviewCandidateJobs(
+  proposal: DispatchProposalPayload,
+): ProposalReviewJobCandidate[] {
+  const jobs = proposal.review?.candidates?.jobs ?? [];
+  const seen = new Set<string>();
+
+  return jobs.filter((job) => {
+    if (seen.has(job.id)) {
+      return false;
+    }
+
+    seen.add(job.id);
+    return true;
+  });
+}
+
+function inferExistingJobType(proposal: DispatchProposalPayload): AgentProposalType {
+  if (proposal.type && proposal.type !== "CREATE_JOB") {
+    return proposal.type;
+  }
+
+  if (proposal.statusDraft?.toStatus === JobStatus.CANCELLED) {
+    return "CANCEL_JOB";
+  }
+
+  if (proposal.statusDraft) {
+    return "CHANGE_JOB_STATUS";
+  }
+
+  if (proposal.scheduleDraft.scheduledStartAt || proposal.scheduleDraft.scheduledEndAt) {
+    return "SCHEDULE_JOB";
+  }
+
+  if (proposal.assigneeDraft?.status === "matched") {
+    return "ASSIGN_JOB";
+  }
+
+  return "UPDATE_JOB";
+}
+
+async function getCustomerSnapshot(
+  tx: Prisma.TransactionClient,
+  auth: AuthContext,
+  customerId: string | undefined,
+): Promise<ProposalReviewCustomerSnapshot | undefined> {
+  if (!customerId) {
+    return undefined;
+  }
+
+  const customer = await tx.customer.findFirst({
+    where: {
+      id: customerId,
+      tenantId: auth.tenantId,
+      archivedAt: null,
+    },
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      email: true,
+      notes: true,
+    },
+  });
+
+  if (!customer) {
+    throw new ApiError(404, "Customer not found.");
+  }
+
+  return customer;
+}
+
+async function getJobSnapshot(
+  tx: Prisma.TransactionClient,
+  auth: AuthContext,
+  jobId: string | undefined,
+): Promise<ProposalReviewJobSnapshot | undefined> {
+  if (!jobId) {
+    return undefined;
+  }
+
+  const job = await tx.job.findFirst({
+    where: {
+      id: jobId,
+      tenantId: auth.tenantId,
+    },
+    select: {
+      id: true,
+      title: true,
+      serviceAddress: true,
+      description: true,
+      status: true,
+      scheduledStartAt: true,
+      scheduledEndAt: true,
+      assignedTo: {
+        select: {
+          displayName: true,
+        },
+      },
+      customer: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  });
+
+  if (!job) {
+    throw new ApiError(404, "Job not found.");
+  }
+
+  if (!openDispatchJobStatuses.includes(job.status)) {
+    throw new ApiError(409, "Only open jobs can be updated from an AI proposal.");
+  }
+
+  return {
+    id: job.id,
+    title: job.title,
+    serviceAddress: job.serviceAddress,
+    description: job.description,
+    status: job.status,
+    scheduledStartAt: job.scheduledStartAt?.toISOString() ?? null,
+    scheduledEndAt: job.scheduledEndAt?.toISOString() ?? null,
+    assignedToName: job.assignedTo?.displayName ?? null,
+    customer: job.customer,
+  };
+}
+
+async function getStaffSnapshot(
+  tx: Prisma.TransactionClient,
+  auth: AuthContext,
+  membershipId: string | undefined,
+): Promise<ProposalReviewStaffSnapshot | undefined> {
+  if (!membershipId) {
+    return undefined;
+  }
+
+  const membership = await tx.membership.findFirst({
+    where: {
+      id: membershipId,
+      tenantId: auth.tenantId,
+    },
+    select: {
+      id: true,
+      userId: true,
+      role: true,
+      status: true,
+      user: {
+        select: {
+          displayName: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  if (!membership) {
+    throw new ApiError(404, "Membership not found.");
+  }
+
+  if (membership.status !== MembershipStatus.ACTIVE || membership.role !== MembershipRole.STAFF) {
+    throw new ApiError(409, "Jobs can only be assigned to active staff members.");
+  }
+
+  return {
+    membershipId: membership.id,
+    userId: membership.userId,
+    displayName: membership.user.displayName,
+    email: membership.user.email,
+  };
+}
+
+async function getScheduleConflictReview(
+  tx: Prisma.TransactionClient,
+  auth: AuthContext,
+  proposal: DispatchProposalPayload,
+  assigneeUserId: string | undefined,
+) {
+  const start = proposal.scheduleDraft.scheduledStartAt;
+  const end = proposal.scheduleDraft.scheduledEndAt;
+
+  if (!assigneeUserId || !start || !end) {
+    return undefined;
+  }
+
+  const scheduledStartAt = new Date(start);
+  const scheduledEndAt = new Date(end);
+
+  if (
+    Number.isNaN(scheduledStartAt.getTime()) ||
+    Number.isNaN(scheduledEndAt.getTime()) ||
+    scheduledEndAt <= scheduledStartAt
+  ) {
+    return undefined;
+  }
+
+  const existingJobId = proposal.jobDraft.existingJobId ?? proposal.target?.jobId;
+  const conflicts = await tx.job.findMany({
+    where: {
+      tenantId: auth.tenantId,
+      assignedToId: assigneeUserId,
+      status: {
+        in: [JobStatus.SCHEDULED, JobStatus.IN_PROGRESS, JobStatus.PENDING_REVIEW],
+      },
+      ...(existingJobId ? { id: { not: existingJobId } } : {}),
+      scheduledStartAt: {
+        lt: scheduledEndAt,
+      },
+      scheduledEndAt: {
+        gt: scheduledStartAt,
+      },
+    },
+    orderBy: {
+      scheduledStartAt: "asc",
+    },
+    select: {
+      id: true,
+      title: true,
+      serviceAddress: true,
+      status: true,
+      scheduledStartAt: true,
+      scheduledEndAt: true,
+      customer: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  });
+
+  return {
+    hasConflict: conflicts.length > 0,
+    conflicts: conflicts.map((job) => ({
+      id: job.id,
+      title: job.title,
+      serviceAddress: job.serviceAddress,
+      status: job.status,
+      scheduledStartAt: job.scheduledStartAt!.toISOString(),
+      scheduledEndAt: job.scheduledEndAt!.toISOString(),
+      customer: job.customer,
+    })),
+  };
+}
+
+async function withProposalReview(
+  tx: Prisma.TransactionClient,
+  auth: AuthContext,
+  proposal: DispatchProposalPayload,
+): Promise<DispatchProposalPayload> {
+  const existingJobCandidates = await findExistingJobCandidatesForReview(tx, auth, proposal);
+  const jobCandidates = [
+    ...normalizeReviewCandidateJobs(proposal),
+    ...existingJobCandidates,
+  ].filter((job, index, allJobs) => allJobs.findIndex((item) => item.id === job.id) === index);
+  const customerId = proposal.target?.customerId ?? resolveCustomerIdFromCustomer(proposal.customer);
+  const existingJobId = proposal.jobDraft.existingJobId ?? proposal.target?.jobId;
+  const membershipId = resolveMembershipIdFromProposal({
+    ...proposal,
+    id: "",
+    conversationId: "",
+    tenantId: auth.tenantId,
+    userId: auth.userId,
+    createdAt: new Date(),
+  });
+  const [customerSnapshot, jobSnapshot, staffSnapshot] = await Promise.all([
+    getCustomerSnapshot(tx, auth, customerId),
+    getJobSnapshot(tx, auth, existingJobId),
+    getStaffSnapshot(tx, auth, membershipId),
+  ]);
+  const scheduleConflicts = await getScheduleConflictReview(
+    tx,
+    auth,
+    proposal,
+    staffSnapshot?.userId ?? proposal.assigneeDraft?.userId,
+  );
+  const blockers: string[] = [];
+  const reviewWarnings = proposal.warnings.filter(
+    (warning) => !warning.startsWith(scheduleConflictWarningPrefix),
+  );
+
+  if (proposal.customer.status === "ambiguous") {
+    blockers.push("Select the customer this proposal should use.");
+  } else if (
+    proposal.type === "UPDATE_CUSTOMER" &&
+    !customerId
+  ) {
+    blockers.push("Select the customer to update.");
+  } else if (
+    proposal.type !== "CREATE_CUSTOMER" &&
+    proposal.customer.status === "missing"
+  ) {
+    blockers.push("Resolve the customer before confirming.");
+  }
+
+  if (isExistingJobProposalType(proposal.type) && !existingJobId) {
+    blockers.push("Select the existing job this proposal should update.");
+  }
+
+  if (proposal.type === "CREATE_JOB" && !existingJobId && jobCandidates.length > 0) {
+    blockers.push("This looks like an existing job. Select the existing job before confirming.");
+  }
+
+  if (
+    proposal.assigneeDraft?.status === "ambiguous" ||
+    (proposal.type === "ASSIGN_JOB" && !membershipId)
+  ) {
+    blockers.push("Select the staff member this proposal should assign.");
+  }
+
+  if (
+    (proposal.scheduleDraft.scheduledStartAt && !proposal.scheduleDraft.scheduledEndAt) ||
+    (!proposal.scheduleDraft.scheduledStartAt && proposal.scheduleDraft.scheduledEndAt)
+  ) {
+    blockers.push("Provide both start and end time before confirming.");
+  }
+
+  if (scheduleConflicts?.hasConflict) {
+    reviewWarnings.push(`${scheduleConflictWarningPrefix}${scheduleConflicts.conflicts.length} existing job(s).`);
+  }
+
+  const uniqueWarnings = uniqueStrings(reviewWarnings);
+  const review: ProposalReview = {
+    status: blockers.length > 0 ? "NEEDS_RESOLUTION" : uniqueWarnings.length > 0 ? "HAS_WARNINGS" : "READY",
+    blockers: uniqueStrings(blockers),
+    warnings: uniqueWarnings,
+    snapshots: {
+      ...(customerSnapshot ? { customer: customerSnapshot } : {}),
+      ...(jobSnapshot ? { job: jobSnapshot } : {}),
+      ...(staffSnapshot ? { assignee: staffSnapshot } : {}),
+    },
+    candidates: {
+      ...(proposal.customer.matches?.length ? { customers: proposal.customer.matches } : {}),
+      ...(jobCandidates.length ? { jobs: jobCandidates } : {}),
+      ...(proposal.assigneeDraft?.matches?.length ? { staff: proposal.assigneeDraft.matches } : {}),
+    },
+    ...(scheduleConflicts ? { scheduleConflicts } : {}),
+  };
+
+  return {
+    ...proposal,
+    warnings: uniqueWarnings,
+    review,
+  };
 }
 
 function normalizeOptionalMatchValue(value?: string): string | undefined {
@@ -1766,6 +2484,16 @@ export async function confirmDispatchProposal(
   }
 
   const proposal = proposalFromRecord(proposalRecord);
+  if (proposal.review?.status === "NEEDS_RESOLUTION") {
+    throw new ApiError(
+      409,
+      proposal.review.blockers[0] ?? "Resolve the proposal before confirming.",
+      {
+        code: "PROPOSAL_REVIEW_REQUIRED",
+        blockers: proposal.review.blockers,
+      },
+    );
+  }
 
   try {
     if (proposal.type) {

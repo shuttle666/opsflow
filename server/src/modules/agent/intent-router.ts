@@ -160,7 +160,18 @@ export function classifyAgentIntent(content: string): AgentIntentClassification 
     };
   }
 
-  if (includesAny(normalized, [/new job|create job|新建.*工作|创建.*工作|新增.*工作|工单/u])) {
+  if (
+    includesAny(normalized, [
+      /new\s+job/u,
+      /create\s+job/u,
+      /create\s+.*\bjob\b/u,
+      /new\s+.*\bjob\b/u,
+      /新建.*工作/u,
+      /创建.*工作/u,
+      /新增.*工作/u,
+      /工单/u,
+    ])
+  ) {
     return {
       intent: "CREATE_JOB",
       confidence: 0.76,

@@ -19,7 +19,41 @@ const optionalProposalStringSchema = z
 const optionalProposalDateTimeSchema = z
   .union([z.string().trim().datetime({ offset: true }), z.literal(""), z.null()])
   .optional()
-  .transform((value) => (typeof value === "string" && value ? value : null));
+  .transform((value) => {
+    if (value === undefined) {
+      return undefined;
+    }
+
+    return typeof value === "string" && value ? value : null;
+  });
+const optionalLocalDateSchema = z
+  .union([
+    z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/u),
+    z.literal(""),
+    z.null(),
+  ])
+  .optional()
+  .transform((value) => {
+    if (value === undefined) {
+      return undefined;
+    }
+
+    return typeof value === "string" && value ? value : null;
+  });
+const optionalLocalTimeSchema = z
+  .union([
+    z.string().trim().regex(/^([01]\d|2[0-3]):[0-5]\d$/u),
+    z.literal(""),
+    z.null(),
+  ])
+  .optional()
+  .transform((value) => {
+    if (value === undefined) {
+      return undefined;
+    }
+
+    return typeof value === "string" && value ? value : null;
+  });
 
 const agentIntentSchema = z.enum([
   "READ_ONLY_QUERY",
@@ -41,6 +75,75 @@ export const proposalIdParamSchema = z.object({
   conversationId: z.uuid(),
   proposalId: z.uuid(),
 });
+
+export const updateProposalReviewSchema = z
+  .object({
+    customerId: optionalUuidSchema,
+    jobId: optionalUuidSchema,
+    membershipId: optionalUuidSchema,
+    scheduleDraft: z
+      .object({
+        scheduledStartAt: optionalProposalDateTimeSchema,
+        scheduledEndAt: optionalProposalDateTimeSchema,
+        localDate: optionalLocalDateSchema,
+        localEndDate: optionalLocalDateSchema,
+        localStartTime: optionalLocalTimeSchema,
+        localEndTime: optionalLocalTimeSchema,
+        timezone: z.string().trim().min(1).max(100).optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (
+      !value.customerId &&
+      !value.jobId &&
+      !value.membershipId &&
+      !value.scheduleDraft
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "At least one proposal review update is required.",
+      });
+    }
+
+    const start = value.scheduleDraft?.scheduledStartAt;
+    const end = value.scheduleDraft?.scheduledEndAt;
+    const localDate = value.scheduleDraft?.localDate;
+    const localEndDate = value.scheduleDraft?.localEndDate;
+    const localStart = value.scheduleDraft?.localStartTime;
+    const localEnd = value.scheduleDraft?.localEndTime;
+
+    if (localDate || localEndDate || localStart || localEnd) {
+      if (!localDate || !localStart || !localEnd) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["scheduleDraft"],
+          message: "Local schedule updates require localDate, localStartTime, and localEndTime.",
+        });
+      }
+
+      return;
+    }
+
+    if ((start && !end) || (!start && end)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["scheduleDraft", start ? "scheduledEndAt" : "scheduledStartAt"],
+        message: "Both start and end time are required when scheduling a job.",
+      });
+      return;
+    }
+
+    if (start && end && new Date(end) <= new Date(start)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["scheduleDraft", "scheduledEndAt"],
+        message: "End time must be after the start time.",
+      });
+    }
+  });
 
 export const sendMessageSchema = z
   .object({
@@ -152,6 +255,10 @@ export const resolveTimeWindowToolInputSchema = z
   .object({
     scheduledStartAt: optionalProposalDateTimeSchema,
     scheduledEndAt: optionalProposalDateTimeSchema,
+    localDate: optionalLocalDateSchema,
+    localEndDate: optionalLocalDateSchema,
+    localStartTime: optionalLocalTimeSchema,
+    localEndTime: optionalLocalTimeSchema,
     timezone: z.string().trim().min(1).max(100),
   })
   .strict();
@@ -207,12 +314,32 @@ const dispatchScheduleDraftSchema = z
   .object({
     scheduledStartAt: optionalProposalDateTimeSchema,
     scheduledEndAt: optionalProposalDateTimeSchema,
+    localDate: optionalLocalDateSchema,
+    localEndDate: optionalLocalDateSchema,
+    localStartTime: optionalLocalTimeSchema,
+    localEndTime: optionalLocalTimeSchema,
     timezone: z.string().trim().min(1).max(100),
   })
   .strict()
   .superRefine((value, ctx) => {
     const start = value.scheduledStartAt;
     const end = value.scheduledEndAt;
+    const localDate = value.localDate;
+    const localEndDate = value.localEndDate;
+    const localStart = value.localStartTime;
+    const localEnd = value.localEndTime;
+
+    if (localDate || localEndDate || localStart || localEnd) {
+      if (!localDate || !localStart || !localEnd) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["localDate"],
+          message: "Local schedules require localDate, localStartTime, and localEndTime.",
+        });
+      }
+
+      return;
+    }
 
     if ((start && !end) || (!start && end)) {
       ctx.addIssue({
@@ -341,6 +468,46 @@ const typedStatusDraftSchema = z
   })
   .strict();
 
+const typedProposalReviewJobCandidateSchema = z
+  .object({
+    id: z.uuid(),
+    title: z.string().trim().min(1).max(200),
+    serviceAddress: z.string().trim().max(500).optional(),
+    status: z.nativeEnum(JobStatus),
+    scheduledStartAt: z
+      .union([z.string().trim().datetime({ offset: true }), z.null()])
+      .optional()
+      .transform((value) => value ?? null),
+    scheduledEndAt: z
+      .union([z.string().trim().datetime({ offset: true }), z.null()])
+      .optional()
+      .transform((value) => value ?? null),
+    assignedToName: z
+      .union([z.string().trim().max(200), z.null()])
+      .optional()
+      .transform((value) => value ?? null),
+    customer: z
+      .object({
+        id: z.uuid(),
+        name: z.string().trim().min(1).max(200),
+      })
+      .strict()
+      .optional(),
+    score: z.number().min(0).max(1).optional(),
+  })
+  .strict();
+
+const typedProposalReviewSchema = z
+  .object({
+    candidates: z
+      .object({
+        jobs: z.array(typedProposalReviewJobCandidateSchema).max(10).optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
 export const saveTypedProposalToolInputSchema = z
   .object({
     type: agentIntentSchema.exclude(["READ_ONLY_QUERY"]),
@@ -360,6 +527,7 @@ export const saveTypedProposalToolInputSchema = z
     assigneeDraft: dispatchAssigneeDraftSchema.optional(),
     statusDraft: typedStatusDraftSchema.optional(),
     changes: z.array(proposalChangeSchema).max(10).optional(),
+    review: typedProposalReviewSchema.optional(),
     warnings: z.array(z.string().trim().max(1000)).max(20).default([]),
     confidence: z.number().min(0).max(1),
   })
@@ -369,7 +537,11 @@ export const saveTypedProposalToolInputSchema = z
     const existingJobId = value.jobDraft?.existingJobId ?? value.target?.jobId;
 
     if (type === "UPDATE_CUSTOMER") {
-      if (!value.target?.customerId && !value.customer.matchedCustomerId) {
+      if (
+        !value.target?.customerId &&
+        !value.customer.matchedCustomerId &&
+        value.customer.status !== "ambiguous"
+      ) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["target", "customerId"],
@@ -416,17 +588,6 @@ export const saveTypedProposalToolInputSchema = z
     }
 
     if (
-      ["UPDATE_JOB", "ASSIGN_JOB", "SCHEDULE_JOB", "CHANGE_JOB_STATUS", "CANCEL_JOB"].includes(type) &&
-      !existingJobId
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["jobDraft", "existingJobId"],
-        message: `${type} proposals require an existing job ID.`,
-      });
-    }
-
-    if (
       ["ASSIGN_JOB", "SCHEDULE_JOB"].includes(type) &&
       value.assigneeDraft?.status === "matched" &&
       !value.assigneeDraft.membershipId
@@ -458,6 +619,9 @@ export const saveTypedProposalToolInputSchema = z
 export type ConversationIdParamInput = z.infer<typeof conversationIdParamSchema>;
 export type ProposalIdParamInput = z.infer<typeof proposalIdParamSchema>;
 export type SendMessageInput = z.infer<typeof sendMessageSchema>;
+export type UpdateProposalReviewInput = z.infer<
+  typeof updateProposalReviewSchema
+>;
 export type SaveDispatchProposalToolInput = z.infer<
   typeof saveDispatchProposalToolInputSchema
 >;

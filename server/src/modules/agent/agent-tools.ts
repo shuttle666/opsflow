@@ -311,12 +311,16 @@ toolMap.set("list_activity_feed", {
 toolMap.set("resolve_time_window", {
   definition: {
     name: "resolve_time_window",
-    description: "Validate a proposed schedule time window after the model has converted natural language into ISO date-times.",
+    description: "Validate and convert a proposed schedule time window. Prefer localDate/localStartTime/localEndTime with timezone; do not calculate UTC offsets yourself. Use localEndDate only when the end date differs from the start date.",
     input_schema: {
       type: "object" as const,
       properties: {
         scheduledStartAt: { type: "string" },
         scheduledEndAt: { type: "string" },
+        localDate: { type: "string", description: "Local date in YYYY-MM-DD in the provided timezone." },
+        localEndDate: { type: "string", description: "Optional local end date in YYYY-MM-DD when the window ends on a different local date." },
+        localStartTime: { type: "string", description: "Local start time in HH:mm in the provided timezone." },
+        localEndTime: { type: "string", description: "Local end time in HH:mm in the provided timezone." },
         timezone: { type: "string" },
       },
       required: ["timezone"],
@@ -404,6 +408,10 @@ toolMap.set("save_dispatch_proposal", {
           properties: {
             scheduledStartAt: { type: "string" },
             scheduledEndAt: { type: "string" },
+            localDate: { type: "string" },
+            localEndDate: { type: "string" },
+            localStartTime: { type: "string" },
+            localEndTime: { type: "string" },
             timezone: { type: "string" },
           },
           required: ["timezone"],
@@ -460,7 +468,9 @@ toolMap.set("save_dispatch_proposal", {
           intent: validatedInput.intent,
           customer: validatedInput.customer,
           jobDraft: {
-            existingJobId: validatedInput.jobDraft.existingJobId,
+            ...(validatedInput.jobDraft.existingJobId
+              ? { existingJobId: validatedInput.jobDraft.existingJobId }
+              : {}),
             title: validatedInput.jobDraft.title,
             serviceAddress: validatedInput.jobDraft.serviceAddress,
             description: validatedInput.jobDraft.description ?? null,
@@ -484,7 +494,7 @@ toolMap.set("save_dispatch_proposal", {
 toolMap.set("save_typed_proposal", {
   definition: {
     name: "save_typed_proposal",
-    description: "Save a typed OpsFlow proposal for manager confirmation. Use this for new agent workflows instead of the legacy dispatch proposal tool.",
+    description: "Save a typed OpsFlow proposal for manager confirmation. Use this for new agent workflows instead of the legacy dispatch proposal tool. For ambiguous write requests, save an unresolved proposal and include resolver candidates under review.candidates instead of asking only in chat.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -552,6 +562,10 @@ toolMap.set("save_typed_proposal", {
           properties: {
             scheduledStartAt: { type: "string" },
             scheduledEndAt: { type: "string" },
+            localDate: { type: "string" },
+            localEndDate: { type: "string" },
+            localStartTime: { type: "string" },
+            localEndTime: { type: "string" },
             timezone: { type: "string" },
           },
           required: ["timezone"],
@@ -613,6 +627,53 @@ toolMap.set("save_typed_proposal", {
             },
             required: ["field", "from", "to"],
           },
+        },
+        review: {
+          type: "object",
+          properties: {
+            candidates: {
+              type: "object",
+              properties: {
+                jobs: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      id: { type: "string" },
+                      title: { type: "string" },
+                      serviceAddress: { type: "string" },
+                      status: {
+                        type: "string",
+                        enum: [
+                          "NEW",
+                          "SCHEDULED",
+                          "IN_PROGRESS",
+                          "PENDING_REVIEW",
+                          "COMPLETED",
+                          "CANCELLED",
+                        ],
+                      },
+                      scheduledStartAt: { type: ["string", "null"] },
+                      scheduledEndAt: { type: ["string", "null"] },
+                      assignedToName: { type: ["string", "null"] },
+                      customer: {
+                        type: "object",
+                        properties: {
+                          id: { type: "string" },
+                          name: { type: "string" },
+                        },
+                        required: ["id", "name"],
+                      },
+                      score: { type: "number" },
+                    },
+                    required: ["id", "title", "status"],
+                  },
+                },
+              },
+              required: [],
+            },
+          },
+          required: [],
         },
         warnings: {
           type: "array",

@@ -47,3 +47,77 @@ button {
 ::selection {
   background: var(--color-brand-soft);
 }
+
+@keyframes proposalGlowRotate {
+  to {
+    transform: translate(-50%, -50%) rotate(1turn);
+  }
+}
+
+.proposal-glow-shell {
+  position: relative;
+  isolation: isolate;
+  border-radius: 0.875rem;
+  padding: 2px;
+  background: color-mix(in srgb, var(--color-app-panel) 88%, var(--color-brand));
+  box-shadow:
+    0 0 28px -18px var(--color-brand),
+    var(--shadow-floating);
+}
+
+.proposal-glow-border,
+.proposal-glow-halo {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.proposal-glow-border {
+  z-index: 0;
+}
+
+.proposal-glow-halo {
+  inset: -8px;
+  z-index: -1;
+  filter: blur(14px);
+  opacity: 0.18;
+}
+
+.proposal-glow-border::before,
+.proposal-glow-halo::before {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(130%, 820px);
+  aspect-ratio: 1;
+  background:
+    conic-gradient(
+      from 0deg,
+      color-mix(in srgb, var(--color-brand) 75%, #22d3ee),
+      #22d3ee 70deg,
+      color-mix(in srgb, var(--color-brand-strong) 70%, #c084fc) 145deg,
+      #f472b6 220deg,
+      var(--color-brand) 300deg,
+      color-mix(in srgb, var(--color-brand) 75%, #22d3ee) 360deg
+    );
+  content: "";
+  transform: translate(-50%, -50%) rotate(0deg);
+  animation: proposalGlowRotate 5.5s linear infinite;
+}
+
+.proposal-glow-content {
+  position: relative;
+  z-index: 2;
+  border-radius: 0.75rem;
+  background: var(--color-app-panel);
+  box-shadow: var(--shadow-floating);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .proposal-glow-border::before,
+  .proposal-glow-halo::before {
+    animation: none;
+  }
+}

@@ -16,6 +16,80 @@ export type AgentProposalChange = {
   to: string | null;
 };
 
+export type AgentProposalReview = {
+  status: "READY" | "NEEDS_RESOLUTION" | "HAS_WARNINGS";
+  blockers: string[];
+  warnings: string[];
+  snapshots?: {
+    customer?: {
+      id: string;
+      name: string;
+      phone: string | null;
+      email: string | null;
+      notes: string | null;
+    };
+    job?: {
+      id: string;
+      title: string;
+      serviceAddress: string;
+      description: string | null;
+      status: string;
+      scheduledStartAt: string | null;
+      scheduledEndAt: string | null;
+      assignedToName: string | null;
+      customer: {
+        id: string;
+        name: string;
+      };
+    };
+    assignee?: {
+      membershipId: string;
+      userId: string;
+      displayName: string;
+      email: string;
+    };
+  };
+  candidates?: {
+    customers?: Array<{
+      id: string;
+      name: string;
+    }>;
+    jobs?: Array<{
+      id: string;
+      title: string;
+      serviceAddress?: string;
+      status: string;
+      scheduledStartAt: string | null;
+      scheduledEndAt: string | null;
+      assignedToName: string | null;
+      customer?: {
+        id: string;
+        name: string;
+      };
+    }>;
+    staff?: Array<{
+      membershipId: string;
+      userId: string;
+      displayName: string;
+    }>;
+  };
+  scheduleConflicts?: {
+    hasConflict: boolean;
+    conflicts: Array<{
+      id: string;
+      title: string;
+      serviceAddress: string;
+      status: string;
+      scheduledStartAt: string;
+      scheduledEndAt: string;
+      customer: {
+        id: string;
+        name: string;
+      };
+    }>;
+  };
+};
+
 export type DispatchProposal = {
   id: string;
   conversationId: string;
@@ -47,6 +121,10 @@ export type DispatchProposal = {
   scheduleDraft: {
     scheduledStartAt?: string | null;
     scheduledEndAt?: string | null;
+    localDate?: string | null;
+    localEndDate?: string | null;
+    localStartTime?: string | null;
+    localEndTime?: string | null;
     timezone: string;
   };
   assigneeDraft?: {
@@ -65,9 +143,25 @@ export type DispatchProposal = {
     reason?: string | null;
   };
   changes?: AgentProposalChange[];
+  review?: AgentProposalReview;
   warnings: string[];
   confidence: number;
   createdAt: string;
+};
+
+export type UpdateProposalReviewInput = {
+  customerId?: string;
+  jobId?: string;
+  membershipId?: string;
+  scheduleDraft?: {
+    scheduledStartAt?: string | null;
+    scheduledEndAt?: string | null;
+    localDate?: string | null;
+    localEndDate?: string | null;
+    localStartTime?: string | null;
+    localEndTime?: string | null;
+    timezone?: string;
+  };
 };
 
 export type ChatToolCall = {

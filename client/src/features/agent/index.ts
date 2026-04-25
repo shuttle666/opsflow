@@ -5,4 +5,5 @@ export {
   listConversationsRequest,
   getConversationRequest,
   openMessageStreamRequest,
+  updateProposalReviewRequest,
 } from "./agent-api";

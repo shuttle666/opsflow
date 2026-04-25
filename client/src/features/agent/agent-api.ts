@@ -8,6 +8,8 @@ import type {
   ConversationDetail,
   ConversationSummary,
   SSEEvent,
+  DispatchProposal,
+  UpdateProposalReviewInput,
 } from "@/types/agent";
 
 function requireData<T>(response: ApiSuccessResponse<T>, fallbackMessage: string) {
@@ -185,4 +187,21 @@ export async function confirmProposalRequest(
   );
 
   return requireData(response, "Confirm proposal response is missing payload.");
+}
+
+export async function updateProposalReviewRequest(
+  accessToken: string,
+  conversationId: string,
+  proposalId: string,
+  input: UpdateProposalReviewInput,
+) {
+  const response = await apiClient.patch<ApiSuccessResponse<DispatchProposal>>(
+    `/agent/conversations/${conversationId}/proposals/${proposalId}`,
+    input,
+    {
+      headers: authHeader(accessToken),
+    },
+  );
+
+  return requireData(response, "Update proposal response is missing payload.");
 }

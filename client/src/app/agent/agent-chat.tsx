@@ -6,6 +6,7 @@ import Markdown from "react-markdown";
 import {
   Briefcase,
   Calendar,
+  ChevronDown,
   CheckCircle2,
   History,
   Search,
@@ -21,7 +22,7 @@ import {
   primaryButtonClassName,
   surfaceClassName,
 } from "@/components/ui/styles";
-import { confirmProposalRequest, consumeMessageStream, createConversationRequest, getConversationRequest, listConversationsRequest, openMessageStreamRequest } from "@/features/agent";
+import { confirmProposalRequest, consumeMessageStream, createConversationRequest, getConversationRequest, listConversationsRequest, openMessageStreamRequest, updateProposalReviewRequest } from "@/features/agent";
 import { formatScheduleRange } from "@/features/job";
 import { useAuthStore } from "@/store/auth-store";
 import type {
@@ -29,6 +30,7 @@ import type {
   ConfirmProposalResult,
   ConversationSummary,
   DispatchProposal,
+  UpdateProposalReviewInput,
 } from "@/types/agent";
 
 type ActiveToolCall = {
@@ -228,15 +230,266 @@ function ToolCallIndicator({ toolCall }: { toolCall: ActiveToolCall }) {
   );
 }
 
+function proposalTypeLabel(type: string) {
+  return type.replaceAll("_", " ");
+}
+
+function shortId(id: string | undefined) {
+  return id ? id.slice(0, 8) : "unresolved";
+}
+
+function formatValue(value: string | null | undefined) {
+  return value?.trim() ? value : "blank";
+}
+
+function toDateTimeLocalValue(value: string | null | undefined, timeZone?: string) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  if (timeZone) {
+    try {
+      const parts = Object.fromEntries(
+        new Intl.DateTimeFormat("en-US", {
+          timeZone,
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          hourCycle: "h23",
+        })
+          .formatToParts(date)
+          .filter((part) => part.type !== "literal")
+          .map((part) => [part.type, part.value]),
+      );
+
+      return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+    } catch {
+      // Fall back to the browser timezone if the proposal timezone is invalid.
+    }
+  }
+
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function proposalScheduleInputValue(
+  proposal: DispatchProposal,
+  field: "start" | "end",
+) {
+  const timezone = proposal.scheduleDraft.timezone;
+
+  if (field === "start" && proposal.scheduleDraft.localDate && proposal.scheduleDraft.localStartTime) {
+    return `${proposal.scheduleDraft.localDate}T${proposal.scheduleDraft.localStartTime}`;
+  }
+
+  if (field === "end" && proposal.scheduleDraft.localEndTime) {
+    const localEndDate = proposal.scheduleDraft.localEndDate ?? proposal.scheduleDraft.localDate;
+
+    if (localEndDate) {
+      return `${localEndDate}T${proposal.scheduleDraft.localEndTime}`;
+    }
+  }
+
+  return toDateTimeLocalValue(
+    field === "start"
+      ? proposal.scheduleDraft.scheduledStartAt
+      : proposal.scheduleDraft.scheduledEndAt,
+    timezone,
+  );
+}
+
+function parseDateTimeLocalValue(value: string) {
+  const match = value.match(/^(\d{4}-\d{2}-\d{2})T([0-2]\d:[0-5]\d)$/u);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    localDate: match[1],
+    localTime: match[2],
+  };
+}
+
+function scheduleUpdateFromLocalInputs(
+  startValue: string,
+  endValue: string,
+  timezone: string,
+): NonNullable<UpdateProposalReviewInput["scheduleDraft"]> {
+  const start = parseDateTimeLocalValue(startValue);
+  const end = parseDateTimeLocalValue(endValue);
+
+  if (!start && !end) {
+    return {
+      scheduledStartAt: null,
+      scheduledEndAt: null,
+      timezone,
+    };
+  }
+
+  if (!start || !end) {
+    return {
+      localDate: start?.localDate ?? null,
+      localStartTime: start?.localTime ?? null,
+      localEndTime: end?.localTime ?? null,
+      timezone,
+    };
+  }
+
+  return {
+    localDate: start.localDate,
+    ...(end.localDate !== start.localDate ? { localEndDate: end.localDate } : {}),
+    localStartTime: start.localTime,
+    localEndTime: end.localTime,
+    timezone,
+  };
+}
+
+function ReviewStatusBadge({ status }: { status: string }) {
+  const className =
+    status === "READY"
+      ? "bg-[var(--color-success-soft)] text-[var(--color-success)]"
+      : status === "HAS_WARNINGS"
+        ? "bg-[var(--color-warning-soft)] text-[var(--color-warning)]"
+        : "bg-[var(--color-danger-soft)] text-[var(--color-danger)]";
+
+  return (
+    <span className={cn("rounded-lg px-2.5 py-1 text-[11px] font-semibold uppercase", className)}>
+      {status.replaceAll("_", " ")}
+    </span>
+  );
+}
+
+function ChangeRows({ rows }: { rows: Array<{ label: string; from: string | null | undefined; to: string | null | undefined }> }) {
+  if (rows.length === 0) {
+    return (
+      <p className="text-sm text-[var(--color-text-secondary)]">
+        No field-level changes were included in this proposal.
+      </p>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-[var(--color-app-border)]">
+      {rows.map((row) => (
+        <div
+          key={`${row.label}-${row.from}-${row.to}`}
+          className="grid gap-2 border-b border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3 py-2 text-sm last:border-b-0 sm:grid-cols-[140px_1fr_1fr]"
+        >
+          <div className="font-semibold text-[var(--color-text)]">{row.label}</div>
+          <div className="text-[var(--color-text-secondary)]">
+            <span className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">From</span>
+            <p className="mt-0.5 break-words">{formatValue(row.from)}</p>
+          </div>
+          <div className="text-[var(--color-text-secondary)]">
+            <span className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">To</span>
+            <p className="mt-0.5 break-words font-medium text-[var(--color-text)]">{formatValue(row.to)}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function buildChangeRows(proposal: DispatchProposal) {
+  const type = proposal.type ?? (
+    proposal.intent === "create_customer"
+      ? "CREATE_CUSTOMER"
+      : proposal.jobDraft.existingJobId
+        ? "UPDATE_JOB"
+        : "CREATE_JOB"
+  );
+  const jobSnapshot = proposal.review?.snapshots?.job;
+  const rows: Array<{ label: string; from: string | null | undefined; to: string | null | undefined }> = [];
+
+  if (type === "UPDATE_CUSTOMER") {
+    return (proposal.changes ?? []).map((change) => ({
+      label: change.field,
+      from: change.from,
+      to: change.to,
+    }));
+  }
+
+  if (type === "CREATE_CUSTOMER") {
+    return [
+      { label: "Customer", from: null, to: proposal.customer.name ?? proposal.customer.query },
+      { label: "Phone", from: null, to: proposal.customer.phone },
+      { label: "Email", from: null, to: proposal.customer.email },
+      { label: "Notes", from: null, to: proposal.customer.notes },
+    ].filter((row) => row.to);
+  }
+
+  if (type === "CREATE_JOB") {
+    rows.push({ label: "Job", from: null, to: proposal.jobDraft.title });
+    rows.push({ label: "Service address", from: null, to: proposal.jobDraft.serviceAddress });
+    rows.push({ label: "Description", from: null, to: proposal.jobDraft.description });
+  } else {
+    rows.push({ label: "Job", from: jobSnapshot?.title, to: proposal.jobDraft.title });
+    if (proposal.jobDraft.serviceAddress) {
+      rows.push({ label: "Service address", from: jobSnapshot?.serviceAddress, to: proposal.jobDraft.serviceAddress });
+    }
+    if (proposal.jobDraft.description !== undefined) {
+      rows.push({ label: "Description", from: jobSnapshot?.description, to: proposal.jobDraft.description });
+    }
+  }
+
+  if (proposal.assigneeDraft?.status === "matched") {
+    rows.push({
+      label: "Assignee",
+      from: jobSnapshot?.assignedToName,
+      to: proposal.assigneeDraft.displayName,
+    });
+  }
+
+  if (proposal.scheduleDraft.scheduledStartAt || proposal.scheduleDraft.scheduledEndAt) {
+    rows.push({
+      label: "Schedule",
+      from: formatScheduleRange(
+        jobSnapshot?.scheduledStartAt ?? null,
+        jobSnapshot?.scheduledEndAt ?? null,
+        proposal.scheduleDraft.timezone,
+      ),
+      to: formatScheduleRange(
+        proposal.scheduleDraft.scheduledStartAt ?? null,
+        proposal.scheduleDraft.scheduledEndAt ?? null,
+        proposal.scheduleDraft.timezone,
+      ),
+    });
+  }
+
+  if (proposal.statusDraft?.toStatus) {
+    rows.push({
+      label: "Status",
+      from: jobSnapshot?.status,
+      to: proposal.statusDraft.toStatus,
+    });
+  }
+
+  return rows;
+}
+
 function ProposalCard({
   proposal,
   onConfirm,
+  onUpdate,
+  onHide,
   confirming,
+  updating,
   result,
 }: {
   proposal: DispatchProposal;
   onConfirm: () => void;
+  onUpdate: (input: UpdateProposalReviewInput) => Promise<void>;
+  onHide?: () => void;
   confirming: boolean;
+  updating: boolean;
   result: ConfirmProposalResult | null;
 }) {
   const proposalType = proposal.type ?? (
@@ -246,14 +499,37 @@ function ProposalCard({
         ? "UPDATE_JOB"
         : "CREATE_JOB"
   );
-  const isCustomerOnly = proposalType === "CREATE_CUSTOMER" || proposalType === "UPDATE_CUSTOMER";
-  const isCustomerUpdate = proposalType === "UPDATE_CUSTOMER";
-  const isExistingJobUpdate = Boolean(proposal.jobDraft.existingJobId);
-  const proposalTitle = isCustomerUpdate
+  const [scheduledStartAt, setScheduledStartAt] = useState(
+    proposalScheduleInputValue(proposal, "start"),
+  );
+  const [scheduledEndAt, setScheduledEndAt] = useState(
+    proposalScheduleInputValue(proposal, "end"),
+  );
+  const review = proposal.review;
+  const blockers = review?.blockers ?? [];
+  const warnings = review?.warnings ?? proposal.warnings;
+  const hasBlockers = blockers.length > 0;
+  const canEditSchedule = Boolean(
+    proposalType === "SCHEDULE_JOB" ||
+      proposal.scheduleDraft.scheduledStartAt ||
+      proposal.scheduleDraft.scheduledEndAt,
+  );
+  const proposalTitle = proposalType === "UPDATE_CUSTOMER"
     ? `Update customer: ${proposal.customer.name ?? proposal.customer.query ?? "Customer"}`
-    : isCustomerOnly
+    : proposalType === "CREATE_CUSTOMER"
       ? `Create customer: ${proposal.customer.name ?? "New customer"}`
       : proposal.jobDraft.title;
+  const customerId = proposal.target?.customerId ?? proposal.customer.matchedCustomerId;
+  const jobId = proposal.target?.jobId ?? proposal.jobDraft.existingJobId;
+  const assignee = review?.snapshots?.assignee;
+  const changeRows = buildChangeRows(proposal);
+
+  useEffect(() => {
+    setScheduledStartAt(proposalScheduleInputValue(proposal, "start"));
+    setScheduledEndAt(proposalScheduleInputValue(proposal, "end"));
+  }, [
+    proposal,
+  ]);
 
   return (
     <div className="overflow-hidden rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] shadow-[var(--shadow-panel)]">
@@ -261,140 +537,272 @@ function ProposalCard({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-semibold uppercase text-[var(--color-brand)]">
-              {proposalType.replaceAll("_", " ")} Proposal
+              {proposalTypeLabel(proposalType)} approval
             </p>
             <h3 className="mt-1 text-lg font-bold text-[var(--color-text)]">
               {proposalTitle}
             </h3>
-            <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
-              {isExistingJobUpdate ? "Update existing job - " : ""}
-              Confidence {(proposal.confidence * 100).toFixed(0)}%
-            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[var(--color-text-secondary)]">
+              <ReviewStatusBadge status={review?.status ?? "READY"} />
+              <span>Confidence {(proposal.confidence * 100).toFixed(0)}%</span>
+              {jobId ? <span>Job #{shortId(jobId)}</span> : null}
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={confirming}
-            className={primaryButtonClassName}
-          >
-            {confirming ? "Confirming..." : "Confirm plan"}
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {onHide ? (
+              <button
+                type="button"
+                onClick={onHide}
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] text-[var(--color-text-muted)] transition hover:border-[var(--color-app-border-strong)] hover:text-[var(--color-text)]"
+                aria-label="Hide proposal panel"
+                title="Hide proposal panel"
+              >
+                <ChevronDown className="h-4 w-4" />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={confirming || hasBlockers}
+              className={primaryButtonClassName}
+            >
+              {confirming ? "Confirming..." : "Confirm plan"}
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="p-5">
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4">
-          <p className="text-xs font-semibold uppercase text-[var(--color-text-muted)]">
-            Customer
-          </p>
-          <p className="mt-2 text-sm font-semibold text-[var(--color-text)]">
-            {proposal.customer.status === "matched"
-              ? proposal.customer.matches?.[0]?.name ?? proposal.customer.query ?? "Matched customer"
-              : proposal.customer.name ?? proposal.customer.query ?? "Customer to be resolved"}
-          </p>
-          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-            Status: {proposal.customer.status}
-          </p>
-          {proposal.customer.phone ? (
-            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Phone: {proposal.customer.phone}</p>
-          ) : null}
-          {proposal.customer.email ? (
-            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Email: {proposal.customer.email}</p>
-          ) : null}
-        </div>
-
-        <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4">
-          <p className="text-xs font-semibold uppercase text-[var(--color-text-muted)]">
-            {isCustomerUpdate ? "Profile changes" : isCustomerOnly ? "Intent" : "Schedule"}
-          </p>
-          <p className="mt-2 text-sm font-semibold text-[var(--color-text)]">
-            {isCustomerUpdate
-              ? `${proposal.changes?.length ?? 0} field${proposal.changes?.length === 1 ? "" : "s"}`
-              : isCustomerOnly
-              ? "Create customer record"
-              : formatScheduleRange(
-                  proposal.scheduleDraft.scheduledStartAt ?? null,
-                  proposal.scheduleDraft.scheduledEndAt ?? null,
-                )}
-          </p>
-          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-            {isCustomerUpdate
-              ? `Proposal type: ${proposalType}`
-              : isCustomerOnly
-              ? `Proposal type: ${proposal.intent}`
-              : `Timezone: ${proposal.scheduleDraft.timezone}`}
-          </p>
-          {isCustomerUpdate && proposal.changes?.length ? (
-            <div className="mt-2 space-y-1 text-sm text-[var(--color-text-secondary)]">
-              {proposal.changes.map((change) => (
-                <p key={change.field}>
-                  <span className="font-semibold text-[var(--color-text)]">{change.field}</span>
-                  {": "}
-                  {change.from ?? "blank"} {"->"} {change.to ?? "blank"}
-                </p>
-              ))}
+        <div className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
+          <div className="space-y-4">
+            <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4">
+              <p className="text-xs font-semibold uppercase text-[var(--color-text-muted)]">
+                Target objects
+              </p>
+              <div className="mt-3 space-y-3 text-sm">
+                <div>
+                  <p className="font-semibold text-[var(--color-text)]">
+                    Customer
+                  </p>
+                  <p className="mt-1 text-[var(--color-text-secondary)]">
+                    {review?.snapshots?.customer?.name ?? proposal.customer.name ?? proposal.customer.query ?? "Unresolved customer"}
+                  </p>
+                  {customerId ? (
+                    <Link href={`/customers/${customerId}`} className="mt-1 inline-block text-[12px] font-semibold text-[var(--color-brand)] underline">
+                      Open customer #{shortId(customerId)}
+                    </Link>
+                  ) : null}
+                </div>
+                {proposalType !== "CREATE_CUSTOMER" && proposalType !== "UPDATE_CUSTOMER" ? (
+                  <div>
+                    <p className="font-semibold text-[var(--color-text)]">Job</p>
+                    <p className="mt-1 text-[var(--color-text-secondary)]">
+                      {review?.snapshots?.job?.title ?? proposal.jobDraft.title}
+                    </p>
+                    {jobId ? (
+                      <Link href={`/jobs/${jobId}`} className="mt-1 inline-block text-[12px] font-semibold text-[var(--color-brand)] underline">
+                        Open job #{shortId(jobId)}
+                      </Link>
+                    ) : (
+                      <p className="mt-1 text-[12px] font-semibold text-[var(--color-danger)]">
+                        Existing job unresolved
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+                {proposalType !== "CREATE_CUSTOMER" && proposalType !== "UPDATE_CUSTOMER" ? (
+                  <div>
+                    <p className="font-semibold text-[var(--color-text)]">Staff</p>
+                    <p className="mt-1 text-[var(--color-text-secondary)]">
+                      {assignee?.displayName ?? proposal.assigneeDraft?.displayName ?? "Unassigned"}
+                    </p>
+                    {assignee ? (
+                      <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+                        Membership #{shortId(assignee.membershipId)} · User #{shortId(assignee.userId)}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             </div>
-          ) : null}
-        </div>
 
-        <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4">
-          <p className="text-xs font-semibold uppercase text-[var(--color-text-muted)]">
-            {isCustomerOnly ? "Customer details" : "Assignee"}
-          </p>
-          <p className="mt-2 text-sm font-semibold text-[var(--color-text)]">
-            {isCustomerUpdate
-              ? proposal.customer.phone ?? proposal.customer.email ?? "Existing customer"
-              : isCustomerOnly
-              ? proposal.customer.phone ?? proposal.customer.email ?? "No contact details provided"
-              : proposal.assigneeDraft?.displayName ?? "Unassigned"}
-          </p>
-          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-            {isCustomerOnly
-              ? proposal.customer.notes ?? "No extra notes"
-              : `Status: ${proposal.assigneeDraft?.status ?? "missing"}`}
-          </p>
-        </div>
+            {blockers.length > 0 ? (
+              <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-danger-soft)] p-4">
+                <p className="text-xs font-semibold uppercase text-[var(--color-danger)]">
+                  Resolve before confirming
+                </p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[var(--color-text)]">
+                  {blockers.map((blocker) => (
+                    <li key={blocker}>{blocker}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
 
-        <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4">
-          <p className="text-xs font-semibold uppercase text-[var(--color-text-muted)]">
-            {isCustomerOnly ? "Job draft" : "Service address"}
-          </p>
-          <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
-            {isCustomerUpdate
-              ? "Confirming this proposal updates the customer profile only."
-              : isCustomerOnly
-              ? "No job will be created. Confirming this proposal creates only the customer record."
-              : proposal.jobDraft.serviceAddress?.trim() ||
-                (proposal.jobDraft.existingJobId
-                  ? "Existing job address unchanged."
-                  : "No service address provided.")}
-          </p>
-          {!isCustomerOnly && proposal.jobDraft.existingJobId ? (
-            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-              Confirming this proposal updates the existing job instead of creating a duplicate.
-            </p>
-          ) : null}
-          {!isCustomerOnly && proposal.jobDraft.description?.trim() ? (
-            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-              {proposal.jobDraft.description}
-            </p>
-          ) : null}
-        </div>
-      </div>
+            {warnings.length > 0 ? (
+              <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-warning-soft)] p-4">
+                <p className="text-xs font-semibold uppercase text-[var(--color-warning)]">
+                  Warnings
+                </p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[var(--color-text)]">
+                  {warnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
 
-      {proposal.warnings.length > 0 ? (
-        <div className="mt-4 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-warning-soft)] p-4">
-          <p className="text-xs font-semibold uppercase text-[var(--color-warning)]">
-            Warnings
-          </p>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[var(--color-text)]">
-            {proposal.warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
-            ))}
-          </ul>
+          <div className="space-y-4">
+            <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4">
+              <p className="text-xs font-semibold uppercase text-[var(--color-text-muted)]">
+                What will change
+              </p>
+              <div className="mt-3">
+                <ChangeRows rows={changeRows} />
+              </div>
+            </div>
+
+            {(review?.candidates?.customers?.length || review?.candidates?.jobs?.length || review?.candidates?.staff?.length) ? (
+              <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4">
+                <p className="text-xs font-semibold uppercase text-[var(--color-text-muted)]">
+                  Candidate selection
+                </p>
+                {review?.candidates?.customers?.length ? (
+                  <div className="mt-3">
+                    <p className="text-sm font-semibold text-[var(--color-text)]">Customer</p>
+                    <div className="mt-2 grid gap-2">
+                      {review.candidates.customers.map((candidate) => (
+                        <button
+                          key={candidate.id}
+                          type="button"
+                          disabled={updating || candidate.id === customerId}
+                          onClick={() => void onUpdate({ customerId: candidate.id })}
+                          className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3 py-2 text-left text-sm text-[var(--color-text)] transition hover:border-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <span className="font-semibold">{candidate.name}</span>
+                          <span className="ml-2 text-[12px] text-[var(--color-text-muted)]">#{shortId(candidate.id)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {review?.candidates?.jobs?.length ? (
+                  <div className="mt-4">
+                    <p className="text-sm font-semibold text-[var(--color-text)]">Existing job</p>
+                    <div className="mt-2 grid gap-2">
+                      {review.candidates.jobs.map((candidate) => (
+                        <button
+                          key={candidate.id}
+                          type="button"
+                          disabled={updating || candidate.id === jobId}
+                          onClick={() => void onUpdate({ jobId: candidate.id })}
+                          className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3 py-2 text-left text-sm text-[var(--color-text)] transition hover:border-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <span className="font-semibold">{candidate.title}</span>
+                          <span className="ml-2 text-[12px] text-[var(--color-text-muted)]">#{shortId(candidate.id)}</span>
+                          <p className="mt-1 text-[12px] text-[var(--color-text-secondary)]">
+                            {candidate.serviceAddress ?? "No address"} · {candidate.status}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {review?.candidates?.staff?.length ? (
+                  <div className="mt-4">
+                    <p className="text-sm font-semibold text-[var(--color-text)]">Staff</p>
+                    <div className="mt-2 grid gap-2">
+                      {review.candidates.staff.map((candidate) => (
+                        <button
+                          key={candidate.membershipId}
+                          type="button"
+                          disabled={updating || candidate.membershipId === proposal.assigneeDraft?.membershipId}
+                          onClick={() => void onUpdate({ membershipId: candidate.membershipId })}
+                          className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3 py-2 text-left text-sm text-[var(--color-text)] transition hover:border-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <span className="font-semibold">{candidate.displayName}</span>
+                          <span className="ml-2 text-[12px] text-[var(--color-text-muted)]">#{shortId(candidate.membershipId)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {canEditSchedule ? (
+              <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4">
+                <p className="text-xs font-semibold uppercase text-[var(--color-text-muted)]">
+                  Time window
+                </p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <label className="text-[12px] font-semibold text-[var(--color-text-secondary)]">
+                    Start
+                    <input
+                      type="datetime-local"
+                      value={scheduledStartAt}
+                      onChange={(event) => setScheduledStartAt(event.target.value)}
+                      className="mt-1 h-9 w-full rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-brand)]"
+                    />
+                  </label>
+                  <label className="text-[12px] font-semibold text-[var(--color-text-secondary)]">
+                    End
+                    <input
+                      type="datetime-local"
+                      value={scheduledEndAt}
+                      onChange={(event) => setScheduledEndAt(event.target.value)}
+                      className="mt-1 h-9 w-full rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-brand)]"
+                    />
+                  </label>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[12px] text-[var(--color-text-muted)]">
+                    Timezone: {proposal.scheduleDraft.timezone}
+                  </p>
+                  <button
+                    type="button"
+                    disabled={updating}
+                    onClick={() => void onUpdate({
+                      scheduleDraft: scheduleUpdateFromLocalInputs(
+                        scheduledStartAt,
+                        scheduledEndAt,
+                        proposal.scheduleDraft.timezone,
+                      ),
+                    })}
+                    className="inline-flex h-8 items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3 text-[12px] font-semibold text-[var(--color-brand)] transition hover:border-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {updating ? "Updating..." : "Update time"}
+                  </button>
+                </div>
+                {review?.scheduleConflicts?.hasConflict ? (
+                  <div className="mt-3 rounded-lg bg-[var(--color-warning-soft)] p-3">
+                    <p className="text-sm font-semibold text-[var(--color-warning)]">
+                      Schedule conflict detected
+                    </p>
+                    <div className="mt-2 space-y-2">
+                      {review.scheduleConflicts.conflicts.map((conflict) => (
+                        <div key={conflict.id} className="text-[12px] text-[var(--color-text)]">
+                          <p className="font-semibold">{conflict.title}</p>
+                          <p className="text-[var(--color-text-secondary)]">
+                            {formatScheduleRange(
+                              conflict.scheduledStartAt,
+                              conflict.scheduledEndAt,
+                              proposal.scheduleDraft.timezone,
+                            )}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-[12px] text-[var(--color-text-secondary)]">
+                      Managers can still confirm this plan if the overlap is intentional.
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
-      ) : null}
 
       {result ? (
         <div className="mt-4 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-success-soft)] p-4 text-sm text-[var(--color-success)]">
@@ -544,11 +952,14 @@ export function AgentChat() {
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
   const [pendingProposal, setPendingProposal] = useState<DispatchProposal | null>(null);
+  const [isProposalPanelOpen, setIsProposalPanelOpen] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [isUpdatingProposal, setIsUpdatingProposal] = useState(false);
   const [confirmResult, setConfirmResult] = useState<ConfirmProposalResult | null>(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const lastOpenedProposalIdRef = useRef<string | null>(null);
   const activeConversationKey = useMemo(
     () => activeConversationStorageKey(userId, currentTenant?.tenantId),
     [currentTenant?.tenantId, userId],
@@ -572,6 +983,21 @@ export function AgentChat() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, streamingText, activeToolCalls, scrollToBottom]);
+
+  useEffect(() => {
+    const proposalId = pendingProposal?.id ?? null;
+
+    if (!proposalId) {
+      lastOpenedProposalIdRef.current = null;
+      setIsProposalPanelOpen(false);
+      return;
+    }
+
+    if (lastOpenedProposalIdRef.current !== proposalId) {
+      lastOpenedProposalIdRef.current = proposalId;
+      setIsProposalPanelOpen(true);
+    }
+  }, [pendingProposal?.id]);
 
   const loadConversation = useCallback(
     async (id: string, options?: { preserveConfirmResult?: boolean }) => {
@@ -779,6 +1205,37 @@ export function AgentChat() {
     }
   }, [conversationId, loadConversation, pendingProposal, refreshConversations, withAccessTokenRetry]);
 
+  const handleProposalReviewUpdate = useCallback(async (input: UpdateProposalReviewInput) => {
+    if (!conversationId || !pendingProposal) {
+      return;
+    }
+
+    setIsUpdatingProposal(true);
+    setError(null);
+    setConfirmResult(null);
+
+    try {
+      const updated = await withAccessTokenRetry((accessToken) =>
+        updateProposalReviewRequest(accessToken, conversationId, pendingProposal.id, input),
+      );
+      setPendingProposal(updated);
+      setMessages((current) =>
+        current.map((message) =>
+          message.proposal?.id === updated.id ? { ...message, proposal: updated } : message,
+        ),
+      );
+      await refreshConversations();
+    } catch (updateError) {
+      setError(
+        updateError instanceof Error
+          ? updateError.message
+          : "Failed to update dispatch plan.",
+      );
+    } finally {
+      setIsUpdatingProposal(false);
+    }
+  }, [conversationId, pendingProposal, refreshConversations, withAccessTokenRetry]);
+
   const historyItems = useMemo(() => conversations, [conversations]);
   const isEmptyConversation = messages.length === 0 && !isStreaming;
 
@@ -893,17 +1350,48 @@ export function AgentChat() {
           )}
         </div>
 
-        {pendingProposal ? (
-          <div className="border-t border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-4 py-4 sm:px-6 lg:px-8">
-            <div className="mx-auto w-full max-w-6xl">
-              <ProposalCard
-                proposal={pendingProposal}
-                onConfirm={handleConfirmProposal}
-                confirming={isConfirming}
-                result={confirmResult}
-              />
+        {pendingProposal && !isHistoryOpen ? (
+          isProposalPanelOpen ? (
+            <div className="pointer-events-none absolute inset-x-3 bottom-[76px] z-20 flex justify-center sm:inset-x-5">
+              <div className="proposal-glow-shell pointer-events-auto w-full max-w-5xl">
+                <span className="proposal-glow-halo" aria-hidden="true" />
+                <span className="proposal-glow-border" aria-hidden="true" />
+                <div className="proposal-glow-content max-h-[min(74dvh,720px)] overflow-y-auto">
+                  <ProposalCard
+                    proposal={pendingProposal}
+                    onConfirm={handleConfirmProposal}
+                    onUpdate={handleProposalReviewUpdate}
+                    onHide={() => setIsProposalPanelOpen(false)}
+                    confirming={isConfirming}
+                    updating={isUpdatingProposal}
+                    result={confirmResult}
+                  />
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsProposalPanelOpen(true)}
+              className="absolute inset-x-3 bottom-[76px] z-20 mx-auto flex min-h-12 w-[calc(100%-1.5rem)] max-w-3xl items-center justify-between gap-3 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-4 py-2.5 text-left shadow-[var(--shadow-floating)] transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-soft)] sm:inset-x-5 sm:w-[calc(100%-2.5rem)]"
+              aria-label="Show proposal panel"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[12px] font-semibold uppercase tracking-normal text-[var(--color-brand)]">
+                  Pending approval
+                </span>
+                <span className="mt-0.5 block truncate text-[13px] font-semibold text-[var(--color-text)]">
+                  {proposalTypeLabel(pendingProposal.type ?? pendingProposal.intent)}
+                </span>
+              </span>
+              <span className="flex shrink-0 items-center gap-2">
+                <ReviewStatusBadge status={pendingProposal.review?.status ?? "READY"} />
+                <span className="text-[12px] font-semibold text-[var(--color-brand)]">
+                  Open review
+                </span>
+              </span>
+            </button>
+          )
         ) : null}
 
         {!pendingProposal && confirmResult ? (

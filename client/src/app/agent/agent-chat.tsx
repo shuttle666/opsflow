@@ -4,17 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Markdown from "react-markdown";
 import {
-  Briefcase,
-  Calendar,
   ChevronDown,
-  CheckCircle2,
   History,
-  Search,
   Send,
-  ShieldCheck,
   Sparkles,
-  Users,
-  type IconComponent,
 } from "@/components/ui/icons";
 import { LoadingPanel } from "@/components/ui/loading-panel";
 import {
@@ -64,32 +57,7 @@ const PLANNER_SUGGESTIONS = [
   "Show Harper Lee's workload this week",
 ];
 
-const PLANNER_CAPABILITIES: Array<{
-  title: string;
-  description: string;
-  icon: IconComponent;
-}> = [
-  {
-    title: "Find the right record",
-    description: "Match customers, jobs, and staff before drafting changes.",
-    icon: Search,
-  },
-  {
-    title: "Plan job changes",
-    description: "Create jobs, update existing jobs, assign staff, and schedule time windows.",
-    icon: Briefcase,
-  },
-  {
-    title: "Check schedules",
-    description: "Review staff availability, workload, and overlapping appointments.",
-    icon: Calendar,
-  },
-  {
-    title: "Keep control",
-    description: "Prepare confirm-first proposals for owners and managers to approve.",
-    icon: ShieldCheck,
-  },
-];
+const PLANNER_TAGS = ["Schedule", "Assign", "Update", "Review"] as const;
 
 const agentHeaderButtonClassName =
   "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3 text-[12px] font-semibold text-[var(--color-brand)] shadow-sm transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-soft)] disabled:cursor-not-allowed disabled:opacity-50";
@@ -98,7 +66,7 @@ const composerInputClassName =
   "h-9 min-w-0 flex-1 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3.5 text-[13px] text-[var(--color-text)] outline-none transition placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-brand)] focus:ring-[3px] focus:ring-[var(--color-brand-soft)] disabled:cursor-not-allowed disabled:opacity-60";
 
 const composerSendButtonClassName =
-  "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-brand)] text-white shadow-[0_4px_16px_-10px_var(--color-brand-glow)] transition hover:bg-[var(--color-brand-strong)] disabled:cursor-not-allowed disabled:opacity-50";
+  "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-brand)] !text-white shadow-[0_4px_16px_-10px_var(--color-brand-glow)] transition hover:bg-[var(--color-brand-strong)] hover:!text-white disabled:cursor-not-allowed disabled:opacity-50";
 
 function canUsePlanner(role: string | undefined) {
   return role === "OWNER" || role === "MANAGER";
@@ -177,7 +145,7 @@ function formatRelativeTime(dateString: string): string {
 
 function AiAvatar() {
   return (
-    <div className="mt-0.5 flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-[image:var(--gradient-brand)] text-[11px] font-extrabold text-white shadow-[0_2px_8px_var(--color-brand-glow)]">
+    <div className="mt-0.5 flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-[image:var(--gradient-brand)] text-[11px] font-extrabold !text-white shadow-[0_2px_8px_var(--color-brand-glow)]">
       AI
     </div>
   );
@@ -187,7 +155,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   if (message.role === "user") {
     return (
       <div className="flex flex-row-reverse gap-2.5 pl-4 sm:pl-12">
-        <div className="max-w-[92%] rounded-[14px] rounded-br px-4 py-3 text-[13px] leading-relaxed text-white shadow-[0_2px_8px_var(--color-brand-glow)] sm:max-w-[84%] lg:max-w-[78%] xl:max-w-[74%]" style={{ background: "var(--color-brand)" }}>
+        <div className="max-w-[92%] rounded-[14px] rounded-br px-4 py-3 text-[13px] leading-relaxed !text-white shadow-[0_2px_8px_var(--color-brand-glow)] sm:max-w-[84%] lg:max-w-[78%] xl:max-w-[74%]" style={{ background: "var(--color-brand)" }}>
           {message.content}
         </div>
       </div>
@@ -836,103 +804,44 @@ function ProposalCard({
 
 function EmptyState({ onSuggestion }: { onSuggestion?: (suggestion: string) => void }) {
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-        <div className="max-w-2xl">
-          <div className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-brand-soft)] px-3 py-1.5 text-[12px] font-semibold text-[var(--color-brand)]">
-            <Sparkles className="h-3.5 w-3.5" />
-            AI Planner
-          </div>
-          <h2 className="mt-4 text-2xl font-bold tracking-normal text-[var(--color-text)] sm:text-3xl">
-            Dispatch planning with your live workspace data
-          </h2>
-          <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--color-text-secondary)]">
-            Ask for operational help in plain language. The planner checks records, resolves targets, and drafts changes for approval.
-          </p>
-        </div>
-
-        <div className="grid min-w-[240px] grid-cols-2 gap-2 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-3">
-          <div className="rounded-lg bg-[var(--color-app-panel)] px-3 py-2">
-            <p className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
-              Mode
-            </p>
-            <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">
-              Confirm-first
-            </p>
-          </div>
-          <div className="rounded-lg bg-[var(--color-app-panel)] px-3 py-2">
-            <p className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
-              Scope
-            </p>
-            <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">
-              Ops planning
-            </p>
-          </div>
-        </div>
+    <div className="mx-auto flex w-full max-w-3xl flex-col items-center text-center">
+      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[image:var(--gradient-brand)] !text-white shadow-[0_18px_36px_-24px_var(--color-brand-glow)]">
+        <Sparkles className="h-5 w-5" />
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {PLANNER_CAPABILITIES.map((capability) => {
-          const Icon = capability.icon;
+      <h2 className="mt-5 max-w-xl text-2xl font-bold tracking-normal text-[var(--color-text)] sm:text-3xl">
+        What should OpsFlow plan next?
+      </h2>
+      <p className="mt-2 max-w-lg text-sm leading-6 text-[var(--color-text-secondary)]">
+        Ask in plain language, or start with one of these workspace tasks.
+      </p>
 
-          return (
-            <div
-              key={capability.title}
-              className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4"
+      <div className="mt-4 flex flex-wrap justify-center gap-2">
+        {PLANNER_TAGS.map((tag) => (
+          <span
+            key={tag}
+            className="rounded-full border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-3 py-1 text-[11px] font-semibold text-[var(--color-text-secondary)]"
+          >
+            {tag}
+          </span>
+        ))}
+      </div>
+
+      {onSuggestion ? (
+        <div className="mt-7 grid w-full gap-2 sm:grid-cols-2">
+          {PLANNER_SUGGESTIONS.map((suggestion) => (
+            <button
+              key={suggestion}
+              type="button"
+              onClick={() => onSuggestion(suggestion)}
+              className="group flex min-h-[52px] items-center justify-between gap-3 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-4 py-3 text-left text-[13px] font-semibold text-[var(--color-text)] transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-soft)]"
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--color-app-panel)] text-[var(--color-brand)]">
-                <Icon className="h-4 w-4" />
-              </div>
-              <h3 className="mt-3 text-sm font-semibold text-[var(--color-text)]">
-                {capability.title}
-              </h3>
-              <p className="mt-1 text-[13px] leading-5 text-[var(--color-text-secondary)]">
-                {capability.description}
-              </p>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-        {onSuggestion ? (
-          <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-[var(--color-success)]" />
-              <h3 className="text-sm font-semibold text-[var(--color-text)]">
-                Start with a task
-              </h3>
-            </div>
-            <div className="mt-3 grid gap-2">
-              {PLANNER_SUGGESTIONS.map((suggestion) => (
-                <button
-                  key={suggestion}
-                  type="button"
-                  onClick={() => onSuggestion(suggestion)}
-                  className="group flex min-h-10 items-center justify-between gap-3 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3.5 py-2 text-left text-[13px] font-medium text-[var(--color-text)] transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-soft)]"
-                >
-                  <span>{suggestion}</span>
-                  <Send className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)] transition group-hover:text-[var(--color-brand)]" />
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-4">
-          <div className="flex items-center gap-2">
-            <Users className="h-4 w-4 text-[var(--color-brand)]" />
-            <h3 className="text-sm font-semibold text-[var(--color-text)]">
-              Good for
-            </h3>
-          </div>
-          <div className="mt-3 space-y-2 text-[13px] leading-5 text-[var(--color-text-secondary)]">
-            <p>Scheduling work without double-booking staff.</p>
-            <p>Updating existing jobs instead of creating duplicates.</p>
-            <p>Changing customer profile details after matching the right customer.</p>
-          </div>
+              <span className="line-clamp-2">{suggestion}</span>
+              <Send className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)] transition group-hover:text-[var(--color-brand)]" />
+            </button>
+          ))}
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }

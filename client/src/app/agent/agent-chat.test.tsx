@@ -459,7 +459,7 @@ describe("AgentChat", () => {
       window.sessionStorage.getItem("opsflow:agent:activeConversation:tenant-1:user-1"),
     ).toBeNull();
     expect(
-      screen.getByText("Dispatch planning with your live workspace data"),
+      screen.getByText("What should OpsFlow plan next?"),
     ).toBeInTheDocument();
   });
 });

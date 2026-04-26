@@ -632,7 +632,7 @@ function WeekView({
                     className={cn(
                       "mx-auto mt-3 flex h-9 w-9 items-center justify-center rounded-lg text-lg font-bold",
                       isToday
-                        ? "bg-[var(--color-brand)] text-white"
+                        ? "bg-[var(--color-brand)] !text-white"
                         : "text-[var(--color-text)]",
                     )}
                   >
@@ -781,7 +781,7 @@ function MonthView({
                   <span
                     className={cn(
                       "flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold",
-                      isToday ? "bg-[var(--color-brand)] text-white" : "text-[var(--color-text)]",
+                      isToday ? "bg-[var(--color-brand)] !text-white" : "text-[var(--color-text)]",
                       !isCurrentMonth && !isToday && "text-[var(--color-text-muted)]",
                     )}
                   >
@@ -924,7 +924,7 @@ function CalendarToolbar({
               onClick={() => onViewModeChange(mode)}
               className={cn(
                 "h-8 rounded-md px-3 text-xs font-semibold capitalize text-[var(--color-text-secondary)] transition hover:bg-[var(--color-app-panel-muted)]",
-                viewMode === mode && "bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand)]",
+                viewMode === mode && "bg-[var(--color-brand)] !text-white hover:bg-[var(--color-brand)] hover:!text-white",
               )}
             >
               {mode}

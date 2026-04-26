@@ -121,7 +121,9 @@ describe("WorkflowTimelineCard", () => {
     );
   });
 
-  it("does not render manual status controls for staff", () => {
+  it("renders field workflow actions for assigned staff", () => {
+    const onTransition = vi.fn();
+
     render(
       <WorkflowTimelineCard
         items={[
@@ -145,11 +147,14 @@ describe("WorkflowTimelineCard", () => {
         currentRole="STAFF"
         isAssignedToCurrentUser
         canTransition
+        canShowManualControls
+        onTransition={onTransition}
       />,
     );
 
+    expect(screen.getByText("Field workflow")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Edit status" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Start work" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start work" })).toBeInTheDocument();
     expect(screen.getByText("Job lifecycle")).toBeInTheDocument();
   });
 });

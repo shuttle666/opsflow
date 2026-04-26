@@ -221,6 +221,8 @@ export function WorkflowTimelineCard({
   const statusGuidance = getStatusGuidance(currentStatus, assigneeName);
   const hasAvailableActions = actions.length > 0;
   const hasManualStatusActions = canShowManualControls && hasAvailableActions;
+  const isStaffFieldWorkflow = currentRole === "STAFF" && canTransition && !canEditJob;
+  const isActionPanelOpen = isStaffFieldWorkflow || isManualControlsOpen;
   const isTerminalStatus = currentStatus === "COMPLETED" || currentStatus === "CANCELLED";
   const accessMessage = getAccessMessage({
     role: currentRole,
@@ -341,26 +343,32 @@ export function WorkflowTimelineCard({
           <div className={`${surfaceClassName} space-y-3 p-4`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="max-w-xl">
-                <p className="text-sm font-bold text-[var(--color-text)]">Status controls</p>
+                <p className="text-sm font-bold text-[var(--color-text)]">
+                  {isStaffFieldWorkflow ? "Field workflow" : "Status controls"}
+                </p>
                 <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
-                  Manual transitions stay folded until they are needed for correction or unblock.
+                  {isStaffFieldWorkflow
+                    ? "Move your assigned job through field work when the visit begins."
+                    : "Manual transitions stay folded until they are needed for correction or unblock."}
                 </p>
               </div>
-              <button
-                type="button"
-                aria-expanded={isManualControlsOpen}
-                onClick={() => {
-                  setIsManualControlsOpen((current) => !current);
-                  setSelectedActionId(null);
-                  setReason("");
-                }}
-                className={secondaryButtonClassName}
-              >
-                {isManualControlsOpen ? "Hide status editor" : "Edit status"}
-              </button>
+              {!isStaffFieldWorkflow ? (
+                <button
+                  type="button"
+                  aria-expanded={isManualControlsOpen}
+                  onClick={() => {
+                    setIsManualControlsOpen((current) => !current);
+                    setSelectedActionId(null);
+                    setReason("");
+                  }}
+                  className={secondaryButtonClassName}
+                >
+                  {isManualControlsOpen ? "Hide status editor" : "Edit status"}
+                </button>
+              ) : null}
             </div>
 
-            {isManualControlsOpen ? (
+            {isActionPanelOpen ? (
               <>
                 <div className="grid gap-3 md:grid-cols-2">
                   {actions.map((action, index) => (
@@ -444,8 +452,6 @@ export function WorkflowTimelineCard({
               </>
             ) : null}
 
-            {error ? <p className="text-sm text-[var(--color-danger)]">{error}</p> : null}
-            {success ? <p className="text-sm text-[var(--color-success)]">{success}</p> : null}
           </div>
         ) : isTerminalStatus ? (
           <EmptyStatePanel
@@ -454,6 +460,9 @@ export function WorkflowTimelineCard({
             description="This job is already completed or cancelled, so there are no further lifecycle stages to show."
           />
         ) : null}
+
+        {error ? <p className="text-sm text-[var(--color-danger)]">{error}</p> : null}
+        {success ? <p className="text-sm text-[var(--color-success)]">{success}</p> : null}
 
         <div className={`${surfaceClassName} space-y-3 p-4`}>
           <div>

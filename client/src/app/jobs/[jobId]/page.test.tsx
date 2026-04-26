@@ -242,6 +242,67 @@ describe("job detail page", () => {
     expect(screen.queryByRole("button", { name: "Mark scheduled" })).not.toBeInTheDocument();
   });
 
+  it("lets assigned staff start scheduled work from the field workflow", async () => {
+    const scheduledJob: JobDetail = {
+      ...baseJob,
+      status: "SCHEDULED",
+      scheduledStartAt: "2026-03-20T01:00:00.000Z",
+      scheduledEndAt: "2026-03-20T02:00:00.000Z",
+    };
+    vi.mocked(getJobDetailRequest).mockResolvedValue(scheduledJob);
+    vi.mocked(getJobHistoryRequest).mockResolvedValue({
+      history: [],
+      allowedTransitions: ["IN_PROGRESS", "CANCELLED"],
+    });
+    vi.mocked(transitionJobStatusRequest).mockResolvedValue({
+      job: {
+        ...scheduledJob,
+        status: "IN_PROGRESS",
+      },
+      historyEntry: {
+        id: "history-start",
+        fromStatus: "SCHEDULED",
+        toStatus: "IN_PROGRESS",
+        reason: null,
+        changedAt: "2026-03-20T01:30:00.000Z",
+        changedBy: {
+          id: "staff-1",
+          displayName: "Sam Staff",
+          email: "sam@acme.example",
+        },
+      },
+      allowedTransitions: ["PENDING_REVIEW", "CANCELLED"],
+    });
+    useAuthStore.setState({
+      user: {
+        id: "staff-1",
+        email: "sam@acme.example",
+        displayName: "Sam Staff",
+      },
+      currentTenant: {
+        tenantId: "tenant-1",
+        tenantName: "Acme",
+        tenantSlug: "acme",
+        role: "STAFF",
+      },
+    });
+
+    const user = userEvent.setup();
+    render(<JobDetailPage />);
+
+    expect(await screen.findByText("Field workflow")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit status" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Start work" }));
+
+    await waitFor(() => {
+      expect(transitionJobStatusRequest).toHaveBeenCalledWith("access-token", "job-1", {
+        toStatus: "IN_PROGRESS",
+      });
+    });
+    expect(await screen.findByText("Job moved to In progress.")).toBeInTheDocument();
+  });
+
   it("lets assigned staff submit in-progress work for review", async () => {
     const inProgressJob: JobDetail = {
       ...baseJob,

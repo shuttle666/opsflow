@@ -210,6 +210,24 @@ function getTransitionActions(statuses: JobStatus[]): TransitionActionView[] {
   return statuses.map((status) => getTransitionAction(status));
 }
 
+function getVisibleTransitionActions(
+  currentStatus: JobStatus,
+  statuses: JobStatus[],
+  role: string | undefined,
+): TransitionActionView[] {
+  const actions = getTransitionActions(statuses);
+
+  if (role !== "STAFF") {
+    return actions;
+  }
+
+  if (currentStatus !== "SCHEDULED") {
+    return [];
+  }
+
+  return actions.filter((action) => action.toStatus === "IN_PROGRESS");
+}
+
 function initialsFor(name: string | undefined | null) {
   if (!name) {
     return "OF";
@@ -418,7 +436,13 @@ export default function JobDetailPage() {
     : false;
 
   const transitionActions =
-    canTransition && workflow ? getTransitionActions(workflow.allowedTransitions) : [];
+    job && canTransition && workflow
+      ? getVisibleTransitionActions(
+          job.status,
+          workflow.allowedTransitions,
+          currentTenant?.role,
+        )
+      : [];
 
   function applyCompletionReviewMutation(result: JobCompletionReviewMutationResult) {
     setJob(result.job);
@@ -739,7 +763,7 @@ export default function JobDetailPage() {
                   isAssignedToCurrentUser={job.assignedTo?.id === user?.id}
                   canEditJob={canEdit}
                   canTransition={canTransition}
-                  canShowManualControls={canEdit}
+                  canShowManualControls={transitionActions.length > 0}
                   isSubmitting={isTransitioning}
                   error={workflowError}
                   success={workflowSuccess}

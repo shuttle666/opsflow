@@ -20,9 +20,11 @@ OpsFlow is a multi-tenant operations platform for field service teams, covering 
 - Role-based access control for `OWNER`, `MANAGER`, and `STAFF`
 - Customer management and job management workflows
 - Job assignment, scheduling, and status transitions
+- Completion review flow for staff submission and manager approval
 - Team invitations and membership management
 - Activity feed and audit logging
 - Job evidence and document uploads
+- In-app notifications with unread state and SSE updates
 - AI-assisted dispatch workflow with human confirmation
 
 ## AI Dispatch Planner

@@ -87,7 +87,7 @@ This roadmap is aligned with the current codebase. Phase names describe the prod
 ## Phase 13
 - Status: Planned next
 - Dashboard hardening
-- Replace placeholder revenue and crew cards with real backend metrics
+- Replace client-derived dashboard stats with real backend tenant metrics
 - Add a dashboard summary API
 - Add role-specific dashboard views
 

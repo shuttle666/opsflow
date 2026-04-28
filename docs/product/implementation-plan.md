@@ -12,11 +12,11 @@ This plan reflects the current state of the repository. Older Phase 3-8 implemen
 ## Near-Term Work
 
 ### 1. Dashboard Hardening
-Goal: replace placeholder dashboard cards with real tenant data.
+Goal: promote the current schedule-derived dashboard into a dedicated tenant summary surface.
 
 - Add `GET /api/dashboard/summary`.
 - Return customer count, job counts by status, today/upcoming schedule, pending invitations, active staff count, and recent activity.
-- Replace placeholder revenue and crew values in the dashboard UI.
+- Replace the current client-derived dashboard stats with backend-backed tenant metrics.
 - Add role-aware dashboard states for owner/manager and staff.
 - Add server integration tests and client smoke tests.
 - Update `docs/engineering/api-design.md`, `docs/engineering/openapi.yaml`, and `docs/product/roadmap.md` when complete.

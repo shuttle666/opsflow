@@ -17,4 +17,5 @@ This directory is grouped by document purpose so the root stays small and easy t
 
 ## Design
 
-- [UI Draft](design/ui-draft/STYLE_USAGE.md) - early UI draft assets and usage notes.
+- [Pencil UI Draft](design/v1-pencil-ui-draft/STYLE_USAGE.md) - early UI draft assets and usage notes.
+- [Claude Design Handoff](design/v2-claude-design-handoff/README.md) - exported v2 HTML prototype bundle and implementation notes.

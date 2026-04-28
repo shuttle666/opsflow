@@ -4,7 +4,7 @@ This document is aligned with the Express routers under `server/src/routes` and 
 
 ## Current Status
 - Base API path: `/api`
-- Authentication uses JWT access tokens plus persisted refresh sessions.
+- Authentication uses short-lived JWT access tokens plus persisted refresh sessions. Refresh tokens are delivered in an HttpOnly `opsflow_refresh` cookie.
 - Tenant scope is resolved from the authenticated session; business requests do not accept `tenantId` in the body.
 - Authorization uses `OWNER`, `MANAGER`, and `STAFF` roles.
 - List endpoints return `{ success, message, data, meta.pagination }`.
@@ -38,7 +38,7 @@ This document is aligned with the Express routers under `server/src/routes` and 
 - `DELETE /customers/:customerId` - owner/manager, archives customer
 - `POST /customers/:customerId/restore` - owner/manager
 
-Customer fields include `name`, `phone`, `email`, `address`, `notes`, and `archivedAt`.
+Customer fields include `name`, `phone`, `email`, `notes`, and `archivedAt`. Service locations are stored on jobs as `serviceAddress`, not on customer profiles.
 Customer list accepts `status=active|archived|all` and defaults to `active`.
 
 ## Jobs
@@ -51,6 +51,7 @@ Customer list accepts `status=active|archived|all` and defaults to `active`.
 Job create/update input includes:
 - `customerId`
 - `title`
+- `serviceAddress`
 - `description`
 - `scheduledStartAt`
 - `scheduledEndAt`
@@ -155,9 +156,10 @@ Supported notification types:
 - `GET /agent/conversations`
 - `GET /agent/conversations/:conversationId`
 - `POST /agent/conversations/:conversationId/messages`
+- `PATCH /agent/conversations/:conversationId/proposals/:proposalId`
 - `POST /agent/conversations/:conversationId/proposals/:proposalId/confirm`
 
-The planner is available to authenticated tenant users, but proposal confirmation rejects `STAFF`. Conversations, messages, tool calls, and proposals are persisted for restart recovery, multi-instance operation, and audit. Assistant responses stream over SSE and require `ANTHROPIC_API_KEY`.
+The planner is available to authenticated tenant users, but proposal confirmation rejects `STAFF`. Proposal review updates can resolve `customerId`, `jobId`, `membershipId`, or schedule draft fields before confirmation. Conversations, messages, tool calls, and proposals are persisted for restart recovery, multi-instance operation, and audit. Assistant responses stream over SSE and require `ANTHROPIC_API_KEY`.
 
 ## Contract Notes
 - All successful JSON responses use the common `success/message/data/meta` envelope.

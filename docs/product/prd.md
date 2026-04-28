@@ -30,7 +30,7 @@ OpsFlow centralizes the operational workflow so owners, managers, and staff can 
 - Docker Compose local development and production deployment through GitHub Actions, EC2, Nginx, and Certbot
 
 ## Current Constraints
-- The dashboard has a live "today's schedule" card, but revenue and crew metrics are still placeholder UI.
+- The dashboard has a live today's schedule card and schedule-derived stats, but it does not yet have a dedicated summary API for broader tenant metrics.
 - AI planner conversations, tool traces, and proposals are persisted for restart recovery and audit.
 - Job evidence uses local disk storage in the current deployment shape, with a storage abstraction that can be replaced later.
 - There is no customer-facing portal yet.

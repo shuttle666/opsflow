@@ -20,7 +20,7 @@ OpsFlow is a modular monolith with a Next.js frontend, an Express API, Prisma, P
 
 Current app surfaces:
 - Login, register, and invitation acceptance
-- Dashboard with live today's schedule and placeholder business metrics
+- Dashboard with live today's schedule and schedule-derived stats
 - Customers
 - Jobs and staff workspace
 - Team management
@@ -64,6 +64,10 @@ Core persisted models:
 - `TenantInvitation`
 - `AuditLog`
 - `Notification`
+- `AgentConversation`
+- `AgentMessage`
+- `AgentToolCall`
+- `AgentProposal`
 
 ## Key Flows
 

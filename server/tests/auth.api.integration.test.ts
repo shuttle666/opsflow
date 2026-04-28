@@ -68,6 +68,10 @@ describeIfDb("auth api integration", () => {
 
     expect(loginRes.status).toBe(200);
     expect(loginRes.body.data.accessToken).toBeTruthy();
+    expect(loginRes.body.data.refreshToken).toBeUndefined();
+    const loginCookies = loginRes.headers["set-cookie"] as string[] | undefined;
+    expect(loginCookies?.join(";")).toContain("opsflow_refresh=");
+    expect(loginCookies?.join(";")).toContain("HttpOnly");
 
     const meRes = await request(app)
       .get("/api/auth/me")
@@ -76,6 +80,17 @@ describeIfDb("auth api integration", () => {
     expect(meRes.status).toBe(200);
     expect(meRes.body.data.user.email).toBe(user.email);
     expect(meRes.body.data.currentTenant.tenantId).toBe(tenant.id);
+
+    const refreshRes = await request(app)
+      .post("/api/auth/refresh")
+      .set("Cookie", loginCookies ?? [])
+      .send({});
+
+    expect(refreshRes.status).toBe(200);
+    expect(refreshRes.body.data.accessToken).toBeTruthy();
+    expect(refreshRes.body.data.refreshToken).toBeUndefined();
+    const refreshCookies = refreshRes.headers["set-cookie"] as string[] | undefined;
+    expect(refreshCookies?.join(";")).toContain("opsflow_refresh=");
   });
 
   it("returns 403 for staff role on invitation creation and writes audit log", async () => {

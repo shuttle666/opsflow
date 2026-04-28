@@ -39,7 +39,8 @@ export class LocalDiskEvidenceStorage implements EvidenceStorage {
 
   private resolveStoragePath(storageKey: string) {
     const absolutePath = path.resolve(this.rootDirectory, storageKey);
-    if (!absolutePath.startsWith(this.rootDirectory)) {
+    const relativePath = path.relative(this.rootDirectory, absolutePath);
+    if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
       throw new Error("Invalid storage key.");
     }
 

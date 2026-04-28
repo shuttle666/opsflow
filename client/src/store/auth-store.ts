@@ -109,7 +109,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         set({
           status: "loading",
           accessToken: stored.accessToken,
-          refreshToken: stored.refreshToken,
+          refreshToken: null,
         });
 
         try {
@@ -150,13 +150,12 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       const result = await registerRequest(input);
       writeStoredTokens({
         accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
       });
 
       set({
         status: "authenticated",
         accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
+        refreshToken: null,
         user: result.user,
         currentTenant: result.currentTenant,
         availableTenants: result.availableTenants,
@@ -173,13 +172,12 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       const result = await loginRequest(credentials);
       writeStoredTokens({
         accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
       });
 
       set({
         status: "authenticated",
         accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
+        refreshToken: null,
         user: result.user,
         currentTenant: result.currentTenant,
         availableTenants: result.availableTenants,
@@ -208,13 +206,12 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
     writeStoredTokens({
       accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
     });
 
     set({
       status: "authenticated",
       accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
+      refreshToken: null,
       user: result.user,
       currentTenant: result.currentTenant,
       availableTenants: result.availableTenants,
@@ -312,23 +309,17 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     });
   },
   refreshAccessToken: async () => {
-    const refreshToken = get().refreshToken;
-    if (!refreshToken) {
-      throw new ApiClientError(401, "Refresh token is missing.");
-    }
-
     if (!refreshInFlight) {
-      refreshInFlight = refreshRequest(refreshToken)
+      refreshInFlight = refreshRequest()
         .then((result) => {
           writeStoredTokens({
             accessToken: result.accessToken,
-            refreshToken: result.refreshToken,
           });
 
           set({
             status: "authenticated",
             accessToken: result.accessToken,
-            refreshToken: result.refreshToken,
+            refreshToken: null,
             user: result.user,
             currentTenant: result.currentTenant,
             availableTenants: result.availableTenants,

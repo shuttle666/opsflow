@@ -19,7 +19,6 @@ export type TenantMembership = {
 
 export type AuthTokens = {
   accessToken: string;
-  refreshToken: string;
 };
 
 export type AuthCredentials = {
@@ -35,7 +34,8 @@ export type RegisterInput = {
   tenantName?: string;
 };
 
-export type AuthResult = AuthTokens & {
+export type AuthResult = {
+  accessToken: string;
   expiresInMinutes: number;
   user: AuthUser;
   currentTenant: TenantMembership;

@@ -1,7 +1,7 @@
 import type { AuthTokens } from "@/types/auth";
 
 const ACCESS_TOKEN_KEY = "opsflow.accessToken";
-const REFRESH_TOKEN_KEY = "opsflow.refreshToken";
+const LEGACY_REFRESH_TOKEN_KEY = "opsflow.refreshToken";
 
 function isBrowser() {
   return typeof window !== "undefined";
@@ -13,13 +13,13 @@ export function readStoredTokens(): AuthTokens | null {
   }
 
   const accessToken = window.localStorage.getItem(ACCESS_TOKEN_KEY);
-  const refreshToken = window.localStorage.getItem(REFRESH_TOKEN_KEY);
+  window.localStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY);
 
-  if (!accessToken || !refreshToken) {
+  if (!accessToken) {
     return null;
   }
 
-  return { accessToken, refreshToken };
+  return { accessToken };
 }
 
 export function writeStoredTokens(tokens: AuthTokens) {
@@ -28,7 +28,7 @@ export function writeStoredTokens(tokens: AuthTokens) {
   }
 
   window.localStorage.setItem(ACCESS_TOKEN_KEY, tokens.accessToken);
-  window.localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
+  window.localStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY);
 }
 
 export function clearStoredTokens() {
@@ -37,5 +37,5 @@ export function clearStoredTokens() {
   }
 
   window.localStorage.removeItem(ACCESS_TOKEN_KEY);
-  window.localStorage.removeItem(REFRESH_TOKEN_KEY);
+  window.localStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY);
 }

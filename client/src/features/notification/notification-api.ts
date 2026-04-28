@@ -113,6 +113,7 @@ export async function openNotificationStreamRequest(
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
+    credentials: "include",
     signal,
   });
 

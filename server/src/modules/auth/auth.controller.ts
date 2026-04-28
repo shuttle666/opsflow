@@ -1,4 +1,5 @@
 import type { RequestHandler } from "express";
+import { env } from "../../config/env";
 import { ApiError } from "../../utils/api-error";
 import { sendSuccess } from "../../utils/api-response";
 import { asyncHandler } from "../../utils/async-handler";
@@ -30,34 +31,102 @@ import {
 } from "./auth.service";
 import { getRequestMetadata } from "./request-metadata";
 
+const refreshCookieName = "opsflow_refresh";
+const refreshCookiePath = "/api/auth";
+
+function refreshCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: refreshCookiePath,
+    maxAge: env.JWT_REFRESH_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000,
+  };
+}
+
+function parseCookieHeader(cookieHeader: string | undefined) {
+  const cookies = new Map<string, string>();
+
+  for (const part of cookieHeader?.split(";") ?? []) {
+    const separatorIndex = part.indexOf("=");
+    if (separatorIndex === -1) {
+      continue;
+    }
+
+    const key = part.slice(0, separatorIndex).trim();
+    const value = part.slice(separatorIndex + 1).trim();
+    if (!key) {
+      continue;
+    }
+
+    try {
+      cookies.set(key, decodeURIComponent(value));
+    } catch {
+      cookies.set(key, value);
+    }
+  }
+
+  return cookies;
+}
+
+function getRefreshCookie(req: Parameters<RequestHandler>[0]) {
+  return parseCookieHeader(req.headers.cookie).get(refreshCookieName);
+}
+
+function setRefreshCookie(res: Parameters<RequestHandler>[1], refreshToken: string) {
+  res.cookie(refreshCookieName, refreshToken, refreshCookieOptions());
+}
+
+function clearRefreshCookie(res: Parameters<RequestHandler>[1]) {
+  res.clearCookie(refreshCookieName, {
+    path: refreshCookiePath,
+    httpOnly: true,
+    secure: env.NODE_ENV === "production",
+    sameSite: "lax",
+  });
+}
+
+function publicAuthResult<T extends { refreshToken: string }>(result: T) {
+  const { refreshToken: _refreshToken, ...publicResult } = result;
+  return publicResult;
+}
+
 export const registerHandler: RequestHandler = asyncHandler(async (req, res) => {
   const input = registerSchema.parse(req.body);
   const result = await register(input, getRequestMetadata(req));
+  setRefreshCookie(res, result.refreshToken);
 
   sendSuccess(res, {
     statusCode: 201,
     message: "Registration successful.",
-    data: result,
+    data: publicAuthResult(result),
   });
 });
 
 export const loginHandler: RequestHandler = asyncHandler(async (req, res) => {
   const input = loginSchema.parse(req.body);
   const result = await login(input, getRequestMetadata(req));
+  setRefreshCookie(res, result.refreshToken);
 
   sendSuccess(res, {
     message: "Login successful.",
-    data: result,
+    data: publicAuthResult(result),
   });
 });
 
 export const refreshHandler: RequestHandler = asyncHandler(async (req, res) => {
-  const input = refreshSchema.parse(req.body);
-  const result = await refreshSession(input, getRequestMetadata(req));
+  const input = refreshSchema.parse(req.body ?? {});
+  const refreshToken = input.refreshToken ?? getRefreshCookie(req);
+  if (!refreshToken) {
+    throw new ApiError(401, "Refresh token is missing.");
+  }
+
+  const result = await refreshSession({ refreshToken }, getRequestMetadata(req));
+  setRefreshCookie(res, result.refreshToken);
 
   sendSuccess(res, {
     message: "Token refresh successful.",
-    data: result,
+    data: publicAuthResult(result),
   });
 });
 
@@ -68,6 +137,7 @@ export const logoutHandler: RequestHandler = asyncHandler(async (req, res) => {
 
   const input = logoutSchema.parse(req.body ?? {});
   await logout(req.auth, input, getRequestMetadata(req));
+  clearRefreshCookie(res);
 
   sendSuccess(res, {
     message: "Logout successful.",
@@ -95,10 +165,11 @@ export const switchTenantHandler: RequestHandler = asyncHandler(
 
     const input = switchTenantSchema.parse(req.body);
     const result = await switchTenant(req.auth, input, getRequestMetadata(req));
+    setRefreshCookie(res, result.refreshToken);
 
     sendSuccess(res, {
       message: "Tenant switched successfully.",
-      data: result,
+      data: publicAuthResult(result),
     });
   },
 );

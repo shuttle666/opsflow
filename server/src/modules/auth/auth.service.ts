@@ -549,6 +549,10 @@ export async function login(input: LoginInput, metadata?: RequestMetadata) {
 }
 
 export async function refreshSession(input: RefreshInput, metadata?: RequestMetadata) {
+  if (!input.refreshToken) {
+    throw new AuthError("INVALID_CREDENTIALS", "Refresh token is missing.", 401);
+  }
+
   const tokenHash = hashRefreshToken(input.refreshToken);
 
   const session = await prisma.authSession.findUnique({
@@ -609,6 +613,27 @@ export async function refreshSession(input: RefreshInput, metadata?: RequestMeta
   }
 
   const issued = await prisma.$transaction(async (tx) => {
+    const consumed = await tx.authSession.updateMany({
+      where: {
+        id: session.id,
+        revokedAt: null,
+        expiresAt: {
+          gt: new Date(),
+        },
+      },
+      data: {
+        revokedAt: new Date(),
+      },
+    });
+
+    if (consumed.count !== 1) {
+      throw new AuthError(
+        "SESSION_REVOKED",
+        "Refresh session has already been used.",
+        401,
+      );
+    }
+
     const created = await createSessionAndTokens(tx, {
       userId: session.userId,
       tenantId: session.tenantId,
@@ -619,7 +644,6 @@ export async function refreshSession(input: RefreshInput, metadata?: RequestMeta
     await tx.authSession.update({
       where: { id: session.id },
       data: {
-        revokedAt: new Date(),
         replacedBySessionId: created.sessionId,
       },
     });

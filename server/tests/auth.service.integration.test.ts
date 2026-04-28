@@ -84,6 +84,48 @@ describeIfDb("auth service integration", () => {
     });
   });
 
+  it("allows only one concurrent refresh to consume a refresh token", async () => {
+    const password = await hashPassword("password123");
+    const [tenant, user] = await Promise.all([
+      prisma.tenant.create({
+        data: {
+          name: "Concurrent Tenant",
+          slug: "concurrent-tenant",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "concurrent@test.dev",
+          passwordHash: password,
+          displayName: "Concurrent User",
+        },
+      }),
+    ]);
+
+    await prisma.membership.create({
+      data: {
+        userId: user.id,
+        tenantId: tenant.id,
+        role: MembershipRole.OWNER,
+        status: MembershipStatus.ACTIVE,
+      },
+    });
+
+    const loggedIn = await login({
+      email: user.email,
+      password: "password123",
+      tenantId: tenant.id,
+    });
+
+    const results = await Promise.allSettled([
+      refreshSession({ refreshToken: loggedIn.refreshToken }),
+      refreshSession({ refreshToken: loggedIn.refreshToken }),
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+  });
+
   it("switches tenant for users with multiple memberships", async () => {
     const password = await hashPassword("password123");
     const user = await prisma.user.create({

@@ -974,6 +974,10 @@ export async function checkScheduleConflicts(
     throw new ApiError(400, "Invalid schedule range.");
   }
 
+  if (scheduledEndAt <= scheduledStartAt) {
+    throw new ApiError(400, "End time must be after the start time.");
+  }
+
   const conflicts = await prisma.job.findMany({
     where: {
       tenantId: auth.tenantId,

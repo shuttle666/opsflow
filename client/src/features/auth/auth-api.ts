@@ -48,10 +48,10 @@ export async function registerRequest(input: RegisterInput) {
   return requireData(response, "Register response is missing payload.");
 }
 
-export async function refreshRequest(refreshToken: string) {
+export async function refreshRequest() {
   const response = await apiClient.post<ApiSuccessResponse<AuthResult>>(
     "/auth/refresh",
-    { refreshToken },
+    {},
   );
 
   return requireData(response, "Refresh response is missing payload.");

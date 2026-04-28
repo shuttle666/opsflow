@@ -36,7 +36,6 @@ vi.mock("@/features/auth", () => ({
 function buildAuthResult(): AuthResult {
   return {
     accessToken: "access-token",
-    refreshToken: "refresh-token",
     expiresInMinutes: 15,
     user: {
       id: "user-1",
@@ -89,7 +88,7 @@ describe("auth store", () => {
     expect(state.user?.email).toBe(result.user.email);
     expect(state.currentTenant?.tenantId).toBe(result.currentTenant.tenantId);
     expect(state.accessToken).toBe(result.accessToken);
-    expect(state.refreshToken).toBe(result.refreshToken);
+    expect(state.refreshToken).toBeNull();
   });
 
   it("retries one time after refresh when request returns 401", async () => {

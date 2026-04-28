@@ -1,6 +1,10 @@
 import { MembershipRole } from "@prisma/client";
 import { Router } from "express";
 import { authenticate } from "../../middleware/authenticate";
+import {
+  createRateLimiter,
+  emailAndIpRateLimitKey,
+} from "../../middleware/rate-limit";
 import { requireRole } from "../../middleware/require-role";
 import { requireTenantAccess } from "../../middleware/require-tenant-access";
 import {
@@ -23,9 +27,22 @@ const authRouter = Router();
 const tenantRouter = Router();
 const invitationRouter = Router();
 
-authRouter.post("/register", registerHandler);
-authRouter.post("/login", loginHandler);
-authRouter.post("/refresh", refreshHandler);
+const authMutationLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  maxRequests: 20,
+  message: "Too many authentication attempts. Please try again later.",
+  keyGenerator: emailAndIpRateLimitKey,
+});
+
+const refreshLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  maxRequests: 30,
+  message: "Too many token refresh attempts. Please try again later.",
+});
+
+authRouter.post("/register", authMutationLimiter, registerHandler);
+authRouter.post("/login", authMutationLimiter, loginHandler);
+authRouter.post("/refresh", refreshLimiter, refreshHandler);
 authRouter.post("/logout", authenticate, logoutHandler);
 authRouter.get("/me", authenticate, requireTenantAccess, meHandler);
 authRouter.post("/switch-tenant", authenticate, switchTenantHandler);

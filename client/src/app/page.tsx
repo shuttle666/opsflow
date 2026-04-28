@@ -14,6 +14,15 @@ const heroHighlights = [
   "AI-assisted planning",
 ] as const;
 
+const technicalHighlights = [
+  "Multi-tenant auth",
+  "RBAC workflows",
+  "PostgreSQL + Prisma",
+  "Next.js + Express",
+  "AWS + Docker deployment",
+  "AI dispatch planner",
+] as const;
+
 const workflowSteps = [
   {
     step: "01",
@@ -244,6 +253,35 @@ export default function HomePage() {
                 </p>
               </article>
             ))}
+          </section>
+
+          <section className="grid gap-6 border-y border-[var(--color-app-border)] py-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+            <div>
+              <p className="text-xs font-semibold uppercase text-[var(--color-brand)]">
+                Full-stack SaaS demo
+              </p>
+              <h2 className="mt-3 max-w-xl text-2xl font-extrabold leading-tight text-[var(--color-text)]">
+                Built to show production-minded application engineering.
+              </h2>
+            </div>
+            <div>
+              <p className="text-sm leading-7 text-[var(--color-text-secondary)]">
+                OpsFlow demonstrates a multi-tenant operations platform with
+                authenticated workspaces, role-based access control, job
+                scheduling, customer management, and an AI-assisted dispatch
+                planner backed by a PostgreSQL and Prisma API.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {technicalHighlights.map((item) => (
+                  <span
+                    key={item}
+                    className="rounded-full border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3 py-1 text-xs font-semibold text-[var(--color-text-secondary)]"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
           </section>
 
           <section className="grid gap-4 rounded-[18px] border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-5 sm:p-6 lg:grid-cols-[1fr_auto] lg:items-center">

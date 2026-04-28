@@ -3,6 +3,12 @@ import { DM_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import { AppProviders } from "@/providers/app-providers";
 import "./globals.css";
 
+const siteUrl = "https://opsflow.aboutwenduo.wang";
+const siteTitle = "OpsFlow | Full-Stack Field Service Operations Platform";
+const siteDescription =
+  "A full-stack SaaS demo built with Next.js, Express, Prisma, PostgreSQL, Docker, AWS, and AI-assisted dispatch planning.";
+const socialImage = "/opsflow-logo-full.png";
+
 const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-plus-jakarta",
   subsets: ["latin"],
@@ -16,14 +22,42 @@ const dmMono = DM_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "OpsFlow",
-  description: "Operations management platform foundation",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: siteTitle,
+    template: "%s | OpsFlow",
+  },
+  description: siteDescription,
+  alternates: {
+    canonical: "/",
+  },
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
-      { url: "/icon.png", type: "image/png", sizes: "512x512" },
+      { url: "/opsflow-logo-icon.png", type: "image/png", sizes: "512x512" },
     ],
-    apple: [{ url: "/icon.png", type: "image/png", sizes: "512x512" }],
+    apple: [{ url: "/opsflow-logo-icon.png", type: "image/png", sizes: "512x512" }],
+  },
+  openGraph: {
+    title: siteTitle,
+    description: siteDescription,
+    url: "/",
+    siteName: "OpsFlow",
+    type: "website",
+    images: [
+      {
+        url: socialImage,
+        width: 1420,
+        height: 300,
+        alt: "OpsFlow full-stack field service operations platform",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: siteTitle,
+    description: siteDescription,
+    images: [socialImage],
   },
 };
 

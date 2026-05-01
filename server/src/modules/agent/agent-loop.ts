@@ -1,11 +1,19 @@
-import type Anthropic from "@anthropic-ai/sdk";
 import type { AuthContext } from "../../types/auth";
-import { createAnthropicClient } from "../ai";
+import {
+  createAiProvider,
+  getAiAgentProfile,
+  type AiAgentProfile,
+  type AiMessage,
+  type AiProviderName,
+  type AiToolResultBlock,
+} from "../ai";
 import type { DispatchProposal } from "./agent.service";
 import { executeTool, getToolDefinitions } from "./agent-tools";
-import { classifyAgentIntent, type AgentIntentClassification } from "./intent-router";
-
-const MAX_ITERATIONS = 10;
+import {
+  classifyAgentIntentWithEnhancement,
+  type IntentExtractionSummary,
+} from "./intent-extractor";
+import type { AgentIntentClassification } from "./intent-router";
 
 type AgentCallbacks = {
   onTextDelta: (text: string) => void;
@@ -14,12 +22,62 @@ type AgentCallbacks = {
   onProposal: (proposal: DispatchProposal) => void;
 };
 
-type AgentLoopResult = {
+export type AgentLoopResult = {
   fullText: string;
-  messages: Anthropic.MessageParam[];
+  messages: AiMessage[];
   toolCalls: Array<{ name: string; input: unknown; result: unknown }>;
+  provider: AiProviderName;
+  model: string;
+  iterationCount: number;
+  tokenUsage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+  };
+  intentClassification?: AgentIntentClassification;
+  intentExtraction?: IntentExtractionSummary;
   proposal?: DispatchProposal;
 };
+
+function addTokenUsage(
+  current: AgentLoopResult["tokenUsage"],
+  next: AgentLoopResult["tokenUsage"],
+): AgentLoopResult["tokenUsage"] {
+  if (!next?.inputTokens && !next?.outputTokens) {
+    return current;
+  }
+
+  return {
+    inputTokens: (current?.inputTokens ?? 0) + (next.inputTokens ?? 0),
+    outputTokens: (current?.outputTokens ?? 0) + (next.outputTokens ?? 0),
+  };
+}
+
+function baseLoopResult(input: {
+  profile: AiAgentProfile;
+  fullText: string;
+  messages: AiMessage[];
+  toolCalls: AgentLoopResult["toolCalls"];
+  iterationCount: number;
+  tokenUsage?: AgentLoopResult["tokenUsage"];
+  intentClassification?: AgentIntentClassification;
+  intentExtraction?: IntentExtractionSummary;
+  proposal?: DispatchProposal;
+}): AgentLoopResult {
+  return {
+    fullText: input.fullText,
+    messages: input.messages,
+    toolCalls: input.toolCalls,
+    provider: input.profile.provider,
+    model: input.profile.model,
+    iterationCount: input.iterationCount,
+    ...(input.tokenUsage ? { tokenUsage: input.tokenUsage } : {}),
+    ...(input.intentClassification
+      ? { intentClassification: input.intentClassification }
+      : {}),
+    ...(input.intentExtraction ? { intentExtraction: input.intentExtraction } : {}),
+    ...(input.proposal ? { proposal: input.proposal } : {}),
+  };
+}
 
 function buildSystemPrompt(
   timezone: string,
@@ -32,6 +90,7 @@ function buildSystemPrompt(
 - reason: ${intentClassification.reason}
 - extracted: ${JSON.stringify(intentClassification.extracted)}
 Use this as guidance, but still verify business targets with resolver/read tools before saving any proposal.
+The extracted fields are hints only; never treat them as database identities.
 `
     : "";
 
@@ -56,7 +115,7 @@ Rules:
 - For natural-language schedule times, do not calculate UTC offsets yourself. Call resolve_time_window with localDate (YYYY-MM-DD), localStartTime (HH:mm), localEndTime (HH:mm), timezone="${timezone}", and localEndDate only if the end date differs. Copy the returned schedule fields into the proposal.
 - When the user wants to create, schedule, or assign work, you must gather context with read tools first.
 - Do not attempt to directly create jobs, assign staff, or transition status.
-- For write-like requests, first classify the user's intent with classify_intent, then resolve the relevant targets before saving a proposal.
+- For write-like requests, use the router preclassification above when present. If it is absent, call classify_intent. Then resolve the relevant targets before saving a proposal.
 - Prefer save_typed_proposal for new proposals. Use save_dispatch_proposal only for legacy dispatch flows.
 - The proposal should include a typed proposal type, resolved targets, customer resolution, job draft, schedule draft, assignee draft, warnings, and confidence.
 - Existing job rule: if the user chooses or refers to an existing job found through list_jobs/get_job_detail, do NOT create a new job. Set intent="update_existing_job" and include that job ID as jobDraft.existingJobId. Keep the current job title in jobDraft.title.
@@ -77,7 +136,7 @@ Rules:
 - Be concise and operational in your final response.${routerContext}`;
 }
 
-function messageContentToText(content: Anthropic.MessageParam["content"]) {
+function messageContentToText(content: AiMessage["content"]) {
   if (typeof content === "string") {
     return content;
   }
@@ -94,7 +153,7 @@ function messageContentToText(content: Anthropic.MessageParam["content"]) {
     .trim();
 }
 
-function latestUserText(messages: Anthropic.MessageParam[]) {
+function latestUserText(messages: AiMessage[]) {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
     if (message?.role !== "user") {
@@ -111,7 +170,7 @@ function latestUserText(messages: Anthropic.MessageParam[]) {
 }
 
 export async function runAgentLoop(
-  messages: Anthropic.MessageParam[],
+  messages: AiMessage[],
   auth: AuthContext,
   input: {
     conversationId: string;
@@ -119,21 +178,26 @@ export async function runAgentLoop(
   },
   callbacks: AgentCallbacks,
 ): Promise<AgentLoopResult> {
-  const client = createAnthropicClient();
+  const profile = getAiAgentProfile("dispatch_planner");
+  const provider = createAiProvider(profile.provider);
   const tools = getToolDefinitions(auth);
   const allToolCalls: AgentLoopResult["toolCalls"] = [];
   let fullText = "";
   let proposal: DispatchProposal | undefined;
-  const intentClassification = latestUserText(messages)
-    ? classifyAgentIntent(latestUserText(messages))
+  let tokenUsage: AgentLoopResult["tokenUsage"];
+  let iterationCount = 0;
+  const enhancedIntent = latestUserText(messages)
+    ? await classifyAgentIntentWithEnhancement(latestUserText(messages))
     : undefined;
+  const intentClassification = enhancedIntent?.classification;
+  const intentExtraction = enhancedIntent?.extraction;
 
   const workingMessages = [...messages];
 
-  for (let i = 0; i < MAX_ITERATIONS; i += 1) {
-    const stream = await client.messages.stream({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 4096,
+  for (let i = 0; i < profile.maxIterations; i += 1) {
+    iterationCount = i + 1;
+    const stream = await provider.streamMessages({
+      profile,
       system: buildSystemPrompt(input.timezone, intentClassification),
       tools,
       messages: workingMessages,
@@ -146,13 +210,12 @@ export async function runAgentLoop(
     }> = [];
 
     for await (const event of stream) {
-      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-        fullText += event.delta.text;
-        callbacks.onTextDelta(event.delta.text);
-      }
+      fullText += event.text;
+      callbacks.onTextDelta(event.text);
     }
 
     const finalMessage = await stream.finalMessage();
+    tokenUsage = addTokenUsage(tokenUsage, finalMessage.usage);
 
     for (const block of finalMessage.content) {
       if (block.type === "tool_use") {
@@ -169,16 +232,21 @@ export async function runAgentLoop(
       content: finalMessage.content,
     });
 
-    if (finalMessage.stop_reason !== "tool_use" || toolUseBlocks.length === 0) {
-      return {
+    if (finalMessage.stopReason !== "tool_use" || toolUseBlocks.length === 0) {
+      return baseLoopResult({
+        profile,
         fullText,
         messages: workingMessages,
         toolCalls: allToolCalls,
-        ...(proposal ? { proposal } : {}),
-      };
+        iterationCount,
+        tokenUsage,
+        intentClassification,
+        intentExtraction,
+        proposal,
+      });
     }
 
-    const toolResults: Anthropic.ToolResultBlockParam[] = [];
+    const toolResults: AiToolResultBlock[] = [];
 
     for (const toolUse of toolUseBlocks) {
       callbacks.onToolUse(toolUse.name, toolUse.input);
@@ -212,11 +280,16 @@ export async function runAgentLoop(
     });
   }
 
-  return {
+  return baseLoopResult({
+    profile,
     fullText:
       "I've reached the maximum number of steps for this request. Please try breaking your request into smaller parts.",
     messages: workingMessages,
     toolCalls: allToolCalls,
-    ...(proposal ? { proposal } : {}),
-  };
+    iterationCount,
+    tokenUsage,
+    intentClassification,
+    intentExtraction,
+    proposal,
+  });
 }

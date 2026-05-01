@@ -223,7 +223,7 @@ type DispatchProposalPayload = Omit<
   "id" | "conversationId" | "tenantId" | "userId" | "createdAt"
 >;
 
-type ConfirmedProposalResult = {
+export type ConfirmedProposalResult = {
   proposalId: string;
   proposalType?: AgentProposalType;
   entityType: "customer" | "job";

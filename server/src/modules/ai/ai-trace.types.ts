@@ -10,6 +10,7 @@ export type AiRunTrace = {
   status: AiRunStatus;
   targetType?: string;
   targetId?: string;
+  provider?: string;
   model?: string;
   inputSummary?: string;
   output?: unknown;
@@ -26,4 +27,3 @@ export type AiRunTrace = {
   };
   estimatedCostUsd?: number;
 };
-

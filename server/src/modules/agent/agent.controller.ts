@@ -1,8 +1,13 @@
 import type { RequestHandler } from "express";
-import { env } from "../../config/env";
 import { ApiError } from "../../utils/api-error";
 import { asyncHandler } from "../../utils/async-handler";
 import { sendSuccess } from "../../utils/api-response";
+import {
+  assertAiAgentProfileConfigured,
+  buildAgentRunTrace,
+  buildProposalConfirmationTrace,
+  logAiRunTrace,
+} from "../ai";
 import {
   conversationIdParamSchema,
   proposalIdParamSchema,
@@ -18,12 +23,12 @@ import {
   appendAssistantMessage,
   updateProposalReview,
 } from "./agent.service";
-import { runAgentLoop } from "./agent-loop";
+import { runAgentLoop, type AgentLoopResult } from "./agent-loop";
 
 export const createConversationHandler: RequestHandler = asyncHandler(
   async (req, res) => {
     if (!req.auth) throw new ApiError(401, "Authentication is required.");
-    if (!env.ANTHROPIC_API_KEY) throw new ApiError(503, "AI agent is not configured.");
+    assertAiAgentProfileConfigured("dispatch_planner");
 
     const conversation = await createConversation(req.auth);
     sendSuccess(res, {
@@ -73,7 +78,7 @@ export const getConversationHandler: RequestHandler = asyncHandler(
 export const sendMessageHandler: RequestHandler = asyncHandler(
   async (req, res) => {
     if (!req.auth) throw new ApiError(401, "Authentication is required.");
-    if (!env.ANTHROPIC_API_KEY) throw new ApiError(503, "AI agent is not configured.");
+    assertAiAgentProfileConfigured("dispatch_planner");
 
     const { conversationId } = conversationIdParamSchema.parse(req.params);
     const { content, timezone } = sendMessageSchema.parse(req.body);
@@ -94,9 +99,11 @@ export const sendMessageHandler: RequestHandler = asyncHandler(
     });
 
     const auth = req.auth;
+    const traceStartedAt = new Date();
+    let agentResult: AgentLoopResult | undefined;
 
     try {
-      const result = await runAgentLoop(
+      agentResult = await runAgentLoop(
         updatedConversation.claudeMessages,
         auth,
         {
@@ -127,11 +134,32 @@ export const sendMessageHandler: RequestHandler = asyncHandler(
 
       await appendAssistantMessage(
         conversationId,
-        result.fullText,
-        result.messages,
-        result.toolCalls,
+        agentResult.fullText,
+        agentResult.messages,
+        agentResult.toolCalls,
+      );
+      logAiRunTrace(
+        "ai.agent.run.succeeded",
+        buildAgentRunTrace({
+          auth,
+          conversationId,
+          startedAt: traceStartedAt,
+          completedAt: new Date(),
+          result: agentResult,
+        }),
       );
     } catch (error) {
+      logAiRunTrace(
+        "ai.agent.run.failed",
+        buildAgentRunTrace({
+          auth,
+          conversationId,
+          startedAt: traceStartedAt,
+          completedAt: new Date(),
+          result: agentResult,
+          error,
+        }),
+      );
       const message =
         error instanceof Error ? error.message : "An unexpected error occurred.";
       res.write(`data: ${JSON.stringify({ type: "error", message })}\n\n`);
@@ -146,14 +174,42 @@ export const confirmProposalHandler: RequestHandler = asyncHandler(async (req, r
   if (!req.auth) throw new ApiError(401, "Authentication is required.");
 
   const { conversationId, proposalId } = proposalIdParamSchema.parse(req.params);
+  const traceStartedAt = new Date();
 
-  const result = await confirmDispatchProposal(req.auth, conversationId, proposalId);
+  try {
+    const result = await confirmDispatchProposal(req.auth, conversationId, proposalId);
 
-  sendSuccess(res, {
-    statusCode: 201,
-    message: "Dispatch proposal confirmed.",
-    data: result,
-  });
+    logAiRunTrace(
+      "ai.proposal.confirm.succeeded",
+      buildProposalConfirmationTrace({
+        auth: req.auth,
+        conversationId,
+        proposalId,
+        startedAt: traceStartedAt,
+        completedAt: new Date(),
+        result,
+      }),
+    );
+
+    sendSuccess(res, {
+      statusCode: 201,
+      message: "Dispatch proposal confirmed.",
+      data: result,
+    });
+  } catch (error) {
+    logAiRunTrace(
+      "ai.proposal.confirm.failed",
+      buildProposalConfirmationTrace({
+        auth: req.auth,
+        conversationId,
+        proposalId,
+        startedAt: traceStartedAt,
+        completedAt: new Date(),
+        error,
+      }),
+    );
+    throw error;
+  }
 });
 
 export const updateProposalReviewHandler: RequestHandler = asyncHandler(async (req, res) => {

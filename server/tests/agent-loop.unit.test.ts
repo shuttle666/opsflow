@@ -64,6 +64,10 @@ describe("runAgentLoop", () => {
       .mockResolvedValueOnce(
         buildStream(["先查一下客户。"], {
           stop_reason: "tool_use",
+          usage: {
+            input_tokens: 100,
+            output_tokens: 10,
+          },
           content: [
             {
               type: "tool_use",
@@ -77,6 +81,10 @@ describe("runAgentLoop", () => {
       .mockResolvedValueOnce(
         buildStream(["已找到客户。"], {
           stop_reason: "end_turn",
+          usage: {
+            input_tokens: 120,
+            output_tokens: 15,
+          },
           content: [
             {
               type: "text",
@@ -105,6 +113,20 @@ describe("runAgentLoop", () => {
     expect(result.fullText).toBe("先查一下客户。已找到客户。");
     expect(onTextDelta).toHaveBeenCalledWith("先查一下客户。");
     expect(onTextDelta).toHaveBeenCalledWith("已找到客户。");
+    expect(result.provider).toBe("anthropic");
+    expect(result.model).toBe("claude-sonnet-4-20250514");
+    expect(result.iterationCount).toBe(2);
+    expect(result.tokenUsage).toEqual({
+      inputTokens: 220,
+      outputTokens: 25,
+    });
+    expect(loopMocks.streamFactory).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 4096,
+      }),
+    );
     expect(result.toolCalls).toEqual([
       {
         name: "list_customers",

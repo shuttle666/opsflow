@@ -310,7 +310,59 @@ export default function CustomersPage() {
                 />
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+              <div className="divide-y divide-[var(--color-app-border)] md:hidden">
+                {visibleCustomers.map((customer) => (
+                  <Link
+                    key={customer.id}
+                    href={`/customers/${customer.id}`}
+                    className="block px-4 py-4 transition hover:bg-[var(--color-app-panel-muted)]"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={cn(
+                          "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-bold",
+                          avatarColor(customer.name),
+                        )}
+                      >
+                        {initialsFor(customer.name)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-bold text-[var(--color-text)]">
+                              {customer.name}
+                            </p>
+                            <p className="mt-1 truncate text-xs text-[var(--color-text-secondary)]">
+                              {customer.email ?? "No email on file"}
+                            </p>
+                          </div>
+                          <span
+                            className={cn(
+                              badgeBaseClassName,
+                              "shrink-0",
+                              customer.archivedAt
+                                ? "border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] text-[var(--color-text-secondary)]"
+                                : "border-[var(--color-app-border)] bg-[var(--color-success-soft)] text-[var(--color-success)]",
+                            )}
+                          >
+                            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
+                            {customer.archivedAt ? "Archived" : "Active"}
+                          </span>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between gap-3 text-xs text-[var(--color-text-muted)]">
+                          <span className="truncate font-mono">
+                            {customer.phone ?? "No phone"}
+                          </span>
+                          <MoreHorizontal className="h-5 w-5 shrink-0" />
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+
+              <div className="hidden overflow-x-auto md:block">
                 <table className="min-w-full border-collapse text-sm">
                   <thead className="border-b border-[var(--color-app-border)] text-left text-[11px] uppercase text-[var(--color-text-muted)]">
                     <tr>
@@ -378,6 +430,7 @@ export default function CustomersPage() {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </div>
         </DataTableCard>

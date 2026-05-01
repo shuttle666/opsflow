@@ -23,9 +23,10 @@ import {
   secondaryButtonClassName,
   surfaceClassName,
 } from "@/components/ui/styles";
-import { formatTimeRange, listJobsRequest } from "@/features/job";
+import { getDashboardSummaryRequest } from "@/features/dashboard";
+import { formatTimeRange } from "@/features/job";
 import { useAuthStore } from "@/store/auth-store";
-import type { JobStatus } from "@/types/job";
+import type { DashboardSummary } from "@/types/dashboard";
 
 function initialsFor(name: string) {
   return name
@@ -35,12 +36,45 @@ function initialsFor(name: string) {
     .join("");
 }
 
-function todayRange() {
+function localDateString(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function emptyDashboardSummary(date = localDateString(new Date())): DashboardSummary {
+  const now = new Date().toISOString();
+
+  return {
+    date,
+    rangeStart: now,
+    rangeEnd: now,
+    generatedAt: now,
+    metrics: {
+      todayJobs: 0,
+      scheduledRows: 0,
+      assignedJobs: 0,
+      pendingReview: 0,
+      unassignedJobs: 0,
+      activeCrewScheduled: 0,
+      activeCrewTotal: 0,
+      needsAttention: 0,
+      conflictCount: 0,
+    },
+    schedulePreview: [],
+    attentionItems: [],
+  };
+}
+
+function todaySummaryQuery() {
   const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-  return { from: start.toISOString(), to: end.toISOString() };
+
+  return {
+    date: localDateString(now),
+    timezoneOffsetMinutes: now.getTimezoneOffset(),
+  };
 }
 
 export default function DashboardPage() {
@@ -48,13 +82,11 @@ export default function DashboardPage() {
   const currentTenant = useAuthStore((state) => state.currentTenant);
   const user = useAuthStore((state) => state.user);
 
-  const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
+  const [summary, setSummary] = useState<DashboardSummary>(() =>
+    emptyDashboardSummary(),
+  );
   const [greeting, setGreeting] = useState("Good day");
-  const [isScheduleLoading, setIsScheduleLoading] = useState(true);
-  const [jobCount, setJobCount] = useState(0);
-  const [attentionItems, setAttentionItems] = useState<
-    Array<{ id: string; title: string; customer: string; status: JobStatus; assignee?: string }>
-  >([]);
+  const [isSummaryLoading, setIsSummaryLoading] = useState(true);
   const allowPlanner = currentTenant?.role === "OWNER" || currentTenant?.role === "MANAGER";
 
   useEffect(() => {
@@ -66,61 +98,24 @@ export default function DashboardPage() {
     let cancelled = false;
 
     void (async () => {
-      setIsScheduleLoading(true);
+      setIsSummaryLoading(true);
+      const query = todaySummaryQuery();
 
       try {
-        const { from, to } = todayRange();
         const result = await withAccessTokenRetry((accessToken) =>
-          listJobsRequest(accessToken, {
-            scheduledFrom: from,
-            scheduledTo: to,
-            page: 1,
-            pageSize: 10,
-            sort: "scheduledStartAt_asc",
-          }),
+          getDashboardSummaryRequest(accessToken, query),
         );
 
         if (!cancelled) {
-          setScheduleItems(
-            result.items.map((job) => ({
-              id: job.id,
-              customerName: job.customer.name,
-              customerInitials: initialsFor(job.customer.name),
-              serviceAddress: job.serviceAddress,
-              jobType: job.title,
-              status: job.status,
-              time: formatTimeRange(job.scheduledStartAt, job.scheduledEndAt),
-              assignee: job.assignedToName ?? undefined,
-            })),
-          );
-          setJobCount(result.pagination.total);
-          setAttentionItems(
-            result.items
-              .filter(
-                (job) =>
-                  job.status === "PENDING_REVIEW" ||
-                  job.status === "NEW" ||
-                  !job.assignedToName,
-              )
-              .slice(0, 4)
-              .map((job) => ({
-                id: job.id,
-                title: job.title,
-                customer: job.customer.name,
-                status: job.status,
-                assignee: job.assignedToName ?? undefined,
-              })),
-          );
+          setSummary(result);
         }
       } catch {
         if (!cancelled) {
-          setScheduleItems([]);
-          setJobCount(0);
-          setAttentionItems([]);
+          setSummary(emptyDashboardSummary(query.date));
         }
       } finally {
         if (!cancelled) {
-          setIsScheduleLoading(false);
+          setIsSummaryLoading(false);
         }
       }
     })();
@@ -130,23 +125,20 @@ export default function DashboardPage() {
     };
   }, [withAccessTokenRetry]);
 
-  const dashboardStats = useMemo(() => {
-    const pendingReviewCount = scheduleItems.filter(
-      (item) => item.status === "PENDING_REVIEW",
-    ).length;
-    const unassignedCount = scheduleItems.filter((item) => !item.assignee).length;
-    const activeCrewCount = new Set(
-      scheduleItems.map((item) => item.assignee).filter(Boolean),
-    ).size;
-    const assignedCount = scheduleItems.filter((item) => item.assignee).length;
-
-    return {
-      assignedCount,
-      pendingReviewCount,
-      unassignedCount,
-      activeCrewCount,
-    };
-  }, [scheduleItems]);
+  const scheduleItems = useMemo<ScheduleItem[]>(
+    () =>
+      summary.schedulePreview.map((item) => ({
+        id: item.id,
+        customerName: item.customerName,
+        customerInitials: item.customerInitials || initialsFor(item.customerName),
+        serviceAddress: item.serviceAddress,
+        jobType: item.jobType,
+        status: item.status,
+        time: formatTimeRange(item.scheduledStartAt, item.scheduledEndAt),
+        assignee: item.assignee,
+      })),
+    [summary.schedulePreview],
+  );
 
   return (
     <AppShell
@@ -163,10 +155,10 @@ export default function DashboardPage() {
               {greeting}{user?.displayName ? `, ${user.displayName.split(" ")[0]}` : ""}
             </p>
             <h2 className="mt-1 text-[22px] font-extrabold leading-tight text-white sm:text-2xl">
-              You have {jobCount} {jobCount === 1 ? "job" : "jobs"} scheduled today
+              You have {summary.metrics.todayJobs} {summary.metrics.todayJobs === 1 ? "job" : "jobs"} scheduled today
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-white/75">
-              {dashboardStats.assignedCount} assigned · {dashboardStats.pendingReviewCount} pending review · {dashboardStats.unassignedCount === 0 ? "All crew on track" : `${dashboardStats.unassignedCount} unassigned`}
+              {summary.metrics.assignedJobs} assigned · {summary.metrics.pendingReview} pending review · {summary.metrics.unassignedJobs === 0 ? "All crew on track" : `${summary.metrics.unassignedJobs} unassigned`}
             </p>
           </div>
         </section>
@@ -174,36 +166,36 @@ export default function DashboardPage() {
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Today Jobs"
-            value={String(jobCount)}
+            value={String(summary.metrics.todayJobs)}
             icon={<Briefcase className="h-[18px] w-[18px]" />}
             tone="brand"
             meta="Visible on board"
           />
           <StatCard
             label="Scheduled Rows"
-            value={String(scheduleItems.length)}
+            value={String(summary.metrics.scheduledRows)}
             icon={<Calendar className="h-[18px] w-[18px]" />}
             tone="indigo"
             meta="Loaded for today"
           />
           <StatCard
             label="Pending Review"
-            value={String(dashboardStats.pendingReviewCount)}
+            value={String(summary.metrics.pendingReview)}
             icon={<CheckCircle2 className="h-[18px] w-[18px]" />}
             tone="warning"
             meta="Needs manager action"
           />
           <StatCard
             label="Active Crew"
-            value={String(dashboardStats.activeCrewCount)}
+            value={`${summary.metrics.activeCrewScheduled} / ${summary.metrics.activeCrewTotal}`}
             icon={<Users className="h-[18px] w-[18px]" />}
             tone="success"
-            meta={`${dashboardStats.unassignedCount} unassigned`}
+            meta={`${summary.metrics.unassignedJobs} unassigned`}
           />
         </section>
 
         <div className="grid min-h-0 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
-          <TodaysScheduleCard items={scheduleItems} loading={isScheduleLoading} />
+          <TodaysScheduleCard items={scheduleItems} loading={isSummaryLoading} />
           <section className={`${surfaceClassName} overflow-hidden p-0`}>
             <div className="border-b border-[var(--color-app-border)] px-4 py-3">
               <div className="flex items-center justify-between gap-3">
@@ -214,21 +206,21 @@ export default function DashboardPage() {
                     "border-[var(--color-app-border)] bg-[var(--color-warning-soft)] text-[var(--color-warning)]",
                   )}
                 >
-                  {attentionItems.length}
+                  {summary.metrics.needsAttention}
                 </span>
               </div>
             </div>
 
             <div className="space-y-1 p-2">
-              {isScheduleLoading ? (
+              {isSummaryLoading ? (
                 <p className="px-3 py-6 text-sm text-[var(--color-text-muted)]">Checking today&apos;s board...</p>
-              ) : attentionItems.length === 0 ? (
+              ) : summary.attentionItems.length === 0 ? (
                 <div className="px-3 py-6 text-sm text-[var(--color-text-secondary)]">
                   <p className="font-semibold text-[var(--color-text)]">All clear</p>
                   <p className="mt-1 leading-6">No pending review, new, or unassigned jobs in today&apos;s loaded board.</p>
                 </div>
               ) : (
-                attentionItems.map((item) => (
+                summary.attentionItems.map((item) => (
                   <Link
                     key={item.id}
                     href={`/jobs/${item.id}`}

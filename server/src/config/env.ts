@@ -5,6 +5,22 @@ dotenv.config();
 
 const defaultJwtAccessSecret = "dev-access-secret-change-me";
 
+const booleanEnvSchema = z.preprocess((value) => {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  if (["true", "1", "yes", "on"].includes(value.toLowerCase())) {
+    return true;
+  }
+
+  if (["false", "0", "no", "off", ""].includes(value.toLowerCase())) {
+    return false;
+  }
+
+  return value;
+}, z.boolean());
+
 const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
@@ -28,6 +44,46 @@ const envSchema = z.object({
   EVIDENCE_DIR: z.string().min(1).default("./uploads/evidence"),
   EVIDENCE_MAX_SIZE_BYTES: z.coerce.number().int().positive().default(10 * 1024 * 1024),
   ANTHROPIC_API_KEY: z.string().default(""),
+  OPENAI_API_KEY: z.string().default(""),
+  AI_DISPATCH_PLANNER_PROVIDER: z.enum(["anthropic", "openai"]).default("anthropic"),
+  AI_DISPATCH_PLANNER_MODEL: z
+    .string()
+    .trim()
+    .min(1)
+    .default("claude-sonnet-4-20250514"),
+  AI_DISPATCH_PLANNER_MAX_TOKENS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(4096),
+  AI_DISPATCH_PLANNER_MAX_ITERATIONS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(50)
+    .default(10),
+  AI_DISPATCH_PLANNER_TEMPERATURE: z.preprocess(
+    (value) => (value === "" || value === undefined ? undefined : value),
+    z.coerce.number().min(0).max(1).optional(),
+  ),
+  AI_INTENT_EXTRACTOR_ENABLED: booleanEnvSchema.default(false),
+  AI_INTENT_EXTRACTOR_PROVIDER: z.literal("openai").default("openai"),
+  AI_INTENT_EXTRACTOR_MODEL: z
+    .string()
+    .trim()
+    .min(1)
+    .default("gpt-4.1-mini"),
+  AI_INTENT_EXTRACTOR_MAX_TOKENS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(800),
+  AI_INTENT_EXTRACTOR_TEMPERATURE: z.coerce.number().min(0).max(1).default(0),
+  AI_INTENT_EXTRACTOR_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(2500),
 });
 
 export function parseEnv(source: NodeJS.ProcessEnv) {

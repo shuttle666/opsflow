@@ -1,3 +1,5 @@
+import { extractJobConcepts } from "./agent-domain-dictionary";
+
 export type AgentIntent =
   | "READ_ONLY_QUERY"
   | "CREATE_CUSTOMER"
@@ -13,12 +15,14 @@ export type AgentIntentClassification = {
   intent: AgentIntent;
   confidence: number;
   reason: string;
+  source?: "rules" | "ai" | "merged";
   extracted: {
     customerQuery?: string;
     jobQuery?: string;
     staffQuery?: string;
     timeQuery?: string;
     serviceAddress?: string;
+    jobConcepts?: string[];
     customerFields?: Partial<{
       name: string;
       phone: string;
@@ -47,6 +51,11 @@ function extractEmail(value: string) {
   return match?.[0]?.trim();
 }
 
+function jobConcepts(value: string) {
+  const concepts = extractJobConcepts(value);
+  return concepts.length > 0 ? concepts : undefined;
+}
+
 export function classifyAgentIntent(content: string): AgentIntentClassification {
   const text = content.trim();
   const normalized = text.toLowerCase();
@@ -64,6 +73,7 @@ export function classifyAgentIntent(content: string): AgentIntentClassification 
       reason: "User appears to be cancelling a job.",
       extracted: {
         jobQuery: extractQuoted(text) ?? text,
+        jobConcepts: jobConcepts(text),
       },
     };
   }
@@ -105,6 +115,7 @@ export function classifyAgentIntent(content: string): AgentIntentClassification 
         serviceAddress: includesAny(normalized, [/address|地址|service address/u])
           ? text
           : undefined,
+        jobConcepts: jobConcepts(text),
       },
     };
   }
@@ -121,6 +132,7 @@ export function classifyAgentIntent(content: string): AgentIntentClassification 
         jobQuery: extractQuoted(text) ?? text,
         staffQuery: text,
         timeQuery: text,
+        jobConcepts: jobConcepts(text),
       },
     };
   }
@@ -133,6 +145,7 @@ export function classifyAgentIntent(content: string): AgentIntentClassification 
       extracted: {
         jobQuery: extractQuoted(text) ?? text,
         staffQuery: text,
+        jobConcepts: jobConcepts(text),
       },
     };
   }
@@ -145,6 +158,7 @@ export function classifyAgentIntent(content: string): AgentIntentClassification 
       extracted: {
         jobQuery: extractQuoted(text) ?? text,
         timeQuery: text,
+        jobConcepts: jobConcepts(text),
       },
     };
   }
@@ -156,6 +170,7 @@ export function classifyAgentIntent(content: string): AgentIntentClassification 
       reason: "User appears to be changing job status.",
       extracted: {
         jobQuery: extractQuoted(text) ?? text,
+        jobConcepts: jobConcepts(text),
       },
     };
   }
@@ -179,6 +194,7 @@ export function classifyAgentIntent(content: string): AgentIntentClassification 
       extracted: {
         jobQuery: extractQuoted(text) ?? text,
         serviceAddress: includesAny(normalized, [/address|地址/u]) ? text : undefined,
+        jobConcepts: jobConcepts(text),
       },
     };
   }
@@ -202,6 +218,7 @@ export function classifyAgentIntent(content: string): AgentIntentClassification 
     extracted: {
       customerQuery: text,
       jobQuery: text,
+      jobConcepts: jobConcepts(text),
     },
   };
 }

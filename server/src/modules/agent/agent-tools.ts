@@ -22,7 +22,7 @@ import {
   saveDispatchProposalToolInputSchema,
   saveTypedProposalToolInputSchema,
 } from "./agent-schemas";
-import { classifyAgentIntent } from "./intent-router";
+import { classifyAgentIntentWithEnhancement } from "./intent-extractor";
 import { storeDispatchProposal, storeTypedProposal } from "./agent.service";
 import {
   resolveCustomerTarget,
@@ -81,7 +81,9 @@ toolMap.set("classify_intent", {
   },
   execute: (_auth, input) =>
     safeExecuteWithSchema(classifyIntentToolInputSchema, input, (validatedInput) =>
-      Promise.resolve(classifyAgentIntent(validatedInput.content)),
+      classifyAgentIntentWithEnhancement(validatedInput.content).then(
+        (result) => result.classification,
+      ),
     ),
 });
 
@@ -222,6 +224,11 @@ toolMap.set("resolve_job_target", {
         title: { type: "string" },
         description: { type: "string" },
         serviceAddress: { type: "string" },
+        concepts: {
+          type: "array",
+          items: { type: "string" },
+          description: "Normalized job concepts such as leak, tap, kitchen, dishwasher, aircon.",
+        },
         customerId: { type: "string" },
         includeClosed: { type: "boolean" },
       },

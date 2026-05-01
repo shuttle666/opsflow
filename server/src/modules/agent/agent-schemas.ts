@@ -240,6 +240,7 @@ export const resolveJobTargetToolInputSchema = z
     title: optionalTrimmedStringSchema,
     description: optionalTrimmedStringSchema,
     serviceAddress: z.string().trim().max(500).optional(),
+    concepts: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
     customerId: optionalUuidSchema,
     includeClosed: z.boolean().optional().default(false),
   })

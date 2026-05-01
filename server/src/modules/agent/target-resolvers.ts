@@ -6,6 +6,11 @@ import {
 import { prisma } from "../../lib/prisma";
 import type { AuthContext } from "../../types/auth";
 import { normalizeScheduleDraftTimezone } from "./agent-time";
+import {
+  normalizeSearchText,
+  sharedJobConceptScore,
+  sharedTokenScore,
+} from "./agent-domain-dictionary";
 
 type ResolverStatus = "matched" | "ambiguous" | "missing" | "new_candidate";
 
@@ -14,6 +19,7 @@ type CustomerCandidate = {
   name: string;
   phone: string | null;
   email: string | null;
+  matchReasons?: string[];
 };
 
 type JobCandidate = {
@@ -29,6 +35,7 @@ type JobCandidate = {
   };
   assignedToName: string | null;
   score: number;
+  matchReasons: string[];
 };
 
 type StaffCandidate = {
@@ -45,94 +52,8 @@ const openJobStatuses = [
   JobStatus.PENDING_REVIEW,
 ];
 
-const stopWords = new Set([
-  "the",
-  "and",
-  "for",
-  "with",
-  "from",
-  "job",
-  "work",
-  "repair",
-  "service",
-  "services",
-]);
-
-const jobConceptPatterns = [
-  ["leak", /leak|漏水|渗漏|漏/iu],
-  ["tap", /\btaps?\b|\bfaucets?\b|水龙头|龙头/iu],
-  ["kitchen", /\bkitchen\b|厨房/iu],
-  ["dishwasher", /\bdish\s*washer\b|\bdishwasher\b|洗碗机/iu],
-  ["investigation", /investigat|inspect|diagnos|调查|检查/iu],
-  ["installation", /install|安装/iu],
-  ["ceiling", /\bceiling\b|天花板|吊顶/iu],
-  ["fan", /\bfans?\b|风扇|吊扇/iu],
-  ["aircon", /\bair\s*con\b|\bac\b|\bair\s*condition|空调/iu],
-  ["maintenance", /mainten|service|维护|保养/iu],
-] satisfies Array<[string, RegExp]>;
-
 function normalize(value?: string | null) {
-  return (value ?? "")
-    .toLowerCase()
-    .replace(/[^a-z0-9\u4e00-\u9fff]+/gu, " ")
-    .replace(/\s+/gu, " ")
-    .trim();
-}
-
-function tokens(value?: string | null) {
-  return new Set(
-    (normalize(value).match(/[a-z0-9\u4e00-\u9fff]+/gu) ?? []).filter(
-      (token) => token.length >= 2 && !stopWords.has(token),
-    ),
-  );
-}
-
-function sharedTokenScore(query: string, candidate: string) {
-  const queryTokens = tokens(query);
-  const candidateTokens = tokens(candidate);
-
-  if (queryTokens.size === 0 || candidateTokens.size === 0) {
-    return 0;
-  }
-
-  let shared = 0;
-  for (const token of queryTokens) {
-    if (candidateTokens.has(token)) {
-      shared += 1;
-    }
-  }
-
-  return shared / Math.max(queryTokens.size, 1);
-}
-
-function extractJobConcepts(value: string) {
-  const concepts = new Set<string>();
-
-  for (const [concept, pattern] of jobConceptPatterns) {
-    if (pattern.test(value)) {
-      concepts.add(concept);
-    }
-  }
-
-  return concepts;
-}
-
-function sharedConceptScore(query: string, candidate: string) {
-  const queryConcepts = extractJobConcepts(query);
-  const candidateConcepts = extractJobConcepts(candidate);
-
-  if (queryConcepts.size === 0 || candidateConcepts.size === 0) {
-    return 0;
-  }
-
-  let shared = 0;
-  for (const concept of queryConcepts) {
-    if (candidateConcepts.has(concept)) {
-      shared += 1;
-    }
-  }
-
-  return shared / Math.max(queryConcepts.size, 1);
+  return normalizeSearchText(value);
 }
 
 function scoreJob(input: ResolveJobTargetInput, job: {
@@ -144,6 +65,7 @@ function scoreJob(input: ResolveJobTargetInput, job: {
   const queryText = [input.q, input.title, input.description].filter(Boolean).join(" ");
   const jobText = [job.title, job.description, job.customerName].filter(Boolean).join(" ");
   let score = 0;
+  const matchReasons: string[] = [];
   const normalizedJobText = normalize(jobText);
   const normalizedQueryText = normalize(queryText);
   const normalizedTitle = normalize(job.title);
@@ -154,20 +76,37 @@ function scoreJob(input: ResolveJobTargetInput, job: {
       (normalizedTitle.length >= 6 && normalizedQueryText.includes(normalizedTitle)))
   ) {
     score += 0.45;
+    matchReasons.push("text_contains");
   }
 
-  score += sharedTokenScore(queryText, jobText) * 0.35;
-  score += sharedConceptScore(queryText, jobText) * 0.4;
+  const tokenScore = sharedTokenScore(queryText, jobText);
+  score += tokenScore * 0.35;
+  if (tokenScore > 0) {
+    matchReasons.push("shared_tokens");
+  }
+
+  const conceptScore = sharedJobConceptScore(queryText, jobText, input.concepts);
+  score += conceptScore * 0.4;
+  if (conceptScore > 0) {
+    matchReasons.push("job_concepts");
+  }
 
   if (input.serviceAddress) {
     const addressScore = sharedTokenScore(input.serviceAddress, job.serviceAddress);
     score += addressScore * 0.25;
+    if (addressScore > 0) {
+      matchReasons.push("address_tokens");
+    }
     if (normalize(job.serviceAddress).includes(normalize(input.serviceAddress))) {
       score += 0.2;
+      matchReasons.push("address_contains");
     }
   }
 
-  return Math.min(1, score);
+  return {
+    score: Math.min(1, score),
+    matchReasons,
+  };
 }
 
 export type ResolveCustomerTargetInput = {
@@ -202,7 +141,7 @@ export async function resolveCustomerTarget(
     };
   }
 
-  const customers = await prisma.customer.findMany({
+  let customers = await prisma.customer.findMany({
     where: {
       tenantId: auth.tenantId,
       archivedAt: null,
@@ -231,6 +170,31 @@ export async function resolveCustomerTarget(
     },
   });
 
+  if (customers.length === 0 && q) {
+    const recentCustomers = await prisma.customer.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        archivedAt: null,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+      },
+    });
+    const normalizedQuery = normalize(q);
+
+    customers = recentCustomers
+      .filter((customer) => {
+        const normalizedName = normalize(customer.name);
+        return normalizedName.length >= 2 && normalizedQuery.includes(normalizedName);
+      })
+      .slice(0, 10);
+  }
+
   if (customers.length === 0) {
     return {
       status: "new_candidate",
@@ -240,14 +204,32 @@ export async function resolveCustomerTarget(
     };
   }
 
-  const exactMatches = customers.filter((customer) => {
-    return (
-      (email && customer.email?.toLowerCase() === email) ||
-      (phone && customer.phone === phone) ||
-      (q && normalize(customer.name) === normalize(q))
-    );
+  const decoratedCustomers = customers.map((customer) => {
+    const matchReasons: string[] = [];
+    if (email && customer.email?.toLowerCase() === email) {
+      matchReasons.push("email_exact");
+    }
+    if (phone && customer.phone === phone) {
+      matchReasons.push("phone_exact");
+    }
+    if (q && normalize(customer.name) === normalize(q)) {
+      matchReasons.push("name_exact");
+    }
+    if (q && normalize(q).includes(normalize(customer.name))) {
+      matchReasons.push("name_mentioned");
+    }
+
+    return {
+      ...customer,
+      ...(matchReasons.length > 0 ? { matchReasons } : {}),
+    };
   });
-  const candidates = exactMatches.length > 0 ? exactMatches : customers;
+  const exactMatches = decoratedCustomers.filter((customer) =>
+    customer.matchReasons?.some((reason) =>
+      ["email_exact", "phone_exact", "name_exact"].includes(reason),
+    ),
+  );
+  const candidates = exactMatches.length > 0 ? exactMatches : decoratedCustomers;
 
   if (candidates.length === 1) {
     return {
@@ -272,6 +254,7 @@ export type ResolveJobTargetInput = {
   title?: string;
   description?: string;
   serviceAddress?: string;
+  concepts?: string[];
   customerId?: string;
   includeClosed?: boolean;
 };
@@ -289,6 +272,7 @@ export async function resolveJobTarget(
   input: ResolveJobTargetInput,
 ): Promise<ResolveJobTargetResult> {
   const query = input.q?.trim() || input.title?.trim() || input.serviceAddress?.trim();
+  const hasConcepts = Boolean(input.concepts?.length);
 
   if (!query && !input.customerId) {
     return {
@@ -310,7 +294,7 @@ export async function resolveJobTarget(
               in: openJobStatuses,
             },
           }),
-      ...(query && !input.customerId
+      ...(query && !input.customerId && !hasConcepts
         ? {
             OR: [
               { title: { contains: query, mode: "insensitive" as const } },
@@ -362,22 +346,27 @@ export async function resolveJobTarget(
   }
 
   const candidates = jobs
-    .map((job) => ({
-      id: job.id,
-      title: job.title,
-      serviceAddress: job.serviceAddress,
-      status: job.status,
-      scheduledStartAt: job.scheduledStartAt?.toISOString() ?? null,
-      scheduledEndAt: job.scheduledEndAt?.toISOString() ?? null,
-      customer: job.customer,
-      assignedToName: job.assignedTo?.displayName ?? null,
-      score: scoreJob(input, {
+    .map((job) => {
+      const scored = scoreJob(input, {
         title: job.title,
         description: job.description,
         serviceAddress: job.serviceAddress,
         customerName: job.customer.name,
-      }),
-    }))
+      });
+
+      return {
+        id: job.id,
+        title: job.title,
+        serviceAddress: job.serviceAddress,
+        status: job.status,
+        scheduledStartAt: job.scheduledStartAt?.toISOString() ?? null,
+        scheduledEndAt: job.scheduledEndAt?.toISOString() ?? null,
+        customer: job.customer,
+        assignedToName: job.assignedTo?.displayName ?? null,
+        score: scored.score,
+        matchReasons: scored.matchReasons,
+      };
+    })
     .sort((left, right) => right.score - left.score);
 
   const best = candidates[0];

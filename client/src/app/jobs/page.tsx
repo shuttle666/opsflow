@@ -347,7 +347,63 @@ export default function JobsPage() {
                   />
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <>
+                <div className="divide-y divide-[var(--color-app-border)] md:hidden">
+                  {jobs.map((job) => (
+                    <Link
+                      key={job.id}
+                      href={`/jobs/${job.id}`}
+                      className="block px-4 py-4 transition hover:bg-[var(--color-app-panel-muted)]"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="line-clamp-2 text-sm font-bold text-[var(--color-text)]">
+                              {job.title}
+                            </p>
+                            <p className="mt-1 truncate text-xs text-[var(--color-text-secondary)]">
+                              {job.customer.name}
+                            </p>
+                          </div>
+                          <StatusBadge kind="job" value={job.status} />
+                        </div>
+
+                        <p className="truncate text-xs text-[var(--color-text-muted)]">
+                          {job.serviceAddress}
+                        </p>
+
+                        <div className="grid gap-2 text-xs text-[var(--color-text-secondary)]">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="font-semibold uppercase text-[var(--color-text-muted)]">
+                              Scheduled
+                            </span>
+                            <span className="min-w-0 truncate text-right font-mono">
+                              {formatScheduleRange(job.scheduledStartAt, job.scheduledEndAt)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="font-semibold uppercase text-[var(--color-text-muted)]">
+                              Assigned
+                            </span>
+                            <span className="min-w-0 truncate text-right">
+                              {job.assignedToName ?? "-"}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="font-semibold uppercase text-[var(--color-text-muted)]">
+                              Updated
+                            </span>
+                            <span className="min-w-0 truncate text-right font-mono">
+                              {formatDateTime(job.updatedAt)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+
+                <div className="hidden overflow-x-auto md:block">
                   <table className="min-w-full border-collapse text-sm">
                     <thead className="border-b border-[var(--color-app-border)] text-left text-[11px] uppercase text-[var(--color-text-muted)]">
                       <tr>
@@ -400,6 +456,7 @@ export default function JobsPage() {
                     </tbody>
                   </table>
                 </div>
+                </>
               )}
             </div>
           </DataTableCard>

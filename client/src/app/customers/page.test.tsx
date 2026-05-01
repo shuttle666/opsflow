@@ -144,8 +144,8 @@ describe("customers page", () => {
     const user = userEvent.setup();
     render(<CustomersPage />);
 
-    expect(await screen.findByText("Noah Thompson")).toBeInTheDocument();
-    expect(screen.getByText("Riley Missing")).toBeInTheDocument();
+    expect(await screen.findAllByText("Noah Thompson")).not.toHaveLength(0);
+    expect(screen.getAllByText("Riley Missing")).not.toHaveLength(0);
     expect(screen.getByRole("link", { name: "Add Customer" })).toBeInTheDocument();
     expect(screen.getByLabelText("Sort customers")).toBeInTheDocument();
     expect(screen.getByLabelText("Customer status")).toBeInTheDocument();
@@ -153,7 +153,7 @@ describe("customers page", () => {
     await user.selectOptions(screen.getByLabelText("Contact filter"), "missing_contact");
 
     expect(screen.queryByText("Noah Thompson")).not.toBeInTheDocument();
-    expect(screen.getByText("Riley Missing")).toBeInTheDocument();
+    expect(screen.getAllByText("Riley Missing")).not.toHaveLength(0);
   });
 
   it("applies search and hides create button for staff", async () => {
@@ -323,7 +323,7 @@ describe("customers page", () => {
         }),
       );
     });
-    expect(await screen.findByText("Archived Customer")).toBeInTheDocument();
+    expect(await screen.findAllByText("Archived Customer")).not.toHaveLength(0);
     expect(screen.getAllByText("Archived").length).toBeGreaterThan(1);
   });
 });

@@ -78,8 +78,67 @@ export function TodaysScheduleCard({ items, loading = false }: TodaysScheduleCar
           <p className="text-sm text-[var(--color-text-muted)]">No jobs scheduled for today</p>
         </div>
       ) : (
-        <div className="w-full overflow-x-auto">
-          <table className="w-full border-collapse text-left text-sm">
+        <>
+          <div className="divide-y divide-[var(--color-app-border)] md:hidden">
+            {items.map((item) => (
+              <Link
+                key={item.id}
+                href={`/jobs/${item.id}`}
+                className="block bg-[var(--color-app-panel)] px-4 py-4 transition hover:bg-[var(--color-app-panel-muted)]"
+              >
+                <div className="flex items-start gap-3">
+                  <div
+                    className={cn(
+                      "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold",
+                      avatarColor(item.customerName),
+                    )}
+                  >
+                    {item.customerInitials}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-[var(--color-text)]">{item.customerName}</p>
+                        <p className="mt-0.5 line-clamp-2 text-sm font-medium text-[var(--color-text-secondary)]">
+                          {item.jobType}
+                        </p>
+                      </div>
+                      <span className="shrink-0 font-mono text-xs font-semibold text-[var(--color-text-muted)]">
+                        {item.time}
+                      </span>
+                    </div>
+                    {item.serviceAddress ? (
+                      <p className="mt-2 truncate text-xs text-[var(--color-text-muted)]">{item.serviceAddress}</p>
+                    ) : null}
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span
+                        className={cn(
+                          badgeBaseClassName,
+                          statusBadgeClassName[item.status] ?? "bg-[var(--color-app-panel-muted)] text-[var(--color-text-secondary)] border-[var(--color-app-border)]",
+                        )}
+                      >
+                        <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
+                        {formatBadgeLabel(item.status)}
+                      </span>
+                      <span
+                        className={cn(
+                          "rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-2.5 py-1 text-[11px] font-semibold",
+                          item.assignee
+                            ? "text-[var(--color-text-secondary)]"
+                            : "text-[var(--color-warning)]",
+                        )}
+                      >
+                        {item.assignee ?? "Unassigned"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          <div className="hidden w-full overflow-x-auto md:block">
+            <table className="w-full border-collapse text-left text-sm">
             <thead className="border-b border-[var(--color-app-border)]">
               <tr className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
                 <th className="min-w-[200px] px-4 py-2.5">Customer</th>
@@ -150,8 +209,9 @@ export function TodaysScheduleCard({ items, loading = false }: TodaysScheduleCar
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

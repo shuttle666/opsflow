@@ -113,7 +113,7 @@ describe("jobs page", () => {
 
     render(<JobsPage />);
 
-    expect(await screen.findByText("Leaking kitchen tap")).toBeInTheDocument();
+    expect(await screen.findAllByText("Leaking kitchen tap")).not.toHaveLength(0);
     expect(screen.getByRole("link", { name: "Create job" })).toBeInTheDocument();
   });
 

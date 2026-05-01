@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Home,
   LogOut,
+  Menu,
   Monitor,
   Moon,
   Search,
@@ -23,13 +24,13 @@ import {
   Sun,
   UserPlus,
   Users,
+  X,
   type IconComponent,
 } from "@/components/ui/icons";
 import {
   cn,
   primaryButtonClassName,
   secondaryButtonClassName,
-  selectClassName,
   subtleButtonClassName,
   surfaceClassName,
 } from "@/components/ui/styles";
@@ -156,11 +157,13 @@ function SidebarNav({
   pathname,
   compact = false,
   collapsed = false,
+  onNavigate,
 }: {
   items: WorkspaceNavItem[];
   pathname: string;
   compact?: boolean;
   collapsed?: boolean;
+  onNavigate?: () => void;
 }) {
   return (
     <nav className={cn("flex flex-col", compact ? "gap-1" : "gap-1.5")}>
@@ -172,6 +175,7 @@ function SidebarNav({
           <Link
             key={item.href}
             href={item.href}
+            onClick={onNavigate}
             title={collapsed ? item.label : undefined}
             style={
               compact
@@ -454,6 +458,7 @@ export function WorkspaceShell({
   const [isPending, startTransition] = useTransition();
   const [actionError, setActionError] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(readStoredSidebarCollapsed);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const user = useAuthStore((state) => state.user);
   const currentTenant = useAuthStore((state) => state.currentTenant);
   const availableTenants = useAuthStore((state) => state.availableTenants);
@@ -461,6 +466,28 @@ export function WorkspaceShell({
   const logout = useAuthStore((state) => state.logout);
 
   const navigation = getWorkspaceNavigation(currentTenant?.role);
+
+  useEffect(() => {
+    if (!isMobileNavOpen) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsMobileNavOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isMobileNavOpen]);
 
   const handleSwitchTenant = (tenantId: string) => {
     setActionError(null);
@@ -600,6 +627,101 @@ export function WorkspaceShell({
         </div>
       </aside>
 
+      {isMobileNavOpen ? (
+        <div className="fixed inset-0 z-50 xl:hidden" role="dialog" aria-modal="true" aria-label="Workspace navigation">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/55 backdrop-blur-sm"
+            aria-label="Close navigation"
+            onClick={() => setIsMobileNavOpen(false)}
+          />
+          <aside
+            id="mobile-workspace-navigation"
+            className="absolute inset-y-0 left-0 flex h-dvh w-[min(320px,calc(100vw-2rem))] flex-col overflow-hidden border-r border-white/10 bg-[image:var(--color-sidebar)] text-white shadow-[var(--shadow-floating)]"
+          >
+            <div className="flex h-[60px] items-center justify-between gap-3 px-5">
+              <Link
+                href="/dashboard"
+                onClick={() => setIsMobileNavOpen(false)}
+                className="flex min-w-0 items-center gap-3"
+              >
+                <BrandMark variant="icon" className="h-8 w-8" />
+                <span className="truncate text-[17px] font-extrabold text-white">OpsFlow</span>
+              </Link>
+              <button
+                type="button"
+                onClick={() => setIsMobileNavOpen(false)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/65 transition hover:bg-white/10 hover:text-white"
+                aria-label="Close navigation"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-3 py-3">
+              <SidebarNav
+                items={navigation}
+                pathname={pathname}
+                onNavigate={() => setIsMobileNavOpen(false)}
+              />
+            </div>
+
+            <div className="space-y-4 border-t border-white/10 p-4">
+              {availableTenants.length > 0 ? (
+                <label className="block space-y-2">
+                  <span className="text-[11px] font-semibold uppercase text-white/45">
+                    Workspace
+                  </span>
+                  <span className="relative block min-w-0">
+                    <select
+                      value={currentTenant?.tenantId ?? ""}
+                      onChange={(event) => handleSwitchTenant(event.target.value)}
+                      disabled={isPending || !currentTenant}
+                      title={currentTenant ? `${currentTenant.tenantName} (${currentTenant.role})` : undefined}
+                      className="block h-10 w-full min-w-0 appearance-none truncate rounded-lg border border-white/10 bg-white/10 px-3 pr-9 text-left text-xs font-medium text-white outline-none transition focus:border-[var(--color-sidebar-accent)] disabled:opacity-60 [&>option]:bg-zinc-50 [&>option]:text-zinc-950"
+                    >
+                      {availableTenants.map((tenant) => (
+                        <option key={tenant.tenantId} value={tenant.tenantId}>
+                          {tenant.tenantName} ({tenant.role})
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/75" />
+                  </span>
+                </label>
+              ) : null}
+
+              {actionError ? <p className="text-xs text-[var(--color-danger)]">{actionError}</p> : null}
+
+              {user && currentTenant ? (
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-bold text-white/85">
+                    {initialsFor(user.displayName)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-semibold text-white/90">
+                      {user.displayName}
+                    </p>
+                    <p className="truncate text-[11px] font-medium text-white/45">
+                      {currentTenant.role}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    disabled={isPending}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/45 transition hover:bg-white/10 hover:text-white"
+                    aria-label="Logout"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </aside>
+        </div>
+      ) : null}
+
       <div
         className={cn(
           "min-h-screen transition-[margin-left] duration-200",
@@ -611,8 +733,20 @@ export function WorkspaceShell({
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="min-w-0">
                 <div className="flex items-center gap-3 xl:hidden">
-                  <BrandMark className="h-8 w-8" />
-                  <span className="text-lg font-bold text-[var(--color-text)]">OpsFlow</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileNavOpen(true)}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] text-[var(--color-text-secondary)] shadow-sm transition hover:bg-[var(--color-app-panel-muted)] hover:text-[var(--color-text)]"
+                    aria-label="Open navigation"
+                    aria-controls="mobile-workspace-navigation"
+                    aria-expanded={isMobileNavOpen}
+                  >
+                    <Menu className="h-5 w-5" />
+                  </button>
+                  <Link href="/dashboard" className="flex min-w-0 items-center gap-2" aria-label="OpsFlow dashboard">
+                    <BrandMark className="h-8 w-8" />
+                    <span className="truncate text-lg font-bold text-[var(--color-text)]">OpsFlow</span>
+                  </Link>
                 </div>
                 <h1 className="mt-3 text-xl font-extrabold leading-tight text-[var(--color-text)] xl:mt-0">
                   {title}
@@ -633,45 +767,6 @@ export function WorkspaceShell({
                 <ThemeToggle />
                 <NotificationBell />
               </div>
-            </div>
-
-            <div className="mt-4 xl:hidden">
-              <div className={cn(surfaceClassName, "p-3")}>
-                <SidebarNav compact items={navigation} pathname={pathname} />
-
-                {currentTenant ? (
-                  <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-                    <span className="relative block min-w-0">
-                      <select
-                        value={currentTenant.tenantId}
-                        onChange={(event) => handleSwitchTenant(event.target.value)}
-                        disabled={isPending}
-                        title={`${currentTenant.tenantName} (${currentTenant.role})`}
-                        className={cn(selectClassName, "block min-w-0 appearance-none truncate pr-9")}
-                      >
-                        {availableTenants.map((tenant) => (
-                          <option key={tenant.tenantId} value={tenant.tenantId}>
-                            {tenant.tenantName} ({tenant.role})
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
-                    </span>
-
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      disabled={isPending}
-                      className={subtleButtonClassName}
-                    >
-                      <LogOut className="h-4 w-4" />
-                      Logout
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-
-              {actionError ? <p className="mt-3 text-sm text-rose-600">{actionError}</p> : null}
             </div>
           </header>
 

@@ -89,7 +89,7 @@ describe("dashboard page", () => {
 
     render(<DashboardPage />);
 
-    expect(await screen.findByText("Boiler inspection")).toBeInTheDocument();
+    expect(await screen.findAllByText("Boiler inspection")).not.toHaveLength(0);
     expect(screen.queryByText("Recent Activity")).not.toBeInTheDocument();
   });
 });

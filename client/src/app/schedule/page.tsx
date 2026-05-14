@@ -32,6 +32,7 @@ import {
   formatTimeRange,
   getScheduleRangeRequest,
 } from "@/features/job";
+import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 import type { MembershipListItem } from "@/types/membership";
 import type { ScheduleDayJobItem, ScheduleLane, ScheduleRangeResult } from "@/types/job";
@@ -1064,7 +1065,7 @@ export default function SchedulePage() {
   const [schedule, setSchedule] = useState<ScheduleRangeResult | null>(null);
   const [isLoadingMembers, setIsLoadingMembers] = useState(true);
   const [isLoadingSchedule, setIsLoadingSchedule] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiErrorView | null>(null);
 
   const allowManage = canManageSchedule(currentTenant?.role);
   const allowView = canViewSchedule(currentTenant?.role);
@@ -1148,11 +1149,7 @@ export default function SchedulePage() {
         }
       } catch (loadError) {
         if (!cancelled) {
-          setError(
-            loadError instanceof Error
-              ? loadError.message
-              : "Failed to load schedule.",
-          );
+          setError(getApiErrorView(loadError, "Failed to load schedule."));
         }
       } finally {
         if (!cancelled) {

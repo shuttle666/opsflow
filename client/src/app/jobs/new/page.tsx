@@ -14,6 +14,7 @@ import { secondaryButtonClassName } from "@/components/ui/styles";
 import { getCustomerDetailRequest, listCustomersRequest } from "@/features/customer/customer-api";
 import { createJobRequest, toApiDateTime } from "@/features/job";
 import type { JobFormValues } from "@/features/job/job-schema";
+import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 import type { CustomerListItem } from "@/types/customer";
 
@@ -40,8 +41,8 @@ function NewJobPageContent() {
     scheduledEndAt: "",
   });
   const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<ApiErrorView | null>(null);
+  const [submitError, setSubmitError] = useState<ApiErrorView | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -94,9 +95,7 @@ function NewJobPageContent() {
         }
       } catch (error) {
         if (!cancelled) {
-          setLoadError(
-            error instanceof Error ? error.message : "Failed to load customers.",
-          );
+          setLoadError(getApiErrorView(error, "Failed to load customers."));
         }
       } finally {
         if (!cancelled) {
@@ -130,47 +129,42 @@ function NewJobPageContent() {
             {loadError ? <InlineErrorBanner message={loadError} /> : null}
 
             {!isLoading ? (
-            customers.length > 0 ? (
-              <JobForm
-                customers={customers}
-                defaultValues={defaultValues}
-                submitLabel="Create job"
-                submittingLabel="Creating job..."
-                submitError={submitError}
-                onSubmit={async (values) => {
-                  setSubmitError(null);
+              customers.length > 0 ? (
+                <JobForm
+                  customers={customers}
+                  defaultValues={defaultValues}
+                  submitLabel="Create job"
+                  submittingLabel="Creating job..."
+                  submitError={submitError}
+                  onSubmit={async (values) => {
+                    setSubmitError(null);
 
-                  try {
-                    const created = await withAccessTokenRetry((accessToken) =>
-                      createJobRequest(accessToken, {
-                      customerId: values.customerId,
-                      title: values.title,
-                      serviceAddress: values.serviceAddress,
-                      description: values.description,
-                      scheduledStartAt: toApiDateTime(values.scheduledStartAt),
-                      scheduledEndAt: toApiDateTime(values.scheduledEndAt),
-                    }),
-                  );
-                    router.push(`/jobs/${created.id}`);
-                  } catch (error) {
-                    setSubmitError(
-                      error instanceof Error ? error.message : "Failed to create job.",
-                    );
-                  }
-                }}
-              />
-            ) : (
-              <div className="space-y-4 text-sm text-[var(--color-text-secondary)]">
-                <p>No customers are available yet. Create a customer before opening a job.</p>
-                <Link
-                  href="/customers/new"
-                  className={secondaryButtonClassName}
-                >
-                  Create customer first
-                </Link>
-              </div>
-            )
-          ) : null}
+                    try {
+                      const created = await withAccessTokenRetry((accessToken) =>
+                        createJobRequest(accessToken, {
+                          customerId: values.customerId,
+                          title: values.title,
+                          serviceAddress: values.serviceAddress,
+                          description: values.description,
+                          scheduledStartAt: toApiDateTime(values.scheduledStartAt),
+                          scheduledEndAt: toApiDateTime(values.scheduledEndAt),
+                        }),
+                      );
+                      router.push(`/jobs/${created.id}`);
+                    } catch (error) {
+                      setSubmitError(getApiErrorView(error, "Failed to create job."));
+                    }
+                  }}
+                />
+              ) : (
+                <div className="space-y-4 text-sm text-[var(--color-text-secondary)]">
+                  <p>No customers are available yet. Create a customer before opening a job.</p>
+                  <Link href="/customers/new" className={secondaryButtonClassName}>
+                    Create customer first
+                  </Link>
+                </div>
+              )
+            ) : null}
           </FormSurface>
         )}
       </AuthGuard>

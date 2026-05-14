@@ -23,6 +23,7 @@ import {
   PAGINATED_TABLE_HEADER_OFFSET,
   useAdaptivePageSize,
 } from "@/hooks/use-adaptive-page-size";
+import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 import type { PaginationMeta } from "@/types/customer";
 import type { JobListItem, JobStatus } from "@/types/job";
@@ -55,7 +56,7 @@ export default function MyJobsPage() {
     totalPages: 1,
   });
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiErrorView | null>(null);
   const {
     containerRef: myJobsTableAreaRef,
     hasMeasured: hasMeasuredPageSize,
@@ -101,11 +102,7 @@ export default function MyJobsPage() {
         }
       } catch (loadError) {
         if (!cancelled) {
-          setError(
-            loadError instanceof Error
-              ? loadError.message
-              : "Failed to load assigned jobs.",
-          );
+          setError(getApiErrorView(loadError, "Failed to load assigned jobs."));
         }
       } finally {
         if (!cancelled) {

@@ -23,6 +23,7 @@ import {
   PAGINATED_LIST_BOTTOM_GAP,
   useAdaptivePageSize,
 } from "@/hooks/use-adaptive-page-size";
+import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 import type { PaginationMeta } from "@/types/customer";
 import type { MembershipRole, MembershipStatus } from "@/types/auth";
@@ -119,7 +120,7 @@ export default function TeamPage() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [actingId, setActingId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiErrorView | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
 
@@ -202,11 +203,7 @@ export default function TeamPage() {
         }
       } catch (loadError) {
         if (!cancelled) {
-          setError(
-            loadError instanceof Error
-              ? loadError.message
-              : "Failed to load team members.",
-          );
+          setError(getApiErrorView(loadError, "Failed to load team members."));
         }
       } finally {
         if (!cancelled) {
@@ -490,9 +487,10 @@ export default function TeamPage() {
                                 })
                                 .catch((actionError) => {
                                   setError(
-                                    actionError instanceof Error
-                                      ? actionError.message
-                                      : "Failed to update membership.",
+                                    getApiErrorView(
+                                      actionError,
+                                      "Failed to update membership.",
+                                    ),
                                   );
                                 })
                                 .finally(() => {

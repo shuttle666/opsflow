@@ -71,18 +71,6 @@ type AuthStore = {
 let refreshInFlight: Promise<AuthResult> | null = null;
 let bootstrapInFlight: Promise<void> | null = null;
 
-function getErrorMessage(error: unknown) {
-  if (error instanceof ApiClientError) {
-    return error.message;
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "Unexpected authentication error.";
-}
-
 export const useAuthStore = create<AuthStore>((set, get) => ({
   status: "loading",
   user: null,
@@ -162,7 +150,11 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       });
     } catch (error) {
       get().clearSession();
-      throw new Error(getErrorMessage(error));
+      if (error instanceof Error) {
+        throw error;
+      }
+
+      throw new Error("Unexpected authentication error.");
     }
   },
   login: async (credentials) => {
@@ -184,7 +176,11 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       });
     } catch (error) {
       get().clearSession();
-      throw new Error(getErrorMessage(error));
+      if (error instanceof Error) {
+        throw error;
+      }
+
+      throw new Error("Unexpected authentication error.");
     }
   },
   logout: async (allDevices = false) => {

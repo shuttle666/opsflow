@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useRef } from "react";
 import { useForm } from "react-hook-form";
 import { FormActions, FormSection } from "@/components/ui/form-surface";
+import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
 import {
   inputClassName,
   primaryButtonClassName,
@@ -11,6 +12,7 @@ import {
   textAreaClassName,
 } from "@/components/ui/styles";
 import { jobFormSchema, type JobFormValues } from "@/features/job/job-schema";
+import type { ApiErrorView } from "@/lib/api-client";
 import type { CustomerListItem } from "@/types/customer";
 
 type JobFormProps = {
@@ -18,7 +20,7 @@ type JobFormProps = {
   defaultValues?: JobFormValues;
   submitLabel: string;
   submittingLabel: string;
-  submitError: string | null;
+  submitError: string | ApiErrorView | null;
   onSubmit: (values: JobFormValues) => Promise<void>;
 };
 
@@ -200,7 +202,7 @@ export function JobForm({
         >
           {isSubmitting ? submittingLabel : submitLabel}
         </button>
-        {submitError ? <p className="text-sm text-rose-600">{submitError}</p> : null}
+        {submitError ? <InlineErrorBanner message={submitError} /> : null}
       </FormActions>
     </form>
   );

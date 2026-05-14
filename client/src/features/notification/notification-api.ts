@@ -123,7 +123,11 @@ export async function openNotificationStreamRequest(
 
   const isJson = response.headers.get("content-type")?.includes("application/json");
   const payload = isJson ? await response.json().catch(() => undefined) : undefined;
-  const errorPayload = payload as { message?: string; details?: unknown } | undefined;
+  const errorPayload = payload as {
+    message?: string;
+    requestId?: string;
+    details?: unknown;
+  } | undefined;
   const text = isJson ? "" : await response.text().catch(() => "");
   const fallbackMessage =
     text.trim() || `API request failed with status ${response.status}`;
@@ -132,6 +136,7 @@ export async function openNotificationStreamRequest(
     response.status,
     errorPayload?.message ?? fallbackMessage,
     errorPayload?.details,
+    errorPayload?.requestId ?? response.headers.get("x-request-id") ?? undefined,
   );
 }
 

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { BrandMark } from "@/components/ui/brand-mark";
+import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
 import {
   ArrowRight,
   Building2,
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/styles";
 import { loginSchema, type LoginFormValues } from "@/features/auth/login-schema";
 import { registerSchema, type RegisterFormValues } from "@/features/auth";
+import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 
 type AuthMode = "login" | "register";
@@ -84,7 +86,7 @@ function AuthTabsPageContent({ initialMode = "login" }: AuthTabsPageProps) {
   const [mode, setMode] = useState<AuthMode>(() =>
     searchParams.get("mode") === "register" ? "register" : initialMode,
   );
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<ApiErrorView | null>(null);
   const [selectedDemoEmail, setSelectedDemoEmail] = useState<string | null>(null);
 
   const rawNext = searchParams.get("next");
@@ -130,9 +132,7 @@ function AuthTabsPageContent({ initialMode = "login" }: AuthTabsPageProps) {
       await login(values);
       router.push(nextPath);
     } catch (error) {
-      setSubmitError(
-        error instanceof Error ? error.message : "Login failed. Please try again.",
-      );
+      setSubmitError(getApiErrorView(error, "Login failed. Please try again."));
     }
   };
 
@@ -148,11 +148,7 @@ function AuthTabsPageContent({ initialMode = "login" }: AuthTabsPageProps) {
       });
       router.push(nextPath);
     } catch (error) {
-      setSubmitError(
-        error instanceof Error
-          ? error.message
-          : "Registration failed. Please try again.",
-      );
+      setSubmitError(getApiErrorView(error, "Registration failed. Please try again."));
     }
   };
 
@@ -264,7 +260,7 @@ function AuthTabsPageContent({ initialMode = "login" }: AuthTabsPageProps) {
               </button>
 
               {submitError ? (
-                <p className="text-center text-sm text-rose-600">{submitError}</p>
+                <InlineErrorBanner message={submitError} />
               ) : null}
 
               <details className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-4 py-3 text-sm text-[var(--color-text-secondary)]">
@@ -371,7 +367,7 @@ function AuthTabsPageContent({ initialMode = "login" }: AuthTabsPageProps) {
               </button>
 
               {submitError ? (
-                <p className="text-center text-sm text-rose-600">{submitError}</p>
+                <InlineErrorBanner message={submitError} />
               ) : null}
             </form>
           )}

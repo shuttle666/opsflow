@@ -23,6 +23,7 @@ import {
   PAGINATED_TABLE_HEADER_OFFSET,
   useAdaptivePageSize,
 } from "@/hooks/use-adaptive-page-size";
+import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 import type { CustomerListItem, PaginationMeta } from "@/types/customer";
 
@@ -81,7 +82,7 @@ export default function CustomersPage() {
     totalPages: 1,
   });
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiErrorView | null>(null);
 
   const allowManage = canManageCustomers(currentTenant?.role);
   const visibleCustomers = useMemo(() => {
@@ -141,11 +142,7 @@ export default function CustomersPage() {
         }
       } catch (loadError) {
         if (!cancelled) {
-          setError(
-            loadError instanceof Error
-              ? loadError.message
-              : "Failed to load customers.",
-          );
+          setError(getApiErrorView(loadError, "Failed to load customers."));
         }
       } finally {
         if (!cancelled) {

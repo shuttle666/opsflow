@@ -16,7 +16,13 @@ export type ApiSuccessResponse<T> = {
 export type ApiErrorResponse = {
   success: false;
   message: string;
+  requestId?: string;
   details?: unknown;
+};
+
+export type ApiErrorView = {
+  message: string;
+  requestId?: string;
 };
 
 export class ApiClientError extends Error {
@@ -24,6 +30,7 @@ export class ApiClientError extends Error {
     public readonly status: number,
     message: string,
     public readonly details?: unknown,
+    public readonly requestId?: string,
   ) {
     super(message);
     this.name = "ApiClientError";
@@ -32,6 +39,46 @@ export class ApiClientError extends Error {
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
+
+const genericApiErrorMessages = new Set([
+  "Validation failed",
+  "Internal server error",
+]);
+
+function requestIdFromResponse(response: Response) {
+  return response.headers.get("x-request-id") ?? undefined;
+}
+
+function requestIdFromPayload(
+  payload: ApiErrorResponse | undefined,
+  response: Response,
+) {
+  return payload?.requestId ?? requestIdFromResponse(response);
+}
+
+export function getApiErrorView(
+  error: unknown,
+  fallbackMessage: string,
+): ApiErrorView {
+  if (error instanceof ApiClientError) {
+    return {
+      message: genericApiErrorMessages.has(error.message)
+        ? fallbackMessage
+        : error.message || fallbackMessage,
+      ...(error.requestId ? { requestId: error.requestId } : {}),
+    };
+  }
+
+  if (error instanceof Error) {
+    return {
+      message: error.message || fallbackMessage,
+    };
+  }
+
+  return {
+    message: fallbackMessage,
+  };
+}
 
 async function request<T>(path: string, options: RequestOptions = {}) {
   const isFormData =
@@ -64,6 +111,7 @@ async function request<T>(path: string, options: RequestOptions = {}) {
         response.status,
         errorPayload?.message ?? `API request failed with status ${response.status}`,
         errorPayload?.details,
+        requestIdFromPayload(errorPayload, response),
       );
     }
 
@@ -79,6 +127,7 @@ async function request<T>(path: string, options: RequestOptions = {}) {
       response.status,
       errorPayload?.message ?? `API request failed with status ${response.status}`,
       errorPayload?.details,
+      requestIdFromPayload(errorPayload, response),
     );
   }
 

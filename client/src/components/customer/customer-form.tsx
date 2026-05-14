@@ -3,17 +3,19 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { FormActions, FormSection } from "@/components/ui/form-surface";
+import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
 import { inputClassName, primaryButtonClassName } from "@/components/ui/styles";
 import {
   customerFormSchema,
   type CustomerFormValues,
 } from "@/features/customer/customer-schema";
+import type { ApiErrorView } from "@/lib/api-client";
 
 type CustomerFormProps = {
   defaultValues?: CustomerFormValues;
   submitLabel: string;
   submittingLabel: string;
-  submitError: string | null;
+  submitError: string | ApiErrorView | null;
   onSubmit: (values: CustomerFormValues) => Promise<void>;
 };
 
@@ -90,7 +92,7 @@ export function CustomerForm({
         >
           {isSubmitting ? submittingLabel : submitLabel}
         </button>
-        {submitError ? <p className="text-sm text-rose-600">{submitError}</p> : null}
+        {submitError ? <InlineErrorBanner message={submitError} /> : null}
       </FormActions>
     </form>
   );

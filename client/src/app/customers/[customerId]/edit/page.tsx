@@ -14,6 +14,7 @@ import {
   updateCustomerRequest,
 } from "@/features/customer/customer-api";
 import type { CustomerFormValues } from "@/features/customer/customer-schema";
+import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 
 function canManageCustomers(role: string | undefined) {
@@ -28,8 +29,8 @@ export default function EditCustomerPage() {
   const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
   const [defaultValues, setDefaultValues] = useState<CustomerFormValues | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | ApiErrorView | null>(null);
+  const [submitError, setSubmitError] = useState<ApiErrorView | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,9 +59,7 @@ export default function EditCustomerPage() {
         }
       } catch (error) {
         if (!cancelled) {
-          setLoadError(
-            error instanceof Error ? error.message : "Failed to load customer.",
-          );
+          setLoadError(getApiErrorView(error, "Failed to load customer."));
         }
       } finally {
         if (!cancelled) {
@@ -94,29 +93,25 @@ export default function EditCustomerPage() {
             {loadError ? <InlineErrorBanner message={loadError} /> : null}
 
             {defaultValues ? (
-            <CustomerForm
-              defaultValues={defaultValues}
-              submitLabel="Save changes"
-              submittingLabel="Saving changes..."
-              submitError={submitError}
-              onSubmit={async (values: CustomerFormValues) => {
-                setSubmitError(null);
+              <CustomerForm
+                defaultValues={defaultValues}
+                submitLabel="Save changes"
+                submittingLabel="Saving changes..."
+                submitError={submitError}
+                onSubmit={async (values: CustomerFormValues) => {
+                  setSubmitError(null);
 
-                try {
-                  await withAccessTokenRetry((accessToken) =>
-                    updateCustomerRequest(accessToken, customerId, values),
-                  );
-                  router.push(`/customers/${customerId}`);
-                } catch (error) {
-                  setSubmitError(
-                    error instanceof Error
-                      ? error.message
-                      : "Failed to update customer.",
+                  try {
+                    await withAccessTokenRetry((accessToken) =>
+                      updateCustomerRequest(accessToken, customerId, values),
                     );
-                }
-              }}
-            />
-          ) : null}
+                    router.push(`/customers/${customerId}`);
+                  } catch (error) {
+                    setSubmitError(getApiErrorView(error, "Failed to update customer."));
+                  }
+                }}
+              />
+            ) : null}
           </FormSurface>
         )}
       </AuthGuard>

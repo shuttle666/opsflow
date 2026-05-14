@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import LoginPage from "@/app/login/page";
+import { ApiClientError } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 
 const pushMock = vi.fn();
@@ -86,5 +87,28 @@ describe("login page", () => {
       });
       expect(pushMock).toHaveBeenCalledWith("/dashboard");
     });
+  });
+
+  it("shows request id metadata when login fails", async () => {
+    const login = vi.fn().mockRejectedValue(
+      new ApiClientError(
+        401,
+        "Invalid email or password.",
+        undefined,
+        "login-request-1",
+      ),
+    );
+    useAuthStore.setState({ login });
+
+    const user = userEvent.setup();
+    render(<LoginPage />);
+
+    await user.type(screen.getByLabelText("Email"), "owner@acme.example");
+    await user.type(screen.getByLabelText("Password"), "wrong-password");
+    await user.click(screen.getByRole("button", { name: "Sign In" }));
+
+    expect(await screen.findByText("Invalid email or password.")).toBeInTheDocument();
+    expect(screen.getByText(/Request ID:/i)).toBeInTheDocument();
+    expect(screen.getByText("login-request-1")).toBeInTheDocument();
   });
 });

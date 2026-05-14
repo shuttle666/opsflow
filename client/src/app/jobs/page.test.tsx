@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import JobsPage from "@/app/jobs/page";
 import { listCustomersRequest } from "@/features/customer/customer-api";
 import { listJobsRequest } from "@/features/job/job-api";
+import { ApiClientError } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 import {
   mockAdaptivePageSizeViewport,
@@ -157,6 +158,22 @@ describe("jobs page", () => {
         expect.objectContaining({ pageSize: 10 }),
       );
     });
+  });
+
+  it("shows request id metadata for API load failures", async () => {
+    vi.mocked(listCustomersRequest).mockResolvedValue({
+      items: [],
+      pagination: { page: 1, pageSize: 50, total: 0, totalPages: 1 },
+    });
+    vi.mocked(listJobsRequest).mockRejectedValue(
+      new ApiClientError(400, "Validation failed", undefined, "request-jobs"),
+    );
+
+    render(<JobsPage />);
+
+    expect(await screen.findByText("Failed to load jobs.")).toBeInTheDocument();
+    expect(screen.getByText(/Request ID:/i)).toBeInTheDocument();
+    expect(screen.getByText("request-jobs")).toBeInTheDocument();
   });
 
   it("applies filters and hides create button for staff", async () => {

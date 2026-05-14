@@ -85,4 +85,24 @@ describe("JobEvidencePanel", () => {
       expect(onDelete).toHaveBeenCalledWith("evidence-1");
     });
   });
+
+  it("renders request id metadata for server errors", () => {
+    render(
+      <JobEvidencePanel
+        items={[]}
+        canUpload
+        error={{
+          message: "Failed to upload evidence.",
+          requestId: "request-evidence",
+        }}
+        onUpload={onUpload}
+        onDelete={onDelete}
+        onDownload={onDownload}
+      />,
+    );
+
+    expect(screen.getByText("Failed to upload evidence.")).toBeInTheDocument();
+    expect(screen.getByText(/Request ID:/i)).toBeInTheDocument();
+    expect(screen.getByText("request-evidence")).toBeInTheDocument();
+  });
 });

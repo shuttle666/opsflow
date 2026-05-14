@@ -7,7 +7,7 @@ This plan reflects the current state of the repository. Older Phase 3-8 implemen
 - Authentication, tenant context, RBAC, refresh sessions, and tenant invitations are implemented.
 - Core operations are implemented: customers, jobs, assignment, staff workspace, workflow history, activity feed, evidence uploads, schedule calendar, completion reviews, notifications, and AI dispatch planning.
 - Dashboard hardening for the current daily dispatch surface is implemented through `GET /api/dashboard/summary`, backend-backed stats, schedule preview rows, attention items, conflict detection, and staff-scoped summaries.
-- Minimal request-level observability is implemented with `X-Request-Id`, structured request/error logs, and `requestId` in error responses.
+- Minimal request-level observability is implemented with `X-Request-Id`, structured request/error logs, `requestId` in error responses, and frontend error surfaces that display the request ID for support/debugging.
 - Prisma models currently include `User`, `Tenant`, `Membership`, `Customer`, `Job`, `JobStatusHistory`, `JobCompletionReview`, `JobEvidence`, `AuthSession`, `TenantInvitation`, `AuditLog`, `Notification`, and persisted agent conversation/proposal records.
 - CI runs client and server validation through GitHub Actions; production deployment is handled by the deploy workflow and the script under `infra/scripts`.
 

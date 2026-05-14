@@ -33,6 +33,7 @@ import {
   uploadJobEvidenceRequest,
 } from "@/features/job/job-api";
 import { formatDateTime, formatScheduleRange } from "@/features/job";
+import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 import type {
   JobDetail,
@@ -363,14 +364,14 @@ export default function JobDetailPage() {
   const [completionReview, setCompletionReview] = useState<JobCompletionReviewItem | null>(null);
   const [evidence, setEvidence] = useState<JobEvidenceItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [workflowError, setWorkflowError] = useState<string | null>(null);
+  const [error, setError] = useState<string | ApiErrorView | null>(null);
+  const [workflowError, setWorkflowError] = useState<string | ApiErrorView | null>(null);
   const [workflowSuccess, setWorkflowSuccess] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [completionReviewError, setCompletionReviewError] = useState<string | null>(null);
+  const [completionReviewError, setCompletionReviewError] = useState<string | ApiErrorView | null>(null);
   const [completionReviewSuccess, setCompletionReviewSuccess] = useState<string | null>(null);
   const [isSubmittingCompletionReview, setIsSubmittingCompletionReview] = useState(false);
-  const [evidenceError, setEvidenceError] = useState<string | null>(null);
+  const [evidenceError, setEvidenceError] = useState<string | ApiErrorView | null>(null);
   const [isUploadingEvidence, setIsUploadingEvidence] = useState(false);
   const [isEvidenceLoading, setIsEvidenceLoading] = useState(true);
 
@@ -412,7 +413,7 @@ export default function JobDetailPage() {
         }
       } catch (loadError) {
         if (!cancelled) {
-          setError(loadError instanceof Error ? loadError.message : "Failed to load job.");
+          setError(getApiErrorView(loadError, "Failed to load job."));
         }
       } finally {
         if (!cancelled) {
@@ -477,11 +478,7 @@ export default function JobDetailPage() {
       }));
       setWorkflowSuccess(`Job moved to ${formatStatusLabel(action.toStatus)}.`);
     } catch (transitionError) {
-      setWorkflowError(
-        transitionError instanceof Error
-          ? transitionError.message
-          : "Failed to update job workflow.",
-      );
+      setWorkflowError(getApiErrorView(transitionError, "Failed to update job workflow."));
     } finally {
       setIsTransitioning(false);
     }
@@ -505,9 +502,7 @@ export default function JobDetailPage() {
       );
       setEvidence((current) => [created, ...current]);
     } catch (uploadError) {
-      setEvidenceError(
-        uploadError instanceof Error ? uploadError.message : "Failed to upload evidence.",
-      );
+      setEvidenceError(getApiErrorView(uploadError, "Failed to upload evidence."));
       throw uploadError;
     } finally {
       setIsUploadingEvidence(false);
@@ -531,9 +526,7 @@ export default function JobDetailPage() {
       setCompletionReviewSuccess("Completion submitted for review.");
     } catch (submitError) {
       setCompletionReviewError(
-        submitError instanceof Error
-          ? submitError.message
-          : "Failed to submit completion for review.",
+        getApiErrorView(submitError, "Failed to submit completion for review."),
       );
       throw submitError;
     } finally {
@@ -557,11 +550,7 @@ export default function JobDetailPage() {
       applyCompletionReviewMutation(result);
       setCompletionReviewSuccess("Completion approved.");
     } catch (approveError) {
-      setCompletionReviewError(
-        approveError instanceof Error
-          ? approveError.message
-          : "Failed to approve completion.",
-      );
+      setCompletionReviewError(getApiErrorView(approveError, "Failed to approve completion."));
       throw approveError;
     } finally {
       setIsSubmittingCompletionReview(false);
@@ -588,9 +577,7 @@ export default function JobDetailPage() {
       setCompletionReviewSuccess("Completion returned for rework.");
     } catch (returnError) {
       setCompletionReviewError(
-        returnError instanceof Error
-          ? returnError.message
-          : "Failed to return completion for rework.",
+        getApiErrorView(returnError, "Failed to return completion for rework."),
       );
       throw returnError;
     } finally {
@@ -611,9 +598,7 @@ export default function JobDetailPage() {
       );
       setEvidence((current) => current.filter((item) => item.id !== evidenceId));
     } catch (deleteError) {
-      setEvidenceError(
-        deleteError instanceof Error ? deleteError.message : "Failed to delete evidence.",
-      );
+      setEvidenceError(getApiErrorView(deleteError, "Failed to delete evidence."));
       throw deleteError;
     }
   }

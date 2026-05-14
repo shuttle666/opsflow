@@ -12,6 +12,7 @@ import { LoadingPanel } from "@/components/ui/loading-panel";
 import { getCustomerDetailRequest, listCustomersRequest } from "@/features/customer/customer-api";
 import { getJobDetailRequest, toApiDateTime, toDateTimeLocal, updateJobRequest } from "@/features/job";
 import type { JobFormValues } from "@/features/job/job-schema";
+import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 import type { CustomerListItem } from "@/types/customer";
 
@@ -28,8 +29,8 @@ export default function EditJobPage() {
   const [customers, setCustomers] = useState<CustomerListItem[]>([]);
   const [defaultValues, setDefaultValues] = useState<JobFormValues | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | ApiErrorView | null>(null);
+  const [submitError, setSubmitError] = useState<ApiErrorView | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -89,7 +90,7 @@ export default function EditJobPage() {
         }
       } catch (error) {
         if (!cancelled) {
-          setLoadError(error instanceof Error ? error.message : "Failed to load job.");
+          setLoadError(getApiErrorView(error, "Failed to load job."));
         }
       } finally {
         if (!cancelled) {
@@ -123,35 +124,33 @@ export default function EditJobPage() {
             {loadError ? <InlineErrorBanner message={loadError} /> : null}
 
             {defaultValues ? (
-            <JobForm
-              customers={customers}
-              defaultValues={defaultValues}
-              submitLabel="Save changes"
-              submittingLabel="Saving changes..."
-              submitError={submitError}
-              onSubmit={async (values) => {
-                setSubmitError(null);
+              <JobForm
+                customers={customers}
+                defaultValues={defaultValues}
+                submitLabel="Save changes"
+                submittingLabel="Saving changes..."
+                submitError={submitError}
+                onSubmit={async (values) => {
+                  setSubmitError(null);
 
-                try {
-                  await withAccessTokenRetry((accessToken) =>
-                    updateJobRequest(accessToken, jobId, {
-                      customerId: values.customerId,
-                      title: values.title,
-                      serviceAddress: values.serviceAddress,
-                      description: values.description,
-                      scheduledStartAt: toApiDateTime(values.scheduledStartAt),
-                      scheduledEndAt: toApiDateTime(values.scheduledEndAt),
-                    }),
-                  );
-                  router.push(`/jobs/${jobId}`);
-                } catch (error) {
-                  setSubmitError(
-                    error instanceof Error ? error.message : "Failed to update job.",
+                  try {
+                    await withAccessTokenRetry((accessToken) =>
+                      updateJobRequest(accessToken, jobId, {
+                        customerId: values.customerId,
+                        title: values.title,
+                        serviceAddress: values.serviceAddress,
+                        description: values.description,
+                        scheduledStartAt: toApiDateTime(values.scheduledStartAt),
+                        scheduledEndAt: toApiDateTime(values.scheduledEndAt),
+                      }),
                     );
-                }
-              }}
-            />
-          ) : null}
+                    router.push(`/jobs/${jobId}`);
+                  } catch (error) {
+                    setSubmitError(getApiErrorView(error, "Failed to update job."));
+                  }
+                }}
+              />
+            ) : null}
           </FormSurface>
         )}
       </AuthGuard>

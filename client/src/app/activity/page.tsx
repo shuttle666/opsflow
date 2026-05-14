@@ -14,6 +14,7 @@ import {
   PAGINATED_LIST_BOTTOM_GAP,
   useAdaptivePageSize,
 } from "@/hooks/use-adaptive-page-size";
+import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 import type { MembershipRole } from "@/types/auth";
 import type { ActivityFeedItem, ActivityFeedPagination } from "@/types/activity";
@@ -43,7 +44,7 @@ export default function ActivityPage() {
   });
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiErrorView | null>(null);
 
   const allowReview = canReviewActivity(currentTenant?.role);
   const {
@@ -97,9 +98,7 @@ export default function ActivityPage() {
         }
       } catch (loadError) {
         if (!cancelled) {
-          setError(
-            loadError instanceof Error ? loadError.message : "Failed to load activity log.",
-          );
+          setError(getApiErrorView(loadError, "Failed to load activity log."));
         }
       } finally {
         if (!cancelled) {

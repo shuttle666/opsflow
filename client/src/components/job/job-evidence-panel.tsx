@@ -14,6 +14,7 @@ import {
   subtleButtonClassName,
   textAreaClassName,
 } from "@/components/ui/styles";
+import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
 import type { JobEvidenceItem, JobEvidenceKind } from "@/types/job";
 
 type JobEvidencePanelProps = {
@@ -21,7 +22,7 @@ type JobEvidencePanelProps = {
   canUpload: boolean;
   isUploading?: boolean;
   isLoading?: boolean;
-  error?: string | null;
+  error?: string | ApiErrorView | null;
   onUpload: (input: { kind: JobEvidenceKind; note?: string; file: File }) => Promise<void>;
   onDelete: (evidenceId: string) => Promise<void>;
   onDownload: (evidence: JobEvidenceItem) => Promise<void>;
@@ -76,7 +77,7 @@ export function JobEvidencePanel({
   const [kind, setKind] = useState<JobEvidenceKind>("SITE_PHOTO");
   const [note, setNote] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [clientError, setClientError] = useState<string | null>(null);
+  const [clientError, setClientError] = useState<string | ApiErrorView | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [activeDeleteId, setActiveDeleteId] = useState<string | null>(null);
   const [activeDownloadId, setActiveDownloadId] = useState<string | null>(null);
@@ -270,9 +271,7 @@ export function JobEvidencePanel({
                           await onDownload(item);
                         } catch (downloadError) {
                           setClientError(
-                            downloadError instanceof Error
-                              ? downloadError.message
-                              : "Failed to download evidence.",
+                            getApiErrorView(downloadError, "Failed to download evidence."),
                           );
                         } finally {
                           setActiveDownloadId((current) => (current === item.id ? null : current));
@@ -304,9 +303,7 @@ export function JobEvidencePanel({
                             setSuccess("Evidence deleted.");
                           } catch (deleteError) {
                             setClientError(
-                              deleteError instanceof Error
-                                ? deleteError.message
-                                : "Failed to delete evidence.",
+                              getApiErrorView(deleteError, "Failed to delete evidence."),
                             );
                           } finally {
                             setActiveDeleteId((current) => (current === item.id ? null : current));

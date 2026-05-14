@@ -8,6 +8,7 @@ import {
   createInvitationRequest,
   listMyInvitationsRequest,
   listTenantInvitationsRequest,
+  loginRequest,
   meRequest,
   registerRequest,
   refreshRequest,
@@ -89,6 +90,23 @@ describe("auth store", () => {
     expect(state.currentTenant?.tenantId).toBe(result.currentTenant.tenantId);
     expect(state.accessToken).toBe(result.accessToken);
     expect(state.refreshToken).toBeNull();
+  });
+
+  it("preserves API error metadata on login failure", async () => {
+    const error = new ApiClientError(
+      401,
+      "Invalid email or password.",
+      undefined,
+      "login-request-1",
+    );
+    vi.mocked(loginRequest).mockRejectedValue(error);
+
+    await expect(
+      useAuthStore.getState().login({
+        email: "owner@acme.example",
+        password: "wrong-password",
+      }),
+    ).rejects.toBe(error);
   });
 
   it("retries one time after refresh when request returns 401", async () => {

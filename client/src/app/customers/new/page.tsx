@@ -9,6 +9,7 @@ import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
 import { FormSurface } from "@/components/ui/form-surface";
 import { createCustomerRequest } from "@/features/customer/customer-api";
 import type { CustomerFormValues } from "@/features/customer/customer-schema";
+import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 
 function canManageCustomers(role: string | undefined) {
@@ -19,7 +20,7 @@ export default function NewCustomerPage() {
   const router = useRouter();
   const currentTenant = useAuthStore((state) => state.currentTenant);
   const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<ApiErrorView | null>(null);
 
   return (
     <AppShell
@@ -45,11 +46,7 @@ export default function NewCustomerPage() {
                   );
                   router.push(`/customers/${created.id}`);
                 } catch (error) {
-                  setSubmitError(
-                    error instanceof Error
-                      ? error.message
-                      : "Failed to create customer.",
-                  );
+                  setSubmitError(getApiErrorView(error, "Failed to create customer."));
                 }
               }}
             />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
 import { SummaryCard } from "@/components/ui/info-cards";
 import {
   cn,
@@ -9,6 +10,7 @@ import {
   surfaceClassName,
   textAreaClassName,
 } from "@/components/ui/styles";
+import type { ApiErrorView } from "@/lib/api-client";
 import type { JobCompletionReviewItem, JobDetail } from "@/types/job";
 
 type JobCompletionReviewCardProps = {
@@ -17,7 +19,7 @@ type JobCompletionReviewCardProps = {
   canSubmit: boolean;
   canReview: boolean;
   isSubmitting?: boolean;
-  error?: string | null;
+  error?: string | ApiErrorView | null;
   success?: string | null;
   onSubmit: (completionNote: string) => Promise<void>;
   onApprove: (review: JobCompletionReviewItem) => Promise<void>;
@@ -216,7 +218,7 @@ export function JobCompletionReviewCard({
           </div>
         ) : null}
 
-        {error ? <p className="text-sm text-[var(--color-danger)]">{error}</p> : null}
+        {error ? <InlineErrorBanner message={error} /> : null}
         {success ? <p className="text-sm text-[var(--color-success)]">{success}</p> : null}
       </div>
     </SummaryCard>

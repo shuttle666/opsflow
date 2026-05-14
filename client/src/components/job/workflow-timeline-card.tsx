@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
+import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
 import {
   Briefcase,
   Calendar,
@@ -16,6 +17,7 @@ import {
   surfaceClassName,
   textAreaClassName,
 } from "@/components/ui/styles";
+import type { ApiErrorView } from "@/lib/api-client";
 import type { TimelineItemView, TransitionActionView } from "@/types/future-ui";
 import type { JobStatus } from "@/types/job";
 
@@ -32,7 +34,7 @@ type WorkflowTimelineCardProps = {
   canTransition?: boolean;
   canShowManualControls?: boolean;
   isSubmitting?: boolean;
-  error?: string | null;
+  error?: string | ApiErrorView | null;
   success?: string | null;
   readOnlyMessage?: string | null;
   onTransition?: (action: TransitionActionView, reason?: string) => void | Promise<void>;
@@ -461,7 +463,7 @@ export function WorkflowTimelineCard({
           />
         ) : null}
 
-        {error ? <p className="text-sm text-[var(--color-danger)]">{error}</p> : null}
+        {error ? <InlineErrorBanner message={error} /> : null}
         {success ? <p className="text-sm text-[var(--color-success)]">{success}</p> : null}
 
         <div className={`${surfaceClassName} space-y-3 p-4`}>

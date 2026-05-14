@@ -178,6 +178,7 @@ The planner is available to authenticated tenant users, but proposal confirmatio
 - All error JSON responses use the common `success/message/requestId/details` envelope.
 - Validation errors are returned as structured error details from Zod.
 - The API writes structured request logs to stdout with `requestId`, method, path, status code, duration, and authenticated user/tenant context when available.
+- The frontend preserves request IDs from API errors and shows them on primary error surfaces, including auth failures, page load failures, form submissions, and job workflow/evidence/review actions. Generic backend messages such as `Validation failed` or `Internal server error` can be replaced with local UI fallback copy while keeping the request ID visible for log lookup.
 - Staff job visibility is restricted to assigned work.
 - Job workflow, assignment, completion review, evidence, and notification actions write audit/notification records where applicable.
 - Production nginx disables buffering for SSE routes.

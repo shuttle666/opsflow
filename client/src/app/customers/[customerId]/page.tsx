@@ -22,6 +22,7 @@ import {
   restoreCustomerRequest,
 } from "@/features/customer/customer-api";
 import { formatDateTime, formatScheduleRange } from "@/features/job";
+import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 import type { CustomerDetail, CustomerJobSummary } from "@/types/customer";
 import type { JobStatus } from "@/types/job";
@@ -213,8 +214,8 @@ export default function CustomerDetailPage() {
   const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
   const [customer, setCustomer] = useState<CustomerDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [error, setError] = useState<string | ApiErrorView | null>(null);
+  const [actionError, setActionError] = useState<ApiErrorView | null>(null);
   const [isArchiving, setIsArchiving] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
 
@@ -241,11 +242,7 @@ export default function CustomerDetailPage() {
         }
       } catch (loadError) {
         if (!cancelled) {
-          setError(
-            loadError instanceof Error
-              ? loadError.message
-              : "Failed to load customer.",
-          );
+          setError(getApiErrorView(loadError, "Failed to load customer."));
         }
       } finally {
         if (!cancelled) {
@@ -284,11 +281,7 @@ export default function CustomerDetailPage() {
       );
       setCustomer({ ...customer, ...archived });
     } catch (archiveError) {
-      setActionError(
-        archiveError instanceof Error
-          ? archiveError.message
-          : "Failed to delete customer.",
-      );
+      setActionError(getApiErrorView(archiveError, "Failed to delete customer."));
     } finally {
       setIsArchiving(false);
     }
@@ -308,11 +301,7 @@ export default function CustomerDetailPage() {
       );
       setCustomer({ ...customer, ...restored });
     } catch (restoreError) {
-      setActionError(
-        restoreError instanceof Error
-          ? restoreError.message
-          : "Failed to restore customer.",
-      );
+      setActionError(getApiErrorView(restoreError, "Failed to restore customer."));
     } finally {
       setIsRestoring(false);
     }

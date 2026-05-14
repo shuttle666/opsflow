@@ -85,14 +85,16 @@ This roadmap is aligned with the current codebase. Phase names describe the prod
 - Dispatch proposal confirmation that creates customers/jobs and can assign/schedule work
 
 ## Phase 13
-- Status: Planned next
+- Status: Completed
 - Dashboard hardening
-- Replace client-derived dashboard stats with real backend tenant metrics
-- Add a dashboard summary API
-- Add role-specific dashboard views
+- `GET /api/dashboard/summary`
+- Backend-backed dashboard metrics for the current daily dispatch surface
+- Role-aware staff dashboard scoping
+- Schedule preview, attention items, and conflict-aware daily stats
 
 ## Later Candidates
 - Production observability: request IDs, structured logs, rate limiting, and error monitoring
+- Expanded dashboard analytics: customer count, job status breakdowns, pending invitations, recent activity, and broader upcoming schedule summaries
 - S3-compatible evidence storage
 - Customer portal
 - Payments and billing

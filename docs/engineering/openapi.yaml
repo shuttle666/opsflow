@@ -19,6 +19,7 @@ tags:
   - name: Tenant
   - name: Invitation
   - name: Customer
+  - name: Dashboard
   - name: Job
   - name: Schedule
   - name: Team
@@ -316,6 +317,58 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  /api/dashboard/summary:
+    get:
+      tags: [Dashboard]
+      operationId: getDashboardSummary
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: timezoneOffsetMinutes
+          in: query
+          schema:
+            type: integer
+            minimum: -840
+            maximum: 840
+            default: 0
+        - name: schedulePreviewLimit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 6
+        - name: attentionLimit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 4
+      responses:
+        "200":
+          description: Daily dashboard summary for the current tenant and role.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiSuccessResponse"
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DashboardSummary"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /api/jobs:
     get:
@@ -1177,6 +1230,9 @@ components:
     JobEvidenceKind:
       type: string
       enum: [SITE_PHOTO, COMPLETION_PROOF, CUSTOMER_DOCUMENT, ISSUE_EVIDENCE]
+    DashboardAttentionReason:
+      type: string
+      enum: [PENDING_REVIEW, NEW_JOB, UNASSIGNED, SCHEDULE_CONFLICT]
     NotificationType:
       type: string
       enum:
@@ -1253,6 +1309,136 @@ components:
         token:
           type: string
           minLength: 20
+    DashboardSummary:
+      type: object
+      required:
+        - date
+        - rangeStart
+        - rangeEnd
+        - generatedAt
+        - metrics
+        - schedulePreview
+        - attentionItems
+      properties:
+        date:
+          type: string
+          format: date
+        rangeStart:
+          type: string
+          format: date-time
+        rangeEnd:
+          type: string
+          format: date-time
+        generatedAt:
+          type: string
+          format: date-time
+        metrics:
+          $ref: "#/components/schemas/DashboardMetrics"
+        schedulePreview:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardScheduleItem"
+        attentionItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardAttentionItem"
+    DashboardMetrics:
+      type: object
+      required:
+        - todayJobs
+        - scheduledRows
+        - assignedJobs
+        - pendingReview
+        - unassignedJobs
+        - activeCrewScheduled
+        - activeCrewTotal
+        - needsAttention
+        - conflictCount
+      properties:
+        todayJobs:
+          type: integer
+          minimum: 0
+        scheduledRows:
+          type: integer
+          minimum: 0
+        assignedJobs:
+          type: integer
+          minimum: 0
+        pendingReview:
+          type: integer
+          minimum: 0
+        unassignedJobs:
+          type: integer
+          minimum: 0
+        activeCrewScheduled:
+          type: integer
+          minimum: 0
+        activeCrewTotal:
+          type: integer
+          minimum: 0
+        needsAttention:
+          type: integer
+          minimum: 0
+        conflictCount:
+          type: integer
+          minimum: 0
+    DashboardScheduleItem:
+      type: object
+      required:
+        - id
+        - customerName
+        - customerInitials
+        - serviceAddress
+        - jobType
+        - status
+        - scheduledStartAt
+        - scheduledEndAt
+        - hasConflict
+      properties:
+        id:
+          type: string
+          format: uuid
+        customerName:
+          type: string
+        customerInitials:
+          type: string
+        serviceAddress:
+          type: string
+        jobType:
+          type: string
+        status:
+          $ref: "#/components/schemas/JobStatus"
+        scheduledStartAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        scheduledEndAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        assignee:
+          type: string
+        hasConflict:
+          type: boolean
+    DashboardAttentionItem:
+      type: object
+      required: [id, title, customer, status, reason]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        customer:
+          type: string
+        status:
+          $ref: "#/components/schemas/JobStatus"
+        assignee:
+          type: string
+        reason:
+          $ref: "#/components/schemas/DashboardAttentionReason"
     CustomerInput:
       type: object
       required: [name]

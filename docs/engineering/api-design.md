@@ -41,6 +41,17 @@ This document is aligned with the Express routers under `server/src/routes` and 
 Customer fields include `name`, `phone`, `email`, `notes`, and `archivedAt`. Service locations are stored on jobs as `serviceAddress`, not on customer profiles.
 Customer list accepts `status=active|archived|all` and defaults to `active`.
 
+## Dashboard
+- `GET /dashboard/summary`
+
+Dashboard summary accepts:
+- `date`
+- `timezoneOffsetMinutes`
+- `schedulePreviewLimit`
+- `attentionLimit`
+
+The summary powers the current daily dispatch dashboard. It returns backend-backed daily metrics, schedule preview rows, attention items, and conflict-aware role-scoped stats. Staff users only see assigned work in the summary.
+
 ## Jobs
 - `GET /jobs` - owner/manager
 - `POST /jobs` - owner/manager

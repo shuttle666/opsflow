@@ -1647,6 +1647,8 @@ components:
           enum: [false]
         message:
           type: string
+        requestId:
+          type: string
         details:
           type: object
           additionalProperties: true

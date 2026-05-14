@@ -9,6 +9,7 @@ This document is aligned with the Express routers under `server/src/routes` and 
 - Authorization uses `OWNER`, `MANAGER`, and `STAFF` roles.
 - List endpoints return `{ success, message, data, meta.pagination }`.
 - Job scheduling now uses `scheduledStartAt` and `scheduledEndAt`. Older `scheduledAt` references are legacy.
+- Every API response includes an `X-Request-Id` header. Error responses also include `requestId` in the JSON body for log correlation.
 
 ## Health
 - `GET /health`
@@ -174,7 +175,9 @@ The planner is available to authenticated tenant users, but proposal confirmatio
 
 ## Contract Notes
 - All successful JSON responses use the common `success/message/data/meta` envelope.
+- All error JSON responses use the common `success/message/requestId/details` envelope.
 - Validation errors are returned as structured error details from Zod.
+- The API writes structured request logs to stdout with `requestId`, method, path, status code, duration, and authenticated user/tenant context when available.
 - Staff job visibility is restricted to assigned work.
 - Job workflow, assignment, completion review, evidence, and notification actions write audit/notification records where applicable.
 - Production nginx disables buffering for SSE routes.

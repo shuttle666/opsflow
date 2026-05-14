@@ -10,5 +10,6 @@ export type ApiSuccessResponse<T> = {
 export type ApiErrorResponse = {
   success: false;
   message: string;
+  requestId?: string;
   details?: unknown;
 };

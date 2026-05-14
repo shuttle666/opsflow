@@ -29,7 +29,6 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
-    "@types/morgan": "^1.9.10",
     "@types/multer": "^2.1.0",
     "@types/node": "^25.5.0",
     "@types/pg": "8.11.11",
@@ -41,6 +40,7 @@
     "vitest": "^4.0.0"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
     "@prisma/adapter-pg": "^7.5.0",
     "@prisma/client": "^7.5.0",
     "bcryptjs": "^3.0.2",
@@ -49,10 +49,8 @@
     "express": "^5.2.1",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
-    "morgan": "^1.10.1",
     "multer": "^2.1.1",
     "pg": "^8.16.3",
-    "@anthropic-ai/sdk": "^0.80.0",
     "zod": "^4.3.6"
   }
 }

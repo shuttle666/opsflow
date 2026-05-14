@@ -1,10 +1,11 @@
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
-import morgan from "morgan";
 import { env } from "./config/env";
 import { errorHandler } from "./middleware/error-handler";
 import { notFoundHandler } from "./middleware/not-found";
+import { requestContext } from "./middleware/request-context";
+import { requestLogger } from "./middleware/request-logger";
 import { apiRouter } from "./routes";
 
 export function createApp() {
@@ -12,6 +13,8 @@ export function createApp() {
 
   app.disable("x-powered-by");
 
+  app.use(requestContext);
+  app.use(requestLogger);
   app.use(helmet());
   app.use(
     cors({
@@ -19,7 +22,6 @@ export function createApp() {
       credentials: true,
     }),
   );
-  app.use(morgan(env.NODE_ENV === "production" ? "combined" : "dev"));
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 

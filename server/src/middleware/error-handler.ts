@@ -2,11 +2,12 @@ import type { ErrorRequestHandler } from "express";
 import { MulterError } from "multer";
 import { ZodError } from "zod";
 import { env } from "../config/env";
+import { serializeError, writeStructuredLog } from "../lib/structured-log";
 import { ApiError } from "../utils/api-error";
 
 export const errorHandler: ErrorRequestHandler = (
   error,
-  _req,
+  req,
   res,
   _next,
 ) => {
@@ -31,12 +32,24 @@ export const errorHandler: ErrorRequestHandler = (
   }
 
   if (statusCode >= 500) {
-    console.error(error);
+    writeStructuredLog({
+      level: "error",
+      type: "http_error",
+      message: "Unhandled request error",
+      requestId: req.requestId,
+      method: req.method,
+      path: req.originalUrl,
+      statusCode,
+      ...(req.auth?.userId ? { userId: req.auth.userId } : {}),
+      ...(req.auth?.tenantId ? { tenantId: req.auth.tenantId } : {}),
+      error: serializeError(error),
+    });
   }
 
   res.status(statusCode).json({
     success: false,
     message,
+    requestId: req.requestId,
     ...(details ? { details } : {}),
     ...(env.NODE_ENV === "development" ? { stack: error.stack } : {}),
   });

@@ -7,6 +7,7 @@ This plan reflects the current state of the repository. Older Phase 3-8 implemen
 - Authentication, tenant context, RBAC, refresh sessions, and tenant invitations are implemented.
 - Core operations are implemented: customers, jobs, assignment, staff workspace, workflow history, activity feed, evidence uploads, schedule calendar, completion reviews, notifications, and AI dispatch planning.
 - Dashboard hardening for the current daily dispatch surface is implemented through `GET /api/dashboard/summary`, backend-backed stats, schedule preview rows, attention items, conflict detection, and staff-scoped summaries.
+- Minimal request-level observability is implemented with `X-Request-Id`, structured request/error logs, and `requestId` in error responses.
 - Prisma models currently include `User`, `Tenant`, `Membership`, `Customer`, `Job`, `JobStatusHistory`, `JobCompletionReview`, `JobEvidence`, `AuthSession`, `TenantInvitation`, `AuditLog`, `Notification`, and persisted agent conversation/proposal records.
 - CI runs client and server validation through GitHub Actions; production deployment is handled by the deploy workflow and the script under `infra/scripts`.
 
@@ -18,8 +19,7 @@ The current dashboard intentionally returns the data consumed by the shipped UI.
 ### 1. Production Hardening
 Goal: improve reliability and operational visibility before adding larger product areas.
 
-- Add request IDs.
-- Add structured request/application logs.
+- Expand structured application logs beyond the request/error baseline.
 - Add rate limiting for auth and write-heavy endpoints.
 - Add a consistent production error taxonomy for expected domain errors.
 - Document migration, seed, deploy, and rollback procedures.

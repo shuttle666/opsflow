@@ -93,7 +93,7 @@ This roadmap is aligned with the current codebase. Phase names describe the prod
 - Schedule preview, attention items, and conflict-aware daily stats
 
 ## Later Candidates
-- Production observability: request IDs, structured logs, rate limiting, and error monitoring
+- Expanded production observability: broader application logs, rate limiting, error taxonomy, and external error monitoring
 - Expanded dashboard analytics: customer count, job status breakdowns, pending invitations, recent activity, and broader upcoming schedule summaries
 - S3-compatible evidence storage
 - Customer portal

@@ -99,7 +99,7 @@ Agent conversations, messages, tool calls, and proposals are persisted in Postgr
 - HTTPS is served through Nginx and Certbot.
 
 ## Current Limitations
-- Dashboard business metrics are not fully backed by a dedicated summary API yet.
-- Request IDs, structured logs, rate limiting, and external error monitoring are planned but not fully implemented.
+- Dashboard metrics for the current daily dispatch surface are backed by a dedicated summary API; broader tenant analytics remain a future option.
+- Request IDs and structured request/error logs are implemented. Broader rate limiting, a production error taxonomy, and external error monitoring remain planned hardening work.
 - Evidence storage is local-first; S3-compatible storage is a future upgrade.
 - There is no customer-facing portal yet.

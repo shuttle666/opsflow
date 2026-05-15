@@ -236,7 +236,7 @@ export function NotificationBell() {
         aria-label="Notifications"
         aria-expanded={isOpen}
         onClick={() => setIsOpen((current) => !current)}
-        className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] shadow-sm transition hover:bg-[var(--color-app-panel-muted)]"
+        className="relative flex h-11 w-11 items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] shadow-sm transition hover:bg-[var(--color-app-panel-muted)] md:h-9 md:w-9"
       >
         {hasUnread ? (
           <BellRing className="h-5 w-5 text-[var(--color-brand)]" />
@@ -251,7 +251,7 @@ export function NotificationBell() {
       </button>
 
       {isOpen ? (
-        <div className="absolute right-0 top-12 z-50 w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] shadow-[var(--shadow-floating)]">
+        <div className="fixed inset-x-4 top-16 z-50 overflow-hidden rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] shadow-[var(--shadow-floating)] sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-[min(360px,calc(100vw-2rem))]">
           <div className="flex items-center justify-between border-b border-[var(--color-app-border)] px-4 py-3">
             <div>
               <p className="text-sm font-bold text-[var(--color-text)]">Notifications</p>
@@ -263,7 +263,7 @@ export function NotificationBell() {
               type="button"
               disabled={!hasUnread}
               onClick={handleMarkAllRead}
-              className={cn(subtleButtonClassName, "h-8 px-3 text-xs")}
+              className={cn(subtleButtonClassName, "px-3 text-xs md:min-h-8")}
             >
               <CheckCircle2 className="h-4 w-4" />
               Read all
@@ -276,7 +276,7 @@ export function NotificationBell() {
             </div>
           ) : null}
 
-          <div className="max-h-[420px] overflow-y-auto">
+          <div className="max-h-[calc(100dvh-13rem)] overflow-y-auto sm:max-h-[420px]">
             {isLoading ? (
               <div className="px-4 py-8 text-center text-sm text-[var(--color-text-secondary)]">
                 Loading notifications...

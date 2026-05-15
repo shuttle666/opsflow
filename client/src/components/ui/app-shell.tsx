@@ -252,7 +252,7 @@ export function ThemeToggle() {
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
-        className="flex h-9 w-9 items-center justify-center rounded-lg border border-transparent text-white shadow-[0_4px_16px_-10px_var(--color-brand-glow)] transition hover:opacity-90"
+        className="flex h-11 w-11 items-center justify-center rounded-lg border border-transparent text-white shadow-[0_4px_16px_-10px_var(--color-brand-glow)] transition hover:opacity-90 md:h-9 md:w-9"
         style={{ background: activeSchemeColor }}
         aria-haspopup="menu"
         aria-expanded={isOpen}
@@ -265,7 +265,7 @@ export function ThemeToggle() {
       {isOpen ? (
         <div
           role="menu"
-          className="absolute right-0 top-11 z-50 w-52 overflow-hidden rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] p-1 shadow-[var(--shadow-floating)]"
+          className="fixed inset-x-4 top-16 z-50 overflow-hidden rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] p-1 shadow-[var(--shadow-floating)] sm:absolute sm:inset-x-auto sm:right-0 sm:top-11 sm:w-52"
         >
           {(["system", "light", "dark"] as ThemeMode[]).map((option) => {
             const active = option === mode;
@@ -307,7 +307,7 @@ export function ThemeToggle() {
                   title={option.label}
                   onClick={() => setScheme(option.value)}
                   className={cn(
-                    "flex h-8 w-8 items-center justify-center rounded-lg border transition hover:bg-[var(--color-app-panel-muted)]",
+                    "flex h-11 w-11 items-center justify-center rounded-lg border transition hover:bg-[var(--color-app-panel-muted)] sm:h-8 sm:w-8",
                     active
                       ? "border-[var(--color-brand)] bg-[var(--color-brand-soft)]"
                       : "border-[var(--color-app-border)]",
@@ -373,32 +373,32 @@ export function PublicShell({
   const header = (
     <header
       className={cn(
-        "flex flex-wrap items-center justify-between gap-3",
+        "flex items-center justify-between gap-2",
         isImmersive
-          ? "mx-auto max-w-[1240px] rounded-[22px] border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-app-panel)_72%,transparent)] px-4 py-3 shadow-[0_18px_60px_-42px_rgba(15,23,42,0.58)] backdrop-blur-xl sm:px-5"
+          ? "mx-auto max-w-[1240px] rounded-[22px] border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-app-panel)_72%,transparent)] px-3 py-2.5 shadow-[0_18px_60px_-42px_rgba(15,23,42,0.58)] backdrop-blur-xl sm:px-5 sm:py-3"
           : "border-b border-[var(--color-app-border)] py-3",
       )}
     >
-      <Link href="/" className="flex items-center gap-3" aria-label="OpsFlow home">
+      <Link href="/" className="flex min-h-11 min-w-0 items-center gap-3" aria-label="OpsFlow home">
         <BrandMark
           variant="wordmark"
           decorative={false}
           className={cn(
             isImmersive
-              ? "h-8 w-[148px] sm:h-9 sm:w-[166px]"
-              : "h-10 w-[190px] sm:h-11 sm:w-[208px]",
+              ? "h-8 w-[142px] sm:h-9 sm:w-[166px]"
+              : "h-9 w-[166px] sm:h-11 sm:w-[208px]",
           )}
         />
       </Link>
 
-      <nav className="flex flex-wrap items-center gap-2">
+      <nav className="flex shrink-0 items-center gap-2">
         {publicNavigation.map((item) => (
           <Link
             key={item.href}
             href={item.href}
             className={cn(
               isImmersive
-                ? "inline-flex h-9 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--color-text)_14%,transparent)] bg-[color-mix(in_srgb,var(--color-app-panel)_34%,transparent)] px-3.5 text-[13px] font-semibold text-[var(--color-text)] shadow-sm backdrop-blur transition hover:border-[color-mix(in_srgb,var(--color-text)_24%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-app-panel)_58%,transparent)]"
+                ? "inline-flex min-h-11 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--color-text)_14%,transparent)] bg-[color-mix(in_srgb,var(--color-app-panel)_34%,transparent)] px-3.5 text-[13px] font-semibold text-[var(--color-text)] shadow-sm backdrop-blur transition hover:border-[color-mix(in_srgb,var(--color-text)_24%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-app-panel)_58%,transparent)] sm:min-h-9"
                 : cn(subtleButtonClassName, "inline-flex px-4"),
             )}
           >
@@ -409,7 +409,7 @@ export function PublicShell({
         <ThemeToggle />
 
         {status === "authenticated" ? (
-          <Link href="/dashboard" className={secondaryButtonClassName}>
+          <Link href="/dashboard" className={cn(secondaryButtonClassName, "hidden sm:inline-flex")}>
             Open workspace
           </Link>
         ) : null}
@@ -651,7 +651,7 @@ export function WorkspaceShell({
               <button
                 type="button"
                 onClick={() => setIsMobileNavOpen(false)}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/65 transition hover:bg-white/10 hover:text-white"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white/65 transition hover:bg-white/10 hover:text-white"
                 aria-label="Close navigation"
               >
                 <X className="h-5 w-5" />
@@ -678,7 +678,7 @@ export function WorkspaceShell({
                       onChange={(event) => handleSwitchTenant(event.target.value)}
                       disabled={isPending || !currentTenant}
                       title={currentTenant ? `${currentTenant.tenantName} (${currentTenant.role})` : undefined}
-                      className="block h-10 w-full min-w-0 appearance-none truncate rounded-lg border border-white/10 bg-white/10 px-3 pr-9 text-left text-xs font-medium text-white outline-none transition focus:border-[var(--color-sidebar-accent)] disabled:opacity-60 [&>option]:bg-zinc-50 [&>option]:text-zinc-950"
+                      className="block min-h-11 w-full min-w-0 appearance-none truncate rounded-lg border border-white/10 bg-white/10 px-3 pr-9 text-left text-xs font-medium text-white outline-none transition focus:border-[var(--color-sidebar-accent)] disabled:opacity-60 [&>option]:bg-zinc-50 [&>option]:text-zinc-950"
                     >
                       {availableTenants.map((tenant) => (
                         <option key={tenant.tenantId} value={tenant.tenantId}>
@@ -710,7 +710,7 @@ export function WorkspaceShell({
                     type="button"
                     onClick={handleLogout}
                     disabled={isPending}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/45 transition hover:bg-white/10 hover:text-white"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white/45 transition hover:bg-white/10 hover:text-white"
                     aria-label="Logout"
                   >
                     <LogOut className="h-4 w-4" />
@@ -729,26 +729,34 @@ export function WorkspaceShell({
         )}
       >
         <div className="flex min-h-screen flex-col">
-          <header className="sticky top-0 z-30 bg-[var(--color-app)]/95 px-4 py-2.5 backdrop-blur sm:px-6 xl:px-7">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <header className="sticky top-0 z-30 border-b border-[var(--color-app-border)] bg-[var(--color-app)]/95 px-4 py-2 backdrop-blur sm:px-6 xl:border-b-0 xl:px-7 xl:py-2.5">
+            <div className="flex items-center justify-between gap-3 xl:hidden">
+              <div className="flex min-w-0 items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsMobileNavOpen(true)}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] text-[var(--color-text-secondary)] shadow-sm transition hover:bg-[var(--color-app-panel-muted)] hover:text-[var(--color-text)]"
+                  aria-label="Open navigation"
+                  aria-controls="mobile-workspace-navigation"
+                  aria-expanded={isMobileNavOpen}
+                >
+                  <Menu className="h-5 w-5" />
+                </button>
+                <Link href="/dashboard" className="flex min-w-0 items-center gap-2" aria-label="OpsFlow dashboard">
+                  <BrandMark className="h-8 w-8" />
+                  <span className="truncate text-lg font-bold text-[var(--color-text)]">OpsFlow</span>
+                </Link>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-2">
+                <ThemeToggle />
+                <NotificationBell />
+              </div>
+            </div>
+
+            <div className="hidden xl:flex xl:items-center xl:justify-between xl:gap-3">
               <div className="min-w-0">
-                <div className="flex items-center gap-3 xl:hidden">
-                  <button
-                    type="button"
-                    onClick={() => setIsMobileNavOpen(true)}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] text-[var(--color-text-secondary)] shadow-sm transition hover:bg-[var(--color-app-panel-muted)] hover:text-[var(--color-text)]"
-                    aria-label="Open navigation"
-                    aria-controls="mobile-workspace-navigation"
-                    aria-expanded={isMobileNavOpen}
-                  >
-                    <Menu className="h-5 w-5" />
-                  </button>
-                  <Link href="/dashboard" className="flex min-w-0 items-center gap-2" aria-label="OpsFlow dashboard">
-                    <BrandMark className="h-8 w-8" />
-                    <span className="truncate text-lg font-bold text-[var(--color-text)]">OpsFlow</span>
-                  </Link>
-                </div>
-                <h1 className="mt-3 text-xl font-extrabold leading-tight text-[var(--color-text)] xl:mt-0">
+                <h1 className="text-xl font-extrabold leading-tight text-[var(--color-text)]">
                   {title}
                 </h1>
                 {description ? (
@@ -758,8 +766,8 @@ export function WorkspaceShell({
                 ) : null}
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="hidden h-9 w-[200px] items-center gap-2 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3 text-sm text-[var(--color-text-muted)] shadow-sm lg:flex">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-[200px] items-center gap-2 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3 text-sm text-[var(--color-text-muted)] shadow-sm">
                   <Search className="h-4 w-4" />
                   <span>Search...</span>
                 </div>
@@ -770,8 +778,25 @@ export function WorkspaceShell({
             </div>
           </header>
 
-          <main className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-1 sm:px-6 xl:px-7">
-            <div className="mx-auto max-w-[1220px] space-y-5">{children}</div>
+          <main className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-4 sm:px-6 xl:px-7 xl:pt-1">
+            <div className="mx-auto max-w-[1220px] space-y-5">
+              <div className="xl:hidden">
+                <h1 className="text-xl font-extrabold leading-tight text-[var(--color-text)]">
+                  {title}
+                </h1>
+                {description ? (
+                  <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--color-text-secondary)]">
+                    {description}
+                  </p>
+                ) : null}
+                {actions ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {actions}
+                  </div>
+                ) : null}
+              </div>
+              {children}
+            </div>
           </main>
         </div>
       </div>

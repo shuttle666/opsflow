@@ -175,7 +175,7 @@ function AuthTabsPageContent({ initialMode = "login" }: AuthTabsPageProps) {
       <div className="relative z-10 mx-auto flex min-h-[calc(100vh-3rem)] max-w-[1240px] items-center justify-center pb-16 pt-24 sm:pt-28">
         <section className="w-full max-w-[31rem] rounded-[28px] border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-app-panel)_78%,transparent)] p-3 shadow-[0_30px_90px_-55px_rgba(15,23,42,0.55)] backdrop-blur-xl">
           <div className="rounded-[22px] border border-[var(--color-app-border)] bg-[color-mix(in_srgb,var(--color-app-panel)_74%,transparent)] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] sm:p-7">
-            <Link href="/" className="mx-auto flex w-fit items-center justify-center">
+            <Link href="/" className="mx-auto flex min-h-11 w-fit items-center justify-center">
               <BrandMark
                 variant="wordmark"
                 decorative={false}
@@ -210,7 +210,7 @@ function AuthTabsPageContent({ initialMode = "login" }: AuthTabsPageProps) {
                   aria-selected={mode === tab.id}
                   onClick={() => switchMode(tab.id)}
                   className={cn(
-                    "h-10 rounded-[15px] text-sm font-semibold transition",
+                    "min-h-11 rounded-[15px] text-sm font-semibold transition",
                     mode === tab.id
                       ? "bg-[var(--color-app-panel)] text-[var(--color-text)] shadow-sm ring-1 ring-[var(--color-brand)]/35"
                       : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]",

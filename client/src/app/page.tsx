@@ -89,20 +89,20 @@ export default function HomePage() {
               <div className="mt-7 flex flex-wrap justify-center gap-3">
                 <Link
                   href="/login?mode=register"
-                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-5 text-[13px] font-semibold !text-white shadow-[0_16px_34px_-24px_var(--color-brand-glow)] transition hover:bg-[var(--color-brand-strong)] hover:!text-white"
+                  className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-5 text-[13px] font-semibold !text-white shadow-[0_16px_34px_-24px_var(--color-brand-glow)] transition hover:bg-[var(--color-brand-strong)] hover:!text-white"
                 >
                   Create account
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
                   href="/login"
-                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-app-panel)_64%,transparent)] px-5 text-[13px] font-semibold text-[var(--color-text)] backdrop-blur transition hover:bg-[color-mix(in_srgb,var(--color-app-panel)_82%,transparent)]"
+                  className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-app-panel)_64%,transparent)] px-5 text-[13px] font-semibold text-[var(--color-text)] backdrop-blur transition hover:bg-[color-mix(in_srgb,var(--color-app-panel)_82%,transparent)]"
                 >
                   Sign in
                 </Link>
                 <Link
                   href="/dashboard"
-                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg px-3.5 text-[13px] font-semibold text-[var(--color-text-secondary)] transition hover:bg-[color-mix(in_srgb,var(--color-app-panel)_54%,transparent)] hover:text-[var(--color-text)]"
+                  className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-3.5 text-[13px] font-semibold text-[var(--color-text-secondary)] transition hover:bg-[color-mix(in_srgb,var(--color-app-panel)_54%,transparent)] hover:text-[var(--color-text)]"
                 >
                   Open workspace
                   <ArrowRight className="h-4 w-4" />
@@ -299,7 +299,7 @@ export default function HomePage() {
             </div>
             <Link
               href="/login?mode=register"
-              className="inline-flex h-10 w-fit items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-5 text-[13px] font-semibold !text-white shadow-[0_16px_34px_-24px_var(--color-brand-glow)] transition hover:bg-[var(--color-brand-strong)] hover:!text-white"
+              className="inline-flex min-h-11 w-fit items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-5 text-[13px] font-semibold !text-white shadow-[0_16px_34px_-24px_var(--color-brand-glow)] transition hover:bg-[var(--color-brand-strong)] hover:!text-white"
             >
               Start planning
               <ArrowRight className="h-4 w-4" />

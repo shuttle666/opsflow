@@ -848,6 +848,104 @@ function MonthView({
   );
 }
 
+function MobileAgendaView({
+  days,
+  jobs,
+  selectedDate,
+  onSelectDate,
+  viewMode,
+  selectedAssigneeId,
+  allowManage,
+}: {
+  days: Date[];
+  jobs: ScheduleJobWithLane[];
+  selectedDate: Date;
+  onSelectDate: (date: Date) => void;
+  viewMode: ViewMode;
+  selectedAssigneeId: string;
+  allowManage: boolean;
+}) {
+  const today = todayLocalDate();
+  const selectedJobs = jobsForDay(jobs, selectedDate);
+  const periodLabel = periodWord(viewMode);
+
+  return (
+    <section className="space-y-3 bg-[var(--color-app-panel)] p-3">
+      <div className="overflow-x-auto pb-1">
+        <div className="flex min-w-max gap-2">
+          {days.map((day) => {
+            const isToday = isSameLocalDate(day, today);
+            const isSelected = isSameLocalDate(day, selectedDate);
+            const dayJobs = jobsForDay(jobs, day);
+
+            return (
+              <button
+                key={day.toISOString()}
+                type="button"
+                onClick={() => onSelectDate(day)}
+                className={cn(
+                  "flex min-h-14 min-w-16 flex-col items-center justify-center rounded-lg border px-3 text-center transition",
+                  isSelected
+                    ? "border-[var(--color-brand)] bg-[var(--color-brand)] !text-white shadow-[0_10px_24px_-18px_var(--color-brand-glow)]"
+                    : "border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] text-[var(--color-text-secondary)]",
+                )}
+              >
+                <span className="text-[11px] font-semibold uppercase">
+                  {weekDayLabels[(day.getDay() + 6) % 7]}
+                </span>
+                <span className="text-lg font-extrabold leading-tight">
+                  {day.getDate()}
+                </span>
+                <span
+                  className={cn(
+                    "text-[10px] font-semibold",
+                    isSelected ? "text-white/75" : isToday ? "text-[var(--color-brand)]" : "text-[var(--color-text-muted)]",
+                  )}
+                >
+                  {dayJobs.length} job{dayJobs.length === 1 ? "" : "s"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-3">
+        <p className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
+          Selected day
+        </p>
+        <h2 className="mt-1 text-base font-bold text-[var(--color-text)]">
+          {formatLongDate(selectedDate)}
+        </h2>
+        <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+          {selectedJobs.length} job{selectedJobs.length === 1 ? "" : "s"} visible this {periodLabel}
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {selectedJobs.length > 0 ? (
+          selectedJobs.map((job) => (
+            <ScheduleJobCard key={`mobile-${selectedDate.toISOString()}-${job.id}`} job={job} compact />
+          ))
+        ) : (
+          <div className="rounded-lg border border-dashed border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-4 py-8 text-center">
+            <p className="text-sm font-semibold text-[var(--color-text)]">
+              No jobs scheduled
+            </p>
+            <p className="mx-auto mt-1 max-w-[18rem] text-xs leading-5 text-[var(--color-text-secondary)]">
+              {selectedAssigneeId
+                ? "The selected staff member has no jobs on this day."
+                : allowManage
+                  ? "No assigned or unassigned jobs are scheduled for this day."
+                  : "No jobs are assigned to you for this day."}
+            </p>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function CalendarToolbar({
   period,
   viewMode,
@@ -924,7 +1022,7 @@ function CalendarToolbar({
               aria-pressed={viewMode === mode}
               onClick={() => onViewModeChange(mode)}
               className={cn(
-                "h-8 rounded-md px-3 text-xs font-semibold capitalize text-[var(--color-text-secondary)] transition hover:bg-[var(--color-app-panel-muted)]",
+                "min-h-11 rounded-md px-3 text-xs font-semibold capitalize text-[var(--color-text-secondary)] transition hover:bg-[var(--color-app-panel-muted)] md:min-h-8",
                 viewMode === mode && "bg-[var(--color-brand)] !text-white hover:bg-[var(--color-brand)] hover:!text-white",
               )}
             >
@@ -942,7 +1040,7 @@ function CalendarToolbar({
               onClick={() => setIsAssigneeMenuOpen((open) => !open)}
               disabled={isLoadingMembers}
               className={cn(
-                "flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] text-[var(--color-text-secondary)] shadow-sm transition hover:bg-[var(--color-app-panel-muted)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50",
+                "flex h-11 w-11 items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] text-[var(--color-text-secondary)] shadow-sm transition hover:bg-[var(--color-app-panel-muted)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50 md:h-9 md:w-9",
                 selectedAssigneeId && "border-[var(--color-brand)] bg-[var(--color-brand-soft)] text-[var(--color-brand)]",
               )}
             >
@@ -1008,7 +1106,7 @@ function CalendarToolbar({
         <button
           type="button"
           onClick={openDatePicker}
-          className="flex min-w-[220px] items-center justify-center gap-2 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3 py-2 text-center shadow-sm transition hover:bg-[var(--color-app-panel-muted)]"
+          className="flex min-h-11 min-w-[220px] items-center justify-center gap-2 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3 py-2 text-center shadow-sm transition hover:bg-[var(--color-app-panel-muted)]"
         >
           <Calendar className="h-4 w-4 text-[var(--color-brand)]" />
           <span className="min-w-0">
@@ -1028,7 +1126,7 @@ function CalendarToolbar({
             type="button"
             aria-label={previousLabel(viewMode)}
             onClick={() => onMovePeriod(-1)}
-            className={cn(subtleButtonClassName, "h-9 w-9 px-0")}
+            className={cn(subtleButtonClassName, "w-11 px-0 md:w-9")}
           >
             <ArrowRight className="h-4 w-4 rotate-180" />
           </button>
@@ -1043,7 +1141,7 @@ function CalendarToolbar({
             type="button"
             aria-label={nextLabel(viewMode)}
             onClick={() => onMovePeriod(1)}
-            className={cn(subtleButtonClassName, "h-9 w-9 px-0")}
+            className={cn(subtleButtonClassName, "w-11 px-0 md:w-9")}
           >
             <ArrowRight className="h-4 w-4" />
           </button>
@@ -1323,32 +1421,50 @@ export default function SchedulePage() {
                     }
                   />
                 </div>
-              ) : viewMode === "day" && dayLanes.length === 0 ? (
-                <div className="p-5">
-                  <EmptyStatePanel
-                    title="No jobs scheduled"
-                    description={
-                      selectedAssigneeId
-                        ? "The selected staff member has no jobs scheduled for this day."
-                        : allowManage
-                          ? "No assigned or unassigned jobs are scheduled for this day."
-                          : "No jobs are assigned to you for this day."
-                    }
-                  />
-                </div>
-              ) : viewMode === "day" ? (
-                <DayView day={period.start} lanes={dayLanes} embedded />
-              ) : viewMode === "week" ? (
-                <WeekView days={period.days} jobs={visibleJobs} embedded />
               ) : (
-                <MonthView
-                  anchorDate={anchorDate}
-                  days={period.days}
-                  jobs={visibleJobs}
-                  selectedDate={selectedDate}
-                  onSelectDate={setSelectedDate}
-                  embedded
-                />
+                <>
+                  <div className="md:hidden">
+                    <MobileAgendaView
+                      days={period.days}
+                      jobs={visibleJobs}
+                      selectedDate={selectedDate}
+                      onSelectDate={setSelectedDate}
+                      viewMode={viewMode}
+                      selectedAssigneeId={selectedAssigneeId}
+                      allowManage={allowManage}
+                    />
+                  </div>
+
+                  <div className="hidden md:block">
+                    {viewMode === "day" && dayLanes.length === 0 ? (
+                      <div className="p-5">
+                        <EmptyStatePanel
+                          title="No jobs scheduled"
+                          description={
+                            selectedAssigneeId
+                              ? "The selected staff member has no jobs scheduled for this day."
+                              : allowManage
+                                ? "No assigned or unassigned jobs are scheduled for this day."
+                                : "No jobs are assigned to you for this day."
+                          }
+                        />
+                      </div>
+                    ) : viewMode === "day" ? (
+                      <DayView day={period.start} lanes={dayLanes} embedded />
+                    ) : viewMode === "week" ? (
+                      <WeekView days={period.days} jobs={visibleJobs} embedded />
+                    ) : (
+                      <MonthView
+                        anchorDate={anchorDate}
+                        days={period.days}
+                        jobs={visibleJobs}
+                        selectedDate={selectedDate}
+                        onSelectDate={setSelectedDate}
+                        embedded
+                      />
+                    )}
+                  </div>
+                </>
               )}
             </section>
           </div>

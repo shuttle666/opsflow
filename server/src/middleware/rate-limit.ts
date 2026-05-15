@@ -47,13 +47,17 @@ export function createRateLimiter(options: RateLimitOptions): RequestHandler {
     bucket.count += 1;
     buckets.set(key, bucket);
 
+    const remaining = Math.max(0, options.maxRequests - bucket.count);
+
+    res.setHeader("RateLimit-Limit", String(options.maxRequests));
+    res.setHeader("RateLimit-Remaining", String(remaining));
     res.setHeader(
       "RateLimit-Reset",
       String(Math.ceil((bucket.resetAt - now) / 1000)),
     );
 
     if (bucket.count > options.maxRequests) {
-      next(new ApiError(429, options.message));
+      next(new ApiError(429, options.message, "RATE_LIMITED"));
       return;
     }
 
@@ -71,4 +75,18 @@ export function emailAndIpRateLimitKey(req: Parameters<RequestHandler>[0]) {
       : "unknown";
 
   return `${clientIp(req)}:${email}`;
+}
+
+export function tenantUserRateLimitKey(scope: string) {
+  return (req: Parameters<RequestHandler>[0]) => {
+    if (req.auth?.tenantId && req.auth.userId) {
+      return `${scope}:${req.auth.tenantId}:${req.auth.userId}`;
+    }
+
+    return `${scope}:${clientIp(req)}`;
+  };
+}
+
+export function clearRateLimitBuckets() {
+  buckets.clear();
 }

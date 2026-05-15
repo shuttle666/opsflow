@@ -38,7 +38,7 @@ export const uploadJobEvidenceHandler: RequestHandler = asyncHandler(async (req,
   const input = uploadJobEvidenceBodySchema.parse(req.body);
 
   if (!req.file) {
-    throw new ApiError(400, "Evidence file is required.");
+    throw new ApiError(400, "Evidence file is required.", "EVIDENCE_FILE_REQUIRED");
   }
 
   const result = await uploadJobEvidence(

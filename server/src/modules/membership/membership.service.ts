@@ -82,7 +82,7 @@ async function getMembershipOrThrow(
   });
 
   if (!membership) {
-    throw new ApiError(404, "Membership not found.");
+    throw new ApiError(404, "Membership not found.", "MEMBERSHIP_NOT_FOUND");
   }
 
   return membership;
@@ -156,7 +156,7 @@ export async function updateMembership(
   const membership = await getMembershipOrThrow(auth, membershipId);
 
   if (membership.status === MembershipStatus.INVITED) {
-    throw new ApiError(409, "Invited memberships are read-only in this phase.");
+    throw new ApiError(409, "Invited memberships are read-only in this phase.", "MEMBERSHIP_INVITED_READ_ONLY");
   }
 
   const nextRole = input.role ?? membership.role;
@@ -172,6 +172,7 @@ export async function updateMembership(
       throw new ApiError(
         409,
         "This tenant must keep at least one active owner.",
+        "CONFLICT",
       );
     }
   }

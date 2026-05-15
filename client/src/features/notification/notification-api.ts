@@ -125,6 +125,7 @@ export async function openNotificationStreamRequest(
   const payload = isJson ? await response.json().catch(() => undefined) : undefined;
   const errorPayload = payload as {
     message?: string;
+    code?: string;
     requestId?: string;
     details?: unknown;
   } | undefined;
@@ -137,6 +138,7 @@ export async function openNotificationStreamRequest(
     errorPayload?.message ?? fallbackMessage,
     errorPayload?.details,
     errorPayload?.requestId ?? response.headers.get("x-request-id") ?? undefined,
+    errorPayload?.code,
   );
 }
 

@@ -9,7 +9,7 @@ This document is aligned with the Express routers under `server/src/routes` and 
 - Authorization uses `OWNER`, `MANAGER`, and `STAFF` roles.
 - List endpoints return `{ success, message, data, meta.pagination }`.
 - Job scheduling now uses `scheduledStartAt` and `scheduledEndAt`. Older `scheduledAt` references are legacy.
-- Every API response includes an `X-Request-Id` header. Error responses also include `requestId` in the JSON body for log correlation.
+- Every API response includes an `X-Request-Id` header. Error responses also include a stable `code` and `requestId` in the JSON body for UI handling and log correlation.
 
 ## Health
 - `GET /health`
@@ -175,7 +175,8 @@ The planner is available to authenticated tenant users, but proposal confirmatio
 
 ## Contract Notes
 - All successful JSON responses use the common `success/message/data/meta` envelope.
-- All error JSON responses use the common `success/message/requestId/details` envelope.
+- All error JSON responses use the common `success/code/message/requestId/details` envelope.
+- Error fields have separate responsibilities: HTTP status carries protocol-level semantics, `code` is the stable application contract, `message` is human-readable copy, and `requestId` correlates a user-visible failure with backend logs.
 - Validation errors are returned as structured error details from Zod.
 - The API writes structured request logs to stdout with `requestId`, method, path, status code, duration, and authenticated user/tenant context when available.
 - The frontend preserves request IDs from API errors and shows them on primary error surfaces, including auth failures, page load failures, form submissions, and job workflow/evidence/review actions. Generic backend messages such as `Validation failed` or `Internal server error` can be replaced with local UI fallback copy while keeping the request ID visible for log lookup.

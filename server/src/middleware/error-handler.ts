@@ -3,7 +3,7 @@ import { MulterError } from "multer";
 import { ZodError } from "zod";
 import { env } from "../config/env";
 import { serializeError, writeStructuredLog } from "../lib/structured-log";
-import { ApiError } from "../utils/api-error";
+import { ApiError, type ApiErrorCode } from "../utils/api-error";
 
 export const errorHandler: ErrorRequestHandler = (
   error,
@@ -13,20 +13,24 @@ export const errorHandler: ErrorRequestHandler = (
 ) => {
   let statusCode = 500;
   let message = "Internal server error";
+  let code: ApiErrorCode = "INTERNAL_ERROR";
   let details: unknown;
 
   if (error instanceof ApiError) {
     statusCode = error.statusCode;
     message = error.message;
+    code = error.code;
     details = error.details;
   } else if (error instanceof MulterError) {
     statusCode = 400;
+    code = error.code === "LIMIT_FILE_SIZE" ? "UPLOAD_FILE_TOO_LARGE" : "UPLOAD_FAILED";
     message =
       error.code === "LIMIT_FILE_SIZE"
         ? "Evidence file exceeds the maximum allowed size."
         : "Evidence upload failed.";
   } else if (error instanceof ZodError) {
     statusCode = 400;
+    code = "VALIDATION_ERROR";
     message = "Validation failed";
     details = error.flatten();
   }
@@ -48,6 +52,7 @@ export const errorHandler: ErrorRequestHandler = (
 
   res.status(statusCode).json({
     success: false,
+    code,
     message,
     requestId: req.requestId,
     ...(details ? { details } : {}),

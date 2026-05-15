@@ -31,6 +31,10 @@ function durationMs(startedAt: Date, completedAt: Date) {
 
 function errorCode(error: unknown) {
   if (error instanceof ApiError) {
+    if (error.code) {
+      return error.code;
+    }
+
     const details = error.details;
     if (details && typeof details === "object" && "code" in details) {
       const code = (details as { code?: unknown }).code;

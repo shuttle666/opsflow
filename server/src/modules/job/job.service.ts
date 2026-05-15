@@ -195,11 +195,11 @@ function normalizeScheduledRange(input: {
   const scheduledEndAt = normalizeOptionalDateTime(input.scheduledEndAt);
 
   if ((scheduledStartAt && !scheduledEndAt) || (!scheduledStartAt && scheduledEndAt)) {
-    throw new ApiError(400, "Both start and end time are required when scheduling a job.");
+    throw new ApiError(400, "Both start and end time are required when scheduling a job.", "JOB_SCHEDULE_INVALID_RANGE");
   }
 
   if (scheduledStartAt && scheduledEndAt && scheduledEndAt <= scheduledStartAt) {
-    throw new ApiError(400, "End time must be after the start time.");
+    throw new ApiError(400, "End time must be after the start time.", "JOB_SCHEDULE_INVALID_RANGE");
   }
 
   return {
@@ -475,7 +475,7 @@ async function getTenantCustomerOrThrow(
   });
 
   if (!customer) {
-    throw new ApiError(404, "Customer not found.");
+    throw new ApiError(404, "Customer not found.", "CUSTOMER_NOT_FOUND");
   }
 
   return customer;
@@ -494,7 +494,7 @@ async function getJobOrThrow(auth: AuthContext, jobId: string) {
   });
 
   if (!job) {
-    throw new ApiError(404, "Job not found.");
+    throw new ApiError(404, "Job not found.", "JOB_NOT_FOUND");
   }
 
   return job;
@@ -522,14 +522,14 @@ async function getAssignableMembershipOrThrow(auth: AuthContext, membershipId: s
   });
 
   if (!membership) {
-    throw new ApiError(404, "Membership not found.");
+    throw new ApiError(404, "Membership not found.", "MEMBERSHIP_NOT_FOUND");
   }
 
   if (
     membership.status !== MembershipStatus.ACTIVE ||
     membership.role !== MembershipRole.STAFF
   ) {
-    throw new ApiError(409, "Jobs can only be assigned to active staff members.");
+    throw new ApiError(409, "Jobs can only be assigned to active staff members.", "JOB_ASSIGNMENT_INVALID_STAFF");
   }
 
   return membership;
@@ -671,7 +671,7 @@ export async function getJobDetail(
   });
 
   if (!job) {
-    throw new ApiError(404, "Job not found.");
+    throw new ApiError(404, "Job not found.", "JOB_NOT_FOUND");
   }
 
   return mapJobDetail(job);
@@ -801,15 +801,15 @@ export async function getScheduleDay(
 
 function assertValidScheduleRange(rangeStart: Date, rangeEnd: Date) {
   if (Number.isNaN(rangeStart.getTime()) || Number.isNaN(rangeEnd.getTime())) {
-    throw new ApiError(400, "Invalid schedule range.");
+    throw new ApiError(400, "Invalid schedule range.", "JOB_SCHEDULE_INVALID_RANGE");
   }
 
   if (rangeEnd <= rangeStart) {
-    throw new ApiError(400, "Range end must be after range start.");
+    throw new ApiError(400, "Range end must be after range start.", "JOB_SCHEDULE_INVALID_RANGE");
   }
 
   if (rangeEnd.getTime() - rangeStart.getTime() > maxScheduleRangeMs) {
-    throw new ApiError(400, "Schedule range cannot exceed 42 days.");
+    throw new ApiError(400, "Schedule range cannot exceed 42 days.", "JOB_SCHEDULE_INVALID_RANGE");
   }
 }
 
@@ -971,11 +971,11 @@ export async function checkScheduleConflicts(
   const scheduledEndAt = new Date(input.scheduledEndAt);
 
   if (Number.isNaN(scheduledStartAt.getTime()) || Number.isNaN(scheduledEndAt.getTime())) {
-    throw new ApiError(400, "Invalid schedule range.");
+    throw new ApiError(400, "Invalid schedule range.", "JOB_SCHEDULE_INVALID_RANGE");
   }
 
   if (scheduledEndAt <= scheduledStartAt) {
-    throw new ApiError(400, "End time must be after the start time.");
+    throw new ApiError(400, "End time must be after the start time.", "JOB_SCHEDULE_INVALID_RANGE");
   }
 
   const conflicts = await prisma.job.findMany({
@@ -1118,7 +1118,7 @@ export async function unassignJob(
   });
 
   if (!current) {
-    throw new ApiError(404, "Job not found.");
+    throw new ApiError(404, "Job not found.", "JOB_NOT_FOUND");
   }
 
   if (!current.assignedToId) {
@@ -1181,7 +1181,7 @@ export async function getJobHistory(
   });
 
   if (!job) {
-    throw new ApiError(404, "Job not found.");
+    throw new ApiError(404, "Job not found.", "JOB_NOT_FOUND");
   }
 
   const history = await prisma.jobStatusHistory.findMany({
@@ -1238,7 +1238,7 @@ export async function transitionJobStatusForActor(
   });
 
   if (!visibleJob) {
-    throw new ApiError(404, "Job not found.");
+    throw new ApiError(404, "Job not found.", "JOB_NOT_FOUND");
   }
 
   const transitioned = await transitionJobStatus({

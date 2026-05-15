@@ -54,8 +54,25 @@ describe("GET /api/health", () => {
     expect(response.headers["x-request-id"]).toBe("client-request-404");
     expect(response.body).toMatchObject({
       success: false,
+      code: "NOT_FOUND",
       requestId: "client-request-404",
       message: "Route GET /api/missing not found.",
+    });
+  });
+
+  it("returns validation errors with a stable code", async () => {
+    const app = createApp();
+    const response = await request(app)
+      .post("/api/auth/login")
+      .set("X-Request-Id", "client-request-validation")
+      .send({});
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      success: false,
+      code: "VALIDATION_ERROR",
+      requestId: "client-request-validation",
+      message: "Validation failed",
     });
   });
 });

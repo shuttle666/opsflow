@@ -130,7 +130,7 @@ async function getCustomerOrThrow(auth: AuthContext, customerId: string) {
   });
 
   if (!customer) {
-    throw new ApiError(404, "Customer not found.");
+    throw new ApiError(404, "Customer not found.", "CUSTOMER_NOT_FOUND");
   }
 
   return customer;
@@ -249,7 +249,7 @@ export async function getCustomerDetail(
   });
 
   if (!customer) {
-    throw new ApiError(404, "Customer not found.");
+    throw new ApiError(404, "Customer not found.", "CUSTOMER_NOT_FOUND");
   }
 
   return {
@@ -330,7 +330,7 @@ export async function archiveCustomer(
     });
 
     if (!customer) {
-      throw new ApiError(404, "Customer not found.");
+      throw new ApiError(404, "Customer not found.", "CUSTOMER_NOT_FOUND");
     }
 
     if (customer.archivedAt) {
@@ -351,6 +351,7 @@ export async function archiveCustomer(
       throw new ApiError(
         409,
         "Complete or cancel this customer's open jobs before deleting the customer.",
+        "CUSTOMER_HAS_OPEN_JOBS",
       );
     }
 
@@ -418,7 +419,7 @@ export async function restoreCustomer(
     });
 
     if (!customer) {
-      throw new ApiError(404, "Customer not found.");
+      throw new ApiError(404, "Customer not found.", "CUSTOMER_NOT_FOUND");
     }
 
     if (!customer.archivedAt) {

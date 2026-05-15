@@ -87,7 +87,7 @@ async function getVisibleJobOrThrow(auth: AuthContext, jobId: string): Promise<V
   });
 
   if (!job) {
-    throw new ApiError(404, "Job not found.");
+    throw new ApiError(404, "Job not found.", "JOB_NOT_FOUND");
   }
 
   return job;
@@ -132,7 +132,7 @@ async function getVisibleEvidenceOrThrow(
   });
 
   if (!evidence) {
-    throw new ApiError(404, "Evidence not found.");
+    throw new ApiError(404, "Evidence not found.", "EVIDENCE_NOT_FOUND");
   }
 
   return evidence;
@@ -154,15 +154,15 @@ function mapJobEvidenceItem(item: VisibleEvidence): JobEvidenceItem {
 
 function assertSupportedEvidenceFile(file: UploadJobEvidenceInput["file"]) {
   if (!file) {
-    throw new ApiError(400, "Evidence file is required.");
+    throw new ApiError(400, "Evidence file is required.", "EVIDENCE_FILE_REQUIRED");
   }
 
   if (!supportedEvidenceMimeTypes.includes(file.mimetype as (typeof supportedEvidenceMimeTypes)[number])) {
-    throw new ApiError(400, "Evidence file type is not supported.");
+    throw new ApiError(400, "Evidence file type is not supported.", "EVIDENCE_UNSUPPORTED_TYPE");
   }
 
   if (file.size > env.EVIDENCE_MAX_SIZE_BYTES) {
-    throw new ApiError(400, "Evidence file exceeds the maximum allowed size.");
+    throw new ApiError(400, "Evidence file exceeds the maximum allowed size.", "EVIDENCE_FILE_TOO_LARGE");
   }
 }
 

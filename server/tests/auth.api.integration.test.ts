@@ -93,6 +93,51 @@ describeIfDb("auth api integration", () => {
     expect(refreshCookies?.join(";")).toContain("opsflow_refresh=");
   });
 
+  it("returns a stable code for invalid credentials", async () => {
+    const passwordHash = await hashPassword("password123");
+    const [tenant, user] = await Promise.all([
+      prisma.tenant.create({
+        data: {
+          name: "Invalid Login Tenant",
+          slug: "invalid-login-tenant",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "invalid-login@test.dev",
+          passwordHash,
+          displayName: "Invalid Login User",
+        },
+      }),
+    ]);
+
+    await prisma.membership.create({
+      data: {
+        userId: user.id,
+        tenantId: tenant.id,
+        role: MembershipRole.OWNER,
+        status: MembershipStatus.ACTIVE,
+      },
+    });
+
+    const response = await request(app)
+      .post("/api/auth/login")
+      .set("X-Request-Id", "invalid-login-request")
+      .send({
+        email: user.email,
+        password: "wrong-password",
+        tenantId: tenant.id,
+      });
+
+    expect(response.status).toBe(401);
+    expect(response.body).toMatchObject({
+      success: false,
+      code: "AUTH_INVALID_CREDENTIALS",
+      requestId: "invalid-login-request",
+      message: "Invalid email or password.",
+    });
+  });
+
   it("returns 403 for staff role on invitation creation and writes audit log", async () => {
     const passwordHash = await hashPassword("password123");
     const [tenant, staff, invitee] = await Promise.all([

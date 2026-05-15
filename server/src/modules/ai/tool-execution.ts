@@ -16,9 +16,10 @@ export function normalizeAiToolError(error: unknown): AiToolErrorResult {
     const details =
       error.details && typeof error.details === "object" ? error.details : undefined;
     const code =
-      details && "code" in details && typeof details.code === "string"
+      error.code ??
+      (details && "code" in details && typeof details.code === "string"
         ? details.code
-        : undefined;
+        : undefined);
 
     return {
       error: true,
@@ -64,4 +65,3 @@ export async function safeExecuteWithSchema<T>(
 
   return safeExecute(() => fn(parsed.data));
 }
-

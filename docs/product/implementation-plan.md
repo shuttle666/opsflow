@@ -7,7 +7,7 @@ This plan reflects the current state of the repository. Older Phase 3-8 implemen
 - Authentication, tenant context, RBAC, refresh sessions, and tenant invitations are implemented.
 - Core operations are implemented: customers, jobs, assignment, staff workspace, workflow history, activity feed, evidence uploads, schedule calendar, completion reviews, notifications, and AI dispatch planning.
 - Dashboard hardening for the current daily dispatch surface is implemented through `GET /api/dashboard/summary`, backend-backed stats, schedule preview rows, attention items, conflict detection, and staff-scoped summaries.
-- Minimal request-level observability is implemented with `X-Request-Id`, structured request/error logs, `requestId` in error responses, and frontend error surfaces that display the request ID for support/debugging.
+- Minimal request-level observability is implemented with `X-Request-Id`, structured request/error logs, stable error response codes, `requestId` in error responses, frontend error surfaces that display the request ID for support/debugging, and in-memory rate limiting on critical write endpoints.
 - Prisma models currently include `User`, `Tenant`, `Membership`, `Customer`, `Job`, `JobStatusHistory`, `JobCompletionReview`, `JobEvidence`, `AuthSession`, `TenantInvitation`, `AuditLog`, `Notification`, and persisted agent conversation/proposal records.
 - CI runs client and server validation through GitHub Actions; production deployment is handled by the deploy workflow and the script under `infra/scripts`.
 
@@ -20,8 +20,8 @@ The current dashboard intentionally returns the data consumed by the shipped UI.
 Goal: improve reliability and operational visibility before adding larger product areas.
 
 - Expand structured application logs beyond the request/error baseline.
-- Add rate limiting for auth and write-heavy endpoints.
-- Add a consistent production error taxonomy for expected domain errors.
+- Expand rate limiting beyond the current in-memory single-instance implementation if the deployment scales to multiple API instances.
+- Continue expanding stable error codes for newly added domain errors.
 - Document migration, seed, deploy, and rollback procedures.
 
 ### 2. Evidence Storage Upgrade

@@ -4,6 +4,7 @@ import { authenticate } from "../../middleware/authenticate";
 import {
   createRateLimiter,
   emailAndIpRateLimitKey,
+  tenantUserRateLimitKey,
 } from "../../middleware/rate-limit";
 import { requireRole } from "../../middleware/require-role";
 import { requireTenantAccess } from "../../middleware/require-tenant-access";
@@ -40,6 +41,13 @@ const refreshLimiter = createRateLimiter({
   message: "Too many token refresh attempts. Please try again later.",
 });
 
+const invitationMutationLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  maxRequests: 30,
+  message: "Too many invitation changes. Please try again later.",
+  keyGenerator: tenantUserRateLimitKey("invitations"),
+});
+
 authRouter.post("/register", authMutationLimiter, registerHandler);
 authRouter.post("/login", authMutationLimiter, loginHandler);
 authRouter.post("/refresh", refreshLimiter, refreshHandler);
@@ -51,6 +59,7 @@ tenantRouter.post(
   "/:tenantId/invitations",
   authenticate,
   requireTenantAccess,
+  invitationMutationLimiter,
   requireRole(MembershipRole.OWNER, MembershipRole.MANAGER),
   createInvitationHandler,
 );
@@ -65,6 +74,7 @@ tenantRouter.post(
   "/:tenantId/invitations/:invitationId/resend",
   authenticate,
   requireTenantAccess,
+  invitationMutationLimiter,
   requireRole(MembershipRole.OWNER, MembershipRole.MANAGER),
   resendTenantInvitationHandler,
 );
@@ -72,6 +82,7 @@ tenantRouter.post(
   "/:tenantId/invitations/:invitationId/cancel",
   authenticate,
   requireTenantAccess,
+  invitationMutationLimiter,
   requireRole(MembershipRole.OWNER, MembershipRole.MANAGER),
   cancelTenantInvitationHandler,
 );

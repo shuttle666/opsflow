@@ -23,16 +23,29 @@ function getStatusCode(code: JobDomainErrorCode) {
   }
 }
 
+function toApiErrorCode(code: JobDomainErrorCode) {
+  switch (code) {
+    case "CROSS_TENANT_ACCESS":
+      return "JOB_CROSS_TENANT_ACCESS";
+    case "INVALID_STATUS_TRANSITION":
+      return "JOB_INVALID_STATUS_TRANSITION";
+    case "TENANT_INACTIVE":
+      return "AUTH_TENANT_INACTIVE";
+    case "TRANSITION_REASON_REQUIRED":
+      return "JOB_TRANSITION_REASON_REQUIRED";
+    case "JOB_NOT_FOUND":
+    default:
+      return "JOB_NOT_FOUND";
+  }
+}
+
 export class JobDomainError extends ApiError {
   constructor(
-    public readonly code: JobDomainErrorCode,
+    code: JobDomainErrorCode,
     message: string,
-    public readonly details?: Record<string, unknown>,
+    details?: Record<string, unknown>,
   ) {
-    super(getStatusCode(code), message, {
-      code,
-      ...(details ?? {}),
-    });
+    super(getStatusCode(code), message, toApiErrorCode(code), details);
     this.name = "JobDomainError";
   }
 }

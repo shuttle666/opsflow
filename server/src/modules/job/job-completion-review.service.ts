@@ -126,7 +126,7 @@ async function getVisibleJobOrThrow(auth: AuthContext, jobId: string) {
   });
 
   if (!job) {
-    throw new ApiError(404, "Job not found.");
+    throw new ApiError(404, "Job not found.", "JOB_NOT_FOUND");
   }
 
   return job;
@@ -205,7 +205,7 @@ export async function submitJobCompletionReview(
   const completionNote = normalizeNote(input.completionNote);
 
   if (job.status !== JobStatus.IN_PROGRESS) {
-    throw new ApiError(409, "Job must be in progress before completion can be submitted.");
+    throw new ApiError(409, "Job must be in progress before completion can be submitted.", "JOB_COMPLETION_INVALID_STATUS");
   }
 
   const result = await prisma.$transaction(async (tx) => {
@@ -293,15 +293,15 @@ export async function approveJobCompletionReview(
     });
 
     if (!review) {
-      throw new ApiError(404, "Completion review not found.");
+      throw new ApiError(404, "Completion review not found.", "JOB_COMPLETION_REVIEW_NOT_FOUND");
     }
 
     if (review.status !== JobCompletionReviewStatus.PENDING) {
-      throw new ApiError(409, "Completion review has already been resolved.");
+      throw new ApiError(409, "Completion review has already been resolved.", "JOB_COMPLETION_REVIEW_ALREADY_RESOLVED");
     }
 
     if (review.job.status !== JobStatus.PENDING_REVIEW) {
-      throw new ApiError(409, "Job must be pending review before completion can be approved.");
+      throw new ApiError(409, "Job must be pending review before completion can be approved.", "JOB_COMPLETION_INVALID_STATUS");
     }
 
     const transitioned = await transitionJobStatusInTransaction(tx, {
@@ -395,15 +395,15 @@ export async function returnJobCompletionReview(
     });
 
     if (!review) {
-      throw new ApiError(404, "Completion review not found.");
+      throw new ApiError(404, "Completion review not found.", "JOB_COMPLETION_REVIEW_NOT_FOUND");
     }
 
     if (review.status !== JobCompletionReviewStatus.PENDING) {
-      throw new ApiError(409, "Completion review has already been resolved.");
+      throw new ApiError(409, "Completion review has already been resolved.", "JOB_COMPLETION_REVIEW_ALREADY_RESOLVED");
     }
 
     if (review.job.status !== JobStatus.PENDING_REVIEW) {
-      throw new ApiError(409, "Job must be pending review before completion can be returned.");
+      throw new ApiError(409, "Job must be pending review before completion can be returned.", "JOB_COMPLETION_INVALID_STATUS");
     }
 
     const transitioned = await transitionJobStatusInTransaction(tx, {

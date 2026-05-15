@@ -13,6 +13,7 @@ describe("apiClient", () => {
         new Response(
           JSON.stringify({
             success: false,
+            code: "VALIDATION_ERROR",
             message: "Validation failed",
             requestId: "request-from-body",
           }),
@@ -29,6 +30,7 @@ describe("apiClient", () => {
 
     await expect(apiClient.get("/jobs")).rejects.toMatchObject({
       status: 400,
+      code: "VALIDATION_ERROR",
       message: "Validation failed",
       requestId: "request-from-body",
     });
@@ -41,6 +43,7 @@ describe("apiClient", () => {
         new Response(
           JSON.stringify({
             success: false,
+            code: "INTERNAL_ERROR",
             message: "Internal server error",
           }),
           {
@@ -56,6 +59,7 @@ describe("apiClient", () => {
 
     await expect(apiClient.get("/jobs")).rejects.toMatchObject({
       status: 500,
+      code: "INTERNAL_ERROR",
       message: "Internal server error",
       requestId: "request-from-header",
     });
@@ -68,6 +72,7 @@ describe("apiClient", () => {
         new Response(
           JSON.stringify({
             success: false,
+            code: "EVIDENCE_NOT_FOUND",
             message: "Evidence file was not found.",
             requestId: "blob-error-request",
           }),
@@ -83,6 +88,7 @@ describe("apiClient", () => {
 
     await expect(apiClient.getBlob("/jobs/job-1/evidence/evidence-1")).rejects.toMatchObject({
       status: 404,
+      code: "EVIDENCE_NOT_FOUND",
       message: "Evidence file was not found.",
       requestId: "blob-error-request",
     });

@@ -15,6 +15,7 @@ export type ApiSuccessResponse<T> = {
 
 export type ApiErrorResponse = {
   success: false;
+  code?: string;
   message: string;
   requestId?: string;
   details?: unknown;
@@ -31,6 +32,7 @@ export class ApiClientError extends Error {
     message: string,
     public readonly details?: unknown,
     public readonly requestId?: string,
+    public readonly code?: string,
   ) {
     super(message);
     this.name = "ApiClientError";
@@ -112,6 +114,7 @@ async function request<T>(path: string, options: RequestOptions = {}) {
         errorPayload?.message ?? `API request failed with status ${response.status}`,
         errorPayload?.details,
         requestIdFromPayload(errorPayload, response),
+        errorPayload?.code,
       );
     }
 
@@ -128,6 +131,7 @@ async function request<T>(path: string, options: RequestOptions = {}) {
       errorPayload?.message ?? `API request failed with status ${response.status}`,
       errorPayload?.details,
       requestIdFromPayload(errorPayload, response),
+      errorPayload?.code,
     );
   }
 

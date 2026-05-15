@@ -912,7 +912,7 @@ function MobileAgendaView({
 
       <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-3">
         <p className="text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
-          Selected day
+          Agenda day
         </p>
         <h2 className="mt-1 text-base font-bold text-[var(--color-text)]">
           {formatLongDate(selectedDate)}
@@ -930,7 +930,7 @@ function MobileAgendaView({
         ) : (
           <div className="rounded-lg border border-dashed border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-4 py-8 text-center">
             <p className="text-sm font-semibold text-[var(--color-text)]">
-              No jobs scheduled
+              No jobs on this day
             </p>
             <p className="mx-auto mt-1 max-w-[18rem] text-xs leading-5 text-[var(--color-text-secondary)]">
               {selectedAssigneeId

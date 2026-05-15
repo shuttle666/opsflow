@@ -80,7 +80,7 @@ describeIfDb("auth service integration", () => {
         refreshToken: loggedIn.refreshToken,
       }),
     ).rejects.toMatchObject<AuthError>({
-      code: "SESSION_REVOKED",
+      code: "AUTH_SESSION_REVOKED",
     });
   });
 
@@ -201,7 +201,7 @@ describeIfDb("auth service integration", () => {
         { tenantId: "70000000-0000-4000-8000-000000000777" },
       ),
     ).rejects.toMatchObject<AuthError>({
-      code: "TENANT_NOT_FOUND",
+      code: "AUTH_TENANT_NOT_FOUND",
     });
   });
 
@@ -654,7 +654,7 @@ describeIfDb("auth service integration", () => {
         expiredInvitation.id,
       ),
     ).rejects.toMatchObject<AuthError>({
-      code: "INVITATION_EXPIRED",
+      code: "AUTH_INVITATION_EXPIRED",
     });
 
     const cancelledInvitation = await createTenantInvitation(
@@ -689,7 +689,7 @@ describeIfDb("auth service integration", () => {
         cancelledInvitation.id,
       ),
     ).rejects.toMatchObject<AuthError>({
-      code: "INVITATION_ALREADY_USED",
+      code: "AUTH_INVITATION_ALREADY_USED",
     });
 
     const mismatchInvitation = await createTenantInvitation(
@@ -714,7 +714,7 @@ describeIfDb("auth service integration", () => {
         mismatchInvitation.id,
       ),
     ).rejects.toMatchObject<AuthError>({
-      code: "INVITATION_USER_MISMATCH",
+      code: "AUTH_INVITATION_USER_MISMATCH",
     });
 
     const inactiveTenantInvitation = await createTenantInvitation(
@@ -746,7 +746,7 @@ describeIfDb("auth service integration", () => {
         inactiveTenantInvitation.id,
       ),
     ).rejects.toMatchObject<AuthError>({
-      code: "TENANT_INACTIVE",
+      code: "AUTH_TENANT_INACTIVE",
     });
   });
 
@@ -869,7 +869,7 @@ describeIfDb("auth service integration", () => {
         invitation.id,
       ),
     ).rejects.toMatchObject<AuthError>({
-      code: "INVITATION_ALREADY_USED",
+      code: "AUTH_INVITATION_ALREADY_USED",
     });
 
     await expect(
@@ -884,7 +884,7 @@ describeIfDb("auth service integration", () => {
         invitation.id,
       ),
     ).rejects.toMatchObject<AuthError>({
-      code: "INVITATION_ALREADY_USED",
+      code: "AUTH_INVITATION_ALREADY_USED",
     });
   });
 
@@ -922,7 +922,7 @@ describeIfDb("auth service integration", () => {
         password: "password123",
       }),
     ).rejects.toMatchObject<AuthError>({
-      code: "MEMBERSHIP_INACTIVE",
+      code: "AUTH_MEMBERSHIP_INACTIVE",
     });
   });
 });

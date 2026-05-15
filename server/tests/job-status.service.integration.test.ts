@@ -217,7 +217,7 @@ describeIfDb("job transition service + schema constraints", () => {
         changedById: creator.id,
       }),
     ).rejects.toMatchObject<JobDomainError>({
-      code: "INVALID_STATUS_TRANSITION",
+      code: "JOB_INVALID_STATUS_TRANSITION",
     });
   });
 
@@ -264,7 +264,7 @@ describeIfDb("job transition service + schema constraints", () => {
         changedById: creator.id,
       }),
     ).rejects.toMatchObject<JobDomainError>({
-      code: "TRANSITION_REASON_REQUIRED",
+      code: "JOB_TRANSITION_REASON_REQUIRED",
     });
   });
 
@@ -366,7 +366,7 @@ describeIfDb("job transition service + schema constraints", () => {
         changedById: creator.id,
       }),
     ).rejects.toMatchObject<JobDomainError>({
-      code: "TENANT_INACTIVE",
+      code: "AUTH_TENANT_INACTIVE",
     });
   });
 });

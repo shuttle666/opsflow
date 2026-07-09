@@ -1,8 +1,30 @@
 # OpsFlow
 
-OpsFlow is a production-style, multi-tenant field service operations platform built to model the workflows of a real internal SaaS product: dispatch planning, customer and job management, staff assignment, job evidence, completion review, notifications, audit activity, and AI-assisted planning.
+OpsFlow is a production-style, multi-tenant field service operations platform built as a full-stack engineering case study. It models the workflows of a real internal SaaS product: dispatch planning, customer and job management, staff assignment, job evidence, completion review, notifications, audit activity, and AI-assisted planning.
 
-The project is designed as a full-stack engineering case study rather than a simple CRUD demo. It focuses on the kinds of boundaries a real operations system needs: tenant isolation, role-based access control, workflow state transitions, background operational data, deployment automation, test coverage, and request-level debugging.
+The goal of this project is to show how I approach product-grade application engineering beyond a simple CRUD demo. OpsFlow focuses on the boundaries that make real operations software difficult: tenant isolation, role-based access control, workflow integrity, auditability, background operational data, AI-assisted workflows, deployment automation, test coverage, and request-level debugging.
+
+## Why This Matters
+
+OpsFlow is designed to be evaluated quickly as a portfolio project while still holding up under deeper technical review.
+
+- **Full-stack product thinking:** The app covers the full loop from authentication and tenant onboarding to scheduling, field execution, review, notifications, and operational reporting.
+- **Real SaaS boundaries:** API requests derive tenant context from authenticated membership, RBAC is enforced server-side, and job workflow transitions are constrained by a domain state machine.
+- **Production-style engineering:** The project includes CI, database-backed integration tests, seeded demo data, Docker-based local development, AWS deployment assets, request IDs, structured logs, and health checks.
+- **AI inside a controlled workflow:** The dispatch planner can turn natural language into structured proposals, but write actions require explicit user confirmation.
+
+## Quick Local Start
+
+```bash
+cp .env.example .env
+docker compose -f docker-compose.dev.yml up --build
+```
+
+Stop the local stack:
+
+```bash
+docker compose -f docker-compose.dev.yml down
+```
 
 ## Live Demo
 

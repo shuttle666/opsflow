@@ -729,6 +729,69 @@ export async function appendLocalAssistantMessage(
   ]);
 }
 
+export async function appendExternalProposalMessage(
+  auth: AuthContext,
+  input: {
+    conversationId: string;
+    toolName: string;
+    toolInput: unknown;
+    toolResult: unknown;
+    proposalId: string;
+  },
+): Promise<void> {
+  const conversation = await getConversationRecord(auth, input.conversationId);
+  if (!conversation) {
+    throw new Error("Conversation not found.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const message = await tx.agentMessage.create({
+      data: {
+        conversationId: input.conversationId,
+        role: AgentMessageRole.ASSISTANT,
+        content: "An external MCP client created this proposal for your review.",
+      },
+    });
+
+    await tx.agentToolCall.create({
+      data: {
+        conversationId: input.conversationId,
+        messageId: message.id,
+        toolName: input.toolName,
+        input: toJsonValue(input.toolInput),
+        result: toJsonValue(input.toolResult),
+        callOrder: 0,
+      },
+    });
+
+    const linked = await tx.agentProposal.updateMany({
+      where: {
+        id: input.proposalId,
+        conversationId: input.conversationId,
+        tenantId: auth.tenantId,
+        userId: auth.userId,
+        status: AgentProposalStatus.PENDING,
+        assistantMessageId: null,
+      },
+      data: {
+        assistantMessageId: message.id,
+      },
+    });
+
+    if (linked.count !== 1) {
+      throw new Error("Pending proposal could not be linked to the conversation.");
+    }
+
+    await tx.agentConversation.update({
+      where: { id: input.conversationId },
+      data: {
+        preview: `External MCP: ${input.toolName}`,
+        updatedAt: new Date(),
+      },
+    });
+  });
+}
+
 export async function getProposal(
   auth: AuthContext,
   conversationId: string,

@@ -13,6 +13,8 @@
     "ai:eval": "tsx src/modules/agent-evals/cli.ts cheap",
     "ai:eval:cheap": "tsx src/modules/agent-evals/cli.ts cheap",
     "ai:eval:llm": "tsx src/modules/agent-evals/cli.ts llm",
+    "mcp:stdio": "tsx src/modules/mcp/stdio.ts",
+    "mcp:start": "node dist/modules/mcp/stdio.js",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:seed": "prisma db seed",
@@ -41,6 +43,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@prisma/adapter-pg": "^7.5.0",
     "@prisma/client": "^7.5.0",
     "bcryptjs": "^3.0.2",

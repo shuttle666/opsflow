@@ -1,4 +1,9 @@
-import { JobStatus, MembershipRole } from "@prisma/client";
+import {
+  JobStatus,
+  MembershipRole,
+  ToolInvocationSource,
+  ToolInvocationStatus,
+} from "@prisma/client";
 import { z } from "zod";
 import type { AuthContext } from "../src/types/auth";
 import { OpsFlowToolRegistry } from "../src/modules/operations-tools";
@@ -114,6 +119,26 @@ describe("OpsFlowToolRegistry", () => {
     );
   });
 
+  it("rejects direct calls from an audience the tool does not expose", async () => {
+    const registry = new OpsFlowToolRegistry();
+    registry.register(buildTool());
+
+    const result = await registry.execute({
+      auth: buildAuth(MembershipRole.MANAGER),
+      audience: "external-mcp",
+      toolName: "example_tool",
+      arguments: { value: "blocked" },
+      context: { source: "MCP", invocationId: "invocation-audience" },
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        error: true,
+        code: "TOOL_PERMISSION_DENIED",
+      }),
+    );
+  });
+
   it("supports strongly typed enum output schemas", async () => {
     const registry = new OpsFlowToolRegistry();
     registry.register({
@@ -132,5 +157,72 @@ describe("OpsFlowToolRegistry", () => {
         context: { source: "WEB_AGENT", invocationId: "invocation-4" },
       }),
     ).resolves.toEqual({ status: JobStatus.NEW });
+  });
+
+  it("records only structural metadata for successful invocations", async () => {
+    const recordInvocation = vi.fn(async () => {});
+    const registry = new OpsFlowToolRegistry({ recordInvocation });
+    registry.register(buildTool());
+
+    await registry.execute({
+      auth: buildAuth(MembershipRole.MANAGER),
+      audience: "web-agent",
+      toolName: "example_tool",
+      arguments: { value: "private customer details" },
+      context: {
+        source: "WEB_AGENT",
+        invocationId: "invocation-audit",
+        requestId: "request-1",
+        conversationId: "conversation-1",
+      },
+    });
+
+    expect(recordInvocation).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      userId: "user-1",
+      source: ToolInvocationSource.WEB_AGENT,
+      invocationId: "invocation-audit",
+      requestId: "request-1",
+      conversationId: "conversation-1",
+      toolName: "example_tool",
+      status: ToolInvocationStatus.SUCCEEDED,
+      durationMs: expect.any(Number),
+      errorCode: undefined,
+      proposalId: undefined,
+      inputKeys: ["value"],
+      outputKeys: ["value"],
+    });
+    expect(JSON.stringify(recordInvocation.mock.calls)).not.toContain(
+      "private customer details",
+    );
+  });
+
+  it("audits rejected input without storing attacker-controlled values or keys", async () => {
+    const recordInvocation = vi.fn(async () => {});
+    const registry = new OpsFlowToolRegistry({ recordInvocation });
+    registry.register(buildTool());
+
+    await registry.execute({
+      auth: buildAuth(MembershipRole.MANAGER),
+      audience: "web-agent",
+      toolName: "example_tool",
+      arguments: { "private@example.com": "secret" },
+      context: {
+        source: "WEB_AGENT",
+        invocationId: "invocation-invalid",
+      },
+    });
+
+    expect(recordInvocation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: ToolInvocationSource.WEB_AGENT,
+        status: ToolInvocationStatus.FAILED,
+        errorCode: "TOOL_INPUT_VALIDATION_FAILED",
+        inputKeys: [],
+        outputKeys: [],
+      }),
+    );
+    expect(JSON.stringify(recordInvocation.mock.calls)).not.toContain("private@example.com");
+    expect(JSON.stringify(recordInvocation.mock.calls)).not.toContain("secret");
   });
 });

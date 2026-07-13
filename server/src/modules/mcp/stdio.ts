@@ -18,7 +18,11 @@ export async function startStdioMcpServer() {
     return conversationIdPromise;
   };
 
-  const server = createOpsFlowMcpServer({ auth, getConversationId });
+  const server = createOpsFlowMcpServer({
+    auth,
+    resolveAuth: () => resolveAuthContextFromAccessToken(accessToken),
+    getConversationId,
+  });
   await server.connect(new StdioServerTransport());
   console.error("OpsFlow local MCP server connected over stdio.");
 

@@ -28,6 +28,7 @@ type ProposalPersistenceInput = {
 
 export type CreateOpsFlowMcpServerOptions = {
   auth: AuthContext;
+  resolveAuth?: () => Promise<AuthContext>;
   registry?: OpsFlowToolRegistry;
   getConversationId: () => Promise<string>;
   persistProposalMessage?: (input: ProposalPersistenceInput) => Promise<void>;
@@ -112,11 +113,14 @@ export function createOpsFlowMcpServer(
         },
       },
       async (toolInput, extra) => {
+        const currentAuth = options.resolveAuth
+          ? await options.resolveAuth()
+          : options.auth;
         const conversationId = tool.annotations.readOnly
           ? undefined
           : await options.getConversationId();
         const result = await registry.execute({
-          auth: options.auth,
+          auth: currentAuth,
           audience: "external-mcp",
           toolName: tool.name,
           arguments: toolInput,
@@ -139,7 +143,7 @@ export function createOpsFlowMcpServer(
         const structuredContent = toStructuredContent(result);
         if (conversationId && isProposalResult(result)) {
           await persistProposalMessage({
-            auth: options.auth,
+            auth: currentAuth,
             conversationId,
             toolName: tool.name,
             toolInput,

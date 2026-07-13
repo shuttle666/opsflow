@@ -6,9 +6,14 @@ import { searchCustomersTool } from "./definitions/search-customers.tool";
 import { searchJobsTool } from "./definitions/search-jobs.tool";
 import { searchStaffTool } from "./definitions/search-staff.tool";
 import { proposalTools } from "./definitions/proposal-tools";
+import { recordToolInvocationSafe } from "./tool-invocation-audit";
 import { OpsFlowToolRegistry } from "./tool-registry";
 
-export const opsFlowToolRegistry = new OpsFlowToolRegistry();
+export const opsFlowToolRegistry = new OpsFlowToolRegistry({
+  ...(process.env.NODE_ENV === "test"
+    ? {}
+    : { recordInvocation: recordToolInvocationSafe }),
+});
 
 [
   searchJobsTool,
@@ -22,4 +27,5 @@ export const opsFlowToolRegistry = new OpsFlowToolRegistry();
 ].forEach((tool) => opsFlowToolRegistry.register(tool));
 
 export * from "./tool-registry";
+export * from "./tool-invocation-audit";
 export * from "./tool-types";

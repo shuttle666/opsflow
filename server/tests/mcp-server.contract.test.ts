@@ -1,6 +1,10 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { MembershipRole } from "@prisma/client";
+import {
+  MembershipRole,
+  ToolInvocationSource,
+  ToolInvocationStatus,
+} from "@prisma/client";
 import { z } from "zod";
 import { createOpsFlowMcpServer } from "../src/modules/mcp/mcp-server";
 import { OpsFlowToolRegistry } from "../src/modules/operations-tools";
@@ -13,8 +17,8 @@ const auth: AuthContext = {
   role: MembershipRole.MANAGER,
 };
 
-function buildRegistry() {
-  const registry = new OpsFlowToolRegistry();
+function buildRegistry(recordInvocation?: ReturnType<typeof vi.fn>) {
+  const registry = new OpsFlowToolRegistry({ recordInvocation });
   registry.register({
     name: "find_example",
     title: "Find example",
@@ -71,12 +75,15 @@ function buildRegistry() {
 async function connectTestClient(input?: {
   role?: MembershipRole;
   persistProposalMessage?: ReturnType<typeof vi.fn>;
+  recordInvocation?: ReturnType<typeof vi.fn>;
+  resolveAuth?: ReturnType<typeof vi.fn>;
 }) {
   const getConversationId = vi.fn(async () => "conversation-1");
   const persistProposalMessage = input?.persistProposalMessage ?? vi.fn(async () => {});
   const server = createOpsFlowMcpServer({
     auth: { ...auth, role: input?.role ?? auth.role },
-    registry: buildRegistry(),
+    resolveAuth: input?.resolveAuth,
+    registry: buildRegistry(input?.recordInvocation),
     getConversationId,
     persistProposalMessage,
   });
@@ -121,7 +128,8 @@ describe("OpsFlow MCP server contract", () => {
   });
 
   it("serializes canonical Date values into MCP structured content", async () => {
-    const connection = await connectTestClient();
+    const recordInvocation = vi.fn(async () => {});
+    const connection = await connectTestClient({ recordInvocation });
 
     try {
       const result = await connection.client.callTool({
@@ -135,6 +143,16 @@ describe("OpsFlow MCP server contract", () => {
         seenAt: "2026-07-14T00:00:00.000Z",
       });
       expect(connection.getConversationId).not.toHaveBeenCalled();
+      expect(recordInvocation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: ToolInvocationSource.MCP,
+          toolName: "find_example",
+          status: ToolInvocationStatus.SUCCEEDED,
+          requestId: expect.any(String),
+          inputKeys: ["query"],
+          outputKeys: ["id", "seenAt"],
+        }),
+      );
     } finally {
       await connection.client.close();
       await connection.server.close();
@@ -180,6 +198,27 @@ describe("OpsFlow MCP server contract", () => {
 
     try {
       await expect(connection.client.listTools()).resolves.toEqual({ tools: [] });
+    } finally {
+      await connection.client.close();
+      await connection.server.close();
+    }
+  });
+
+  it("revalidates authentication before every MCP tool call", async () => {
+    const resolveAuth = vi.fn(async () => auth);
+    const connection = await connectTestClient({ resolveAuth });
+
+    try {
+      await connection.client.callTool({
+        name: "find_example",
+        arguments: { query: "job-1" },
+      });
+      await connection.client.callTool({
+        name: "find_example",
+        arguments: { query: "job-2" },
+      });
+
+      expect(resolveAuth).toHaveBeenCalledTimes(2);
     } finally {
       await connection.client.close();
       await connection.server.close();

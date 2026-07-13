@@ -147,6 +147,43 @@ export async function listMemberships(
   };
 }
 
+export async function getAssignableStaffMembership(
+  auth: AuthContext,
+  membershipId: string,
+) {
+  const membership = await prisma.membership.findFirst({
+    where: {
+      id: membershipId,
+      tenantId: auth.tenantId,
+      role: MembershipRole.STAFF,
+      status: MembershipStatus.ACTIVE,
+    },
+    select: {
+      id: true,
+      userId: true,
+      user: {
+        select: {
+          displayName: true,
+        },
+      },
+    },
+  });
+
+  if (!membership) {
+    throw new ApiError(
+      404,
+      "Active staff membership not found.",
+      "MEMBERSHIP_NOT_FOUND",
+    );
+  }
+
+  return {
+    membershipId: membership.id,
+    userId: membership.userId,
+    displayName: membership.user.displayName,
+  };
+}
+
 export async function updateMembership(
   auth: AuthContext,
   membershipId: string,

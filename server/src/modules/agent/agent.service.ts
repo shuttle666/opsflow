@@ -641,7 +641,11 @@ function findLatestProposal(
 ): DispatchProposal | undefined {
   for (let index = (toolCalls?.length ?? 0) - 1; index >= 0; index -= 1) {
     const call = toolCalls?.[index];
-    if (call?.name !== "save_dispatch_proposal" && call?.name !== "save_typed_proposal") {
+    if (
+      call?.name !== "save_dispatch_proposal" &&
+      call?.name !== "save_typed_proposal" &&
+      !call?.name.startsWith("propose_")
+    ) {
       continue;
     }
 

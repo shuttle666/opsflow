@@ -19,6 +19,7 @@ This document is aligned with `server/prisma/schema.prisma`.
 - `AgentMessage`
 - `AgentToolCall`
 - `AgentProposal`
+- `ToolInvocation`
 
 ## Core Relationships
 - `User` and `Tenant` are many-to-many through `Membership`.
@@ -34,6 +35,7 @@ This document is aligned with `server/prisma/schema.prisma`.
 - `AuditLog` stores tenant activity.
 - `Notification` stores per-user in-app notifications.
 - `AgentConversation`, `AgentMessage`, `AgentToolCall`, and `AgentProposal` persist AI planner state and confirmation evidence.
+- `ToolInvocation` stores PII-minimized execution metadata shared by Web Agent and MCP calls. It records field names and correlation data, not raw tool values.
 
 ## Important Notes
 - All tenant-scoped business models include `tenant_id`.
@@ -55,6 +57,8 @@ This document is aligned with `server/prisma/schema.prisma`.
 - `NotificationType`: `JOB_ASSIGNED`, `JOB_UNASSIGNED`, `JOB_STATUS_CHANGED`, `JOB_COMPLETION_SUBMITTED`, `JOB_COMPLETION_APPROVED`, `JOB_COMPLETION_RETURNED`
 - `AgentMessageRole`: `USER`, `ASSISTANT`
 - `AgentProposalStatus`: `PENDING`, `CONFIRMING`, `CONFIRMED`, `FAILED`
+- `ToolInvocationSource`: `WEB_AGENT`, `MCP`
+- `ToolInvocationStatus`: `SUCCEEDED`, `FAILED`
 
 ## Future Candidates
 - Quote
@@ -100,6 +104,9 @@ erDiagram
     USERS ||--o{ AGENT_PROPOSALS : creates
     USERS ||--o{ AGENT_PROPOSALS : confirms
     AGENT_MESSAGES ||--o| AGENT_PROPOSALS : presents
+    TENANTS ||--o{ TOOL_INVOCATIONS : owns
+    USERS ||--o{ TOOL_INVOCATIONS : invokes
+    AGENT_CONVERSATIONS ||--o{ TOOL_INVOCATIONS : correlates
 
     USERS {
         uuid id
@@ -255,5 +262,22 @@ erDiagram
         json confirmation_result
         uuid confirmed_by_id
         datetime confirmed_at
+    }
+
+    TOOL_INVOCATIONS {
+        uuid id
+        uuid tenant_id
+        uuid user_id
+        uuid conversation_id
+        ToolInvocationSource source
+        string invocation_id
+        string request_id
+        string tool_name
+        ToolInvocationStatus status
+        int duration_ms
+        string error_code
+        string proposal_id
+        string_array input_keys
+        string_array output_keys
     }
 ```

@@ -173,6 +173,8 @@ Supported notification types:
 
 The planner is available to authenticated tenant users, but proposal confirmation rejects `STAFF`. Proposal review updates can resolve `customerId`, `jobId`, `membershipId`, or schedule draft fields before confirmation. Conversations, messages, tool calls, and proposals are persisted for restart recovery, multi-instance operation, and audit. Assistant responses stream over SSE and require `ANTHROPIC_API_KEY`.
 
+The same canonical Tool Registry also powers a local stdio MCP server. MCP is not an HTTP route in this API contract. It validates an OpsFlow access session on each tool call, exposes a role-filtered subset of read/proposal tools, and returns Web approval URLs for pending proposals. See [Local MCP Integration](mcp.md).
+
 ## Contract Notes
 - All successful JSON responses use the common `success/message/data/meta` envelope.
 - All error JSON responses use the common `success/code/message/requestId/details` envelope.

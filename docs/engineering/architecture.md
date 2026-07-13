@@ -47,6 +47,8 @@ Current modules:
 - `audit` - tenant activity feed from audit logs
 - `notification` - persisted notifications, unread counts, and SSE streaming
 - `agent` - persisted AI dispatch planner conversations, tool traces, proposals, and proposal confirmation
+- `operations-tools` - provider-neutral business tool contracts, Registry execution, exposure policy, and invocation audit hooks
+- `mcp` - local stdio MCP adapter and access-session validation
 
 ## Database
 PostgreSQL is the system of record. Tenant isolation is enforced through `tenantId` on business entities and tenant-aware query filters.
@@ -68,6 +70,7 @@ Core persisted models:
 - `AgentMessage`
 - `AgentToolCall`
 - `AgentProposal`
+- `ToolInvocation`
 
 ## Key Flows
 
@@ -87,9 +90,29 @@ Evidence files are uploaded through job-scoped endpoints and stored through a st
 Activity is tenant-wide audit history for owners/managers. Notifications are user-specific unread reminders and can stream to the UI over SSE.
 
 ### AI Dispatch Planner
-The agent uses Anthropic, repository-local tools, and explicit confirmation. It can search customers, jobs, staff, activity, and schedule conflicts, then save a proposal. Confirmation can create customers/jobs, assign work, and move scheduled jobs to `SCHEDULED`.
+
+The AI application layer is split into canonical business tools and thin protocol/provider adapters.
+
+```mermaid
+flowchart LR
+  Web["Web Agent loop"] --> Anthropic["Anthropic tool adapter"]
+  Host["External MCP host"] --> Stdio["stdio MCP adapter"]
+  Anthropic --> Registry["OpsFlow Tool Registry"]
+  Stdio --> Registry
+  Registry --> Domain["Tenant-aware domain services"]
+  Domain --> Db["PostgreSQL"]
+  Registry --> Invocations["PII-minimized ToolInvocation records"]
+```
+
+Each Registry entry owns its canonical name, description, Zod input/output schemas, allowed audiences, allowed roles, MCP-style behavior annotations, and execution handler. The Web Agent converts these definitions to provider tool schemas and keeps its tool-use loop. The local MCP server registers the same definitions over stdio. Neither adapter owns business logic.
+
+Read tools query tenant-aware services. Task-oriented proposal tools reload current database snapshots and create pending proposals instead of directly mutating operational records. Confirmation in the Web app can create or update customers/jobs, assign work, schedule work, and apply approved status transitions.
 
 Agent conversations, messages, tool calls, and proposals are persisted in PostgreSQL. Confirmed proposals are retained with confirmation metadata for audit.
+
+External MCP proposals also create a persisted Agent conversation and assistant message. The MCP result includes an approval URL that opens that proposal in the Web UI. Tool invocations from both entry points record source, status, duration, correlation IDs, and field names without copying raw customer/job values into the invocation audit table.
+
+See [Local MCP Integration](mcp.md) for the current tool catalog, setup, authorization boundary, and deferred remote transport work.
 
 ## Infrastructure
 - Local development uses `docker-compose.dev.yml`.
@@ -103,3 +126,4 @@ Agent conversations, messages, tool calls, and proposals are persisted in Postgr
 - Request IDs and structured request/error logs are implemented. Broader rate limiting, a production error taxonomy, and external error monitoring remain planned hardening work.
 - Evidence storage is local-first; S3-compatible storage is a future upgrade.
 - There is no customer-facing portal yet.
+- MCP is local stdio only. Remote transport, OAuth/client registration, and public MCP operations are deferred.

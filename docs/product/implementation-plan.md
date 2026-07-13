@@ -8,7 +8,8 @@ This plan reflects the current state of the repository. Older Phase 3-8 implemen
 - Core operations are implemented: customers, jobs, assignment, staff workspace, workflow history, activity feed, evidence uploads, schedule calendar, completion reviews, notifications, and AI dispatch planning.
 - Dashboard hardening for the current daily dispatch surface is implemented through `GET /api/dashboard/summary`, backend-backed stats, schedule preview rows, attention items, conflict detection, and staff-scoped summaries.
 - Minimal request-level observability is implemented with `X-Request-Id`, structured request/error logs, stable error response codes, `requestId` in error responses, frontend error surfaces that display the request ID for support/debugging, and in-memory rate limiting on critical write endpoints.
-- Prisma models currently include `User`, `Tenant`, `Membership`, `Customer`, `Job`, `JobStatusHistory`, `JobCompletionReview`, `JobEvidence`, `AuthSession`, `TenantInvitation`, `AuditLog`, `Notification`, and persisted agent conversation/proposal records.
+- Prisma models currently include `User`, `Tenant`, `Membership`, `Customer`, `Job`, `JobStatusHistory`, `JobCompletionReview`, `JobEvidence`, `AuthSession`, `TenantInvitation`, `AuditLog`, `Notification`, persisted agent conversation/proposal records, and PII-minimized `ToolInvocation` audit records.
+- The AI application layer uses a provider-neutral Tool Registry shared by the Web Agent and a local stdio MCP server. External proposal tools hand approval back to the Web UI; remote MCP transport is deferred.
 - CI runs client and server validation through GitHub Actions; production deployment is handled by the deploy workflow and the script under `infra/scripts`.
 
 ## Future Dashboard Candidates

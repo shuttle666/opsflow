@@ -11,6 +11,7 @@ This directory is grouped by document purpose so the root stays small and easy t
 ## Engineering
 
 - [Architecture](engineering/architecture.md) - system shape, stack, and major domains.
+- [Local MCP Integration](engineering/mcp.md) - shared Tool Registry architecture, stdio setup, security boundaries, and client configuration.
 - [ERD](engineering/erd.md) - data model relationships and Mermaid ERD notes.
 - [API Design](engineering/api-design.md) - implemented API surface summary checked against Express routes.
 - [OpenAPI Specification](engineering/openapi.yaml) - machine-readable API contract.

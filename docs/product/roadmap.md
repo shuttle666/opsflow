@@ -92,6 +92,14 @@ This roadmap is aligned with the current codebase. Phase names describe the prod
 - Role-aware staff dashboard scoping
 - Schedule preview, attention items, and conflict-aware daily stats
 
+## Phase 14
+- Status: Completed
+- Provider-neutral Tool Registry shared by the Web Agent and protocol adapters
+- Task-oriented read/proposal tools with role and audience exposure rules
+- Local stdio MCP server with access-session validation and contract tests
+- MCP proposal handoff to the Web approval flow
+- PII-minimized Web/MCP tool invocation audit records
+
 ## Later Candidates
 - Expanded production observability: broader application logs, rate limiting, error taxonomy, and external error monitoring
 - Expanded dashboard analytics: customer count, job status breakdowns, pending invitations, recent activity, and broader upcoming schedule summaries
@@ -99,3 +107,4 @@ This roadmap is aligned with the current codebase. Phase names describe the prod
 - Customer portal
 - Payments and billing
 - Route optimization and third-party integrations
+- Remote MCP transport, OAuth/client registration, and public MCP operations

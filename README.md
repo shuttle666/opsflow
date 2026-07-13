@@ -11,7 +11,7 @@ OpsFlow is designed to be evaluated quickly as a portfolio project while still h
 - **Full-stack product thinking:** The app covers the full loop from authentication and tenant onboarding to scheduling, field execution, review, notifications, and operational reporting.
 - **Real SaaS boundaries:** API requests derive tenant context from authenticated membership, RBAC is enforced server-side, and job workflow transitions are constrained by a domain state machine.
 - **Production-style engineering:** The project includes CI, database-backed integration tests, seeded demo data, Docker-based local development, AWS deployment assets, request IDs, structured logs, and health checks.
-- **AI inside a controlled workflow:** The dispatch planner can turn natural language into structured proposals, but write actions require explicit user confirmation.
+- **AI inside a controlled workflow:** A provider-neutral Tool Registry powers both the Web Agent and a local MCP server. Natural-language requests become structured proposals, while business writes still require explicit confirmation.
 
 ## Quick Local Start
 
@@ -64,6 +64,7 @@ For the quickest walkthrough, use the demo accounts in this order:
 - Activity feed and audit logging for operational traceability
 - In-app notifications with unread state and SSE updates
 - AI-assisted dispatch planner with human confirmation before writes
+- Local stdio MCP server backed by the same tenant-aware tools as the Web Agent
 
 ## Engineering Highlights
 
@@ -72,6 +73,8 @@ For the quickest walkthrough, use the demo accounts in this order:
 - **Workflow state machine:** Job status transitions are constrained, audited, and surfaced through timeline/history views.
 - **Request-level observability:** Every API response carries `X-Request-Id`; error responses include `requestId`; backend logs are structured; frontend error surfaces display Request IDs for support/debugging.
 - **Streaming UX:** Notifications and AI planner responses use SSE-style streaming flows.
+- **Portable AI tools:** Canonical Zod contracts and execution handlers live in one Tool Registry; provider and MCP adapters only translate schemas and protocol messages.
+- **AI safety and audit:** Tool exposure is role/audience filtered, proposal tools are approval-gated, and Web/MCP invocations record PII-minimized audit metadata.
 - **Storage abstraction:** Job evidence is handled through a storage layer that can be upgraded from local storage to object storage.
 - **Seeded demo data:** Local and production demo seeds create realistic tenants, customers, jobs, staff, schedules, reviews, notifications, and activity.
 - **Deployment pipeline:** GitHub Actions deploys to AWS EC2 with Docker Compose, Nginx, Certbot, health checks, and rollback support.
@@ -82,6 +85,12 @@ For the quickest walkthrough, use the demo accounts in this order:
 ```mermaid
 flowchart LR
   Browser["Next.js Client"] --> Api["Express API"]
+  Api --> WebAgent["Web Agent loop"]
+  McpHost["External MCP host"] --> Stdio["Local stdio MCP adapter"]
+  WebAgent --> Registry["OpsFlow Tool Registry"]
+  Stdio --> Registry
+  Registry --> Services["Tenant-aware domain services"]
+  Services --> Prisma
   Api --> Prisma["Prisma ORM"]
   Prisma --> Postgres["PostgreSQL / Amazon RDS"]
   Api --> Storage["Evidence Storage"]
@@ -96,15 +105,16 @@ flowchart LR
 More details:
 
 - [Engineering architecture](docs/engineering/architecture.md)
+- [Local MCP integration](docs/engineering/mcp.md)
 - [API design](docs/engineering/api-design.md)
 - [OpenAPI contract](docs/engineering/openapi.yaml)
 - [Entity relationship design](docs/engineering/erd.md)
 - [Implementation plan](docs/product/implementation-plan.md)
 - [Roadmap](docs/product/roadmap.md)
 
-## AI Dispatch Planner
+## AI Dispatch Planner And MCP
 
-OpsFlow includes an AI-powered dispatch planner designed for operational workflows rather than generic chat.
+OpsFlow includes an AI-powered dispatch planner designed for operational workflows rather than generic chat. Its business tools are provider-neutral and shared by two entry points: the in-app Web Agent tool loop and a local stdio MCP server for external MCP hosts.
 
 It can help turn natural-language requests into structured dispatch proposals by:
 
@@ -113,14 +123,16 @@ It can help turn natural-language requests into structured dispatch proposals by
 - suggesting a likely assignee
 - generating a structured proposal before any write happens
 
-The final action still requires user confirmation, so AI stays inside a controlled operational flow.
+The MCP surface intentionally exposes a narrower set of read and proposal tools. Proposal calls return an OpsFlow approval URL; the final action still requires confirmation in the Web app, so both entry points stay inside the same controlled operational flow.
+
+See [Local MCP Integration](docs/engineering/mcp.md) for the architecture, exposed tools, access-token setup, client configuration, and current local-only scope.
 
 ## Tech Stack
 
 - Frontend: Next.js 16, React, TypeScript, Tailwind CSS
 - Backend: Express, TypeScript, Prisma, PostgreSQL
 - State and validation: Zustand, TanStack Query, React Hook Form, Zod
-- AI: Anthropic SDK, SSE streaming responses
+- AI: Anthropic SDK, Model Context Protocol TypeScript SDK, Zod Tool Registry, SSE streaming responses
 - Infrastructure: AWS EC2, Amazon RDS, Docker Compose, Nginx, Certbot
 - CI/CD: GitHub Actions, SSH-based production deployment, health checks, rollback support
 

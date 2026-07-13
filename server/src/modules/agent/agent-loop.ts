@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { AuthContext } from "../../types/auth";
 import {
   createAiProvider,
@@ -9,6 +10,8 @@ import {
 } from "../ai";
 import type { DispatchProposal } from "./agent.service";
 import { executeTool, getToolDefinitions } from "./agent-tools";
+import { opsFlowToolRegistry } from "../operations-tools";
+import { toAnthropicTool } from "./adapters/anthropic-tool-adapter";
 import {
   classifyAgentIntentWithEnhancement,
   type IntentExtractionSummary,
@@ -118,11 +121,11 @@ Rules:
 - For write-like requests, use the router preclassification above when present. If it is absent, call classify_intent. Then resolve the relevant targets before saving a proposal.
 - Prefer save_typed_proposal for new proposals. Use save_dispatch_proposal only for legacy dispatch flows.
 - The proposal should include a typed proposal type, resolved targets, customer resolution, job draft, schedule draft, assignee draft, warnings, and confidence.
-- Existing job rule: if the user chooses or refers to an existing job found through list_jobs/get_job_detail, do NOT create a new job. Set intent="update_existing_job" and include that job ID as jobDraft.existingJobId. Keep the current job title in jobDraft.title.
+- Existing job rule: if the user chooses or refers to an existing job found through search_jobs/get_job_detail, do NOT create a new job. Set intent="update_existing_job" and include that job ID as jobDraft.existingJobId. Keep the current job title in jobDraft.title.
 - If multiple existing jobs match a write-like request, do not only ask in chat. Save a typed proposal without target.jobId/jobDraft.existingJobId and include the resolver candidates under review.candidates.jobs. The proposal review panel will let the user choose the correct job.
 - When checking schedule conflicts for an existing job, pass excludeJobId=jobDraft.existingJobId.
 - If a save proposal tool returns an EXISTING_JOB_REQUIRED error, do not present the failed plan as saved. Use details.candidateJobs to retry with an existing job target when exactly one job is clearly correct; otherwise save a typed unresolved proposal with those jobs under review.candidates.jobs.
-- Do not translate or rename an existing job when saving a proposal; preserve the existing job title from list_jobs/get_job_detail.
+- Do not translate or rename an existing job when saving a proposal; preserve the existing job title from search_jobs/get_job_detail.
 - Treat addresses as job service locations, not customer profile fields. For new jobs, put the site address in jobDraft.serviceAddress.
 - Customer profile proposals must never contain an address. Customer updates may only change name, phone, email, or notes.
 - If the user wants to create a customer, you should still prepare a proposal instead of refusing. Use intent="create_customer", set customer.status="new", and include any provided phone, email, or notes.
@@ -180,7 +183,17 @@ export async function runAgentLoop(
 ): Promise<AgentLoopResult> {
   const profile = getAiAgentProfile("dispatch_planner");
   const provider = createAiProvider(profile.provider);
-  const tools = getToolDefinitions(auth);
+  const canonicalTools = opsFlowToolRegistry.list({
+    auth,
+    audience: "web-agent",
+  });
+  const canonicalToolNames = new Set(canonicalTools.map((tool) => tool.name));
+  const tools = [
+    ...canonicalTools.map(toAnthropicTool),
+    ...getToolDefinitions(auth).filter(
+      (tool) => tool.name !== "list_jobs" && !canonicalToolNames.has(tool.name),
+    ),
+  ];
   const allToolCalls: AgentLoopResult["toolCalls"] = [];
   let fullText = "";
   let proposal: DispatchProposal | undefined;
@@ -250,9 +263,21 @@ export async function runAgentLoop(
 
     for (const toolUse of toolUseBlocks) {
       callbacks.onToolUse(toolUse.name, toolUse.input);
-      const result = await executeTool(auth, toolUse.name, toolUse.input, {
-        conversationId: input.conversationId,
-      });
+      const result = opsFlowToolRegistry.has(toolUse.name)
+        ? await opsFlowToolRegistry.execute({
+            auth,
+            audience: "web-agent",
+            toolName: toolUse.name,
+            arguments: toolUse.input,
+            context: {
+              source: "WEB_AGENT",
+              invocationId: randomUUID(),
+              conversationId: input.conversationId,
+            },
+          })
+        : await executeTool(auth, toolUse.name, toolUse.input, {
+            conversationId: input.conversationId,
+          });
       callbacks.onToolResult(toolUse.name, result);
 
       const maybeProposal = (result as { proposal?: DispatchProposal } | undefined)?.proposal;

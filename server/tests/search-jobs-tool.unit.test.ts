@@ -58,7 +58,10 @@ describe("search_jobs canonical tool", () => {
         },
         { source: "WEB_AGENT", invocationId: "invocation-1" },
       ),
-    ).resolves.toEqual(result);
+    ).resolves.toEqual({
+      jobs: result.items,
+      pagination: result.pagination,
+    });
 
     expect(jobMocks.listJobs).toHaveBeenCalledWith(auth, {
       q: "leak",

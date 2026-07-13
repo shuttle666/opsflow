@@ -2,6 +2,7 @@ import { JobStatus, MembershipRole } from "@prisma/client";
 import { z } from "zod";
 import * as jobService from "../../job/job.service";
 import type { OpsFlowTool } from "../tool-types";
+import { jobSummarySchema, paginationSchema } from "./shared-schemas";
 
 export const searchJobsInputSchema = z
   .object({
@@ -16,29 +17,8 @@ export const searchJobsInputSchema = z
   .strict();
 
 const searchJobsOutputSchema = z.object({
-  items: z.array(
-    z.object({
-      id: z.string(),
-      title: z.string(),
-      serviceAddress: z.string(),
-      status: z.nativeEnum(JobStatus),
-      scheduledStartAt: z.date().nullable(),
-      scheduledEndAt: z.date().nullable(),
-      createdAt: z.date(),
-      updatedAt: z.date(),
-      customer: z.object({
-        id: z.string(),
-        name: z.string(),
-      }),
-      assignedToName: z.string().optional(),
-    }),
-  ),
-  pagination: z.object({
-    page: z.number().int(),
-    pageSize: z.number().int(),
-    total: z.number().int(),
-    totalPages: z.number().int(),
-  }),
+  jobs: z.array(jobSummarySchema),
+  pagination: paginationSchema,
 });
 
 export const searchJobsTool: OpsFlowTool<
@@ -59,8 +39,8 @@ export const searchJobsTool: OpsFlowTool<
     idempotent: true,
     openWorld: false,
   },
-  execute: (auth, input) =>
-    jobService.listJobs(auth, {
+  execute: async (auth, input) => {
+    const result = await jobService.listJobs(auth, {
       q: input.q,
       status: input.status,
       customerId: input.customerId,
@@ -69,5 +49,8 @@ export const searchJobsTool: OpsFlowTool<
       page: input.page,
       pageSize: input.pageSize,
       sort: "createdAt_desc",
-    }),
+    });
+
+    return { jobs: result.items, pagination: result.pagination };
+  },
 };

@@ -21,15 +21,5 @@ export const opsFlowToolRegistry = new OpsFlowToolRegistry();
   ...proposalTools,
 ].forEach((tool) => opsFlowToolRegistry.register(tool));
 
-export const replacedLegacyReadToolNames = new Set([
-  "list_jobs",
-  "get_job_detail",
-  "list_customers",
-  "get_customer_detail",
-  "list_memberships",
-  "check_schedule_conflicts",
-  "list_activity_feed",
-]);
-
 export * from "./tool-registry";
 export * from "./tool-types";

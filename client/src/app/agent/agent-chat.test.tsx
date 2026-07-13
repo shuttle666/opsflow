@@ -31,6 +31,7 @@ describe("AgentChat", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     window.sessionStorage.clear();
+    window.history.replaceState({}, "", "/agent");
     Element.prototype.scrollIntoView = vi.fn();
     vi.mocked(listConversationsRequest).mockResolvedValue([]);
     vi.mocked(getConversationRequest).mockResolvedValue({
@@ -461,5 +462,44 @@ describe("AgentChat", () => {
     expect(
       screen.getByText("What should OpsFlow plan next?"),
     ).toBeInTheDocument();
+  });
+
+  it("opens a conversation linked by an external proposal approval URL", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/agent?conversationId=conversation-linked&proposalId=proposal-linked",
+    );
+    vi.mocked(listConversationsRequest).mockResolvedValueOnce([
+      {
+        id: "conversation-linked",
+        preview: "External MCP proposal",
+        createdAt: "2026-04-01T00:00:00.000Z",
+        updatedAt: "2026-04-01T00:00:00.000Z",
+      },
+    ]);
+    vi.mocked(getConversationRequest).mockResolvedValueOnce({
+      id: "conversation-linked",
+      messages: [
+        {
+          id: "message-linked",
+          role: "assistant",
+          content: "External proposal is ready for review.",
+          createdAt: "2026-04-01T00:00:00.000Z",
+        },
+      ],
+      createdAt: "2026-04-01T00:00:00.000Z",
+      updatedAt: "2026-04-01T00:00:00.000Z",
+    });
+
+    render(<AgentChat />);
+
+    expect(
+      await screen.findByText("External proposal is ready for review."),
+    ).toBeInTheDocument();
+    expect(getConversationRequest).toHaveBeenCalledWith(
+      "expired-token",
+      "conversation-linked",
+    );
   });
 });

@@ -88,8 +88,13 @@ function llmResultAssertions(input: {
 }) {
   const assertions: AiEvalAssertion[] = [
     expectTruthy(
-      "LLM called at least one resolver",
-      input.toolCalls.some((toolCall) => toolCall.name.startsWith("resolve_")),
+      "LLM called at least one discovery tool",
+      input.toolCalls.some(
+        (toolCall) =>
+          toolCall.name.startsWith("search_") ||
+          toolCall.name === "get_job" ||
+          toolCall.name === "get_customer",
+      ),
       { toolNames: input.toolCalls.map((toolCall) => toolCall.name) },
     ),
     expectTruthy("LLM saved a proposal", input.proposal),

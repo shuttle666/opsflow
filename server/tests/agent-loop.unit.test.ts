@@ -3,14 +3,16 @@ import { MembershipRole } from "@prisma/client";
 import type { AuthContext } from "../src/types/auth";
 
 const loopMocks = vi.hoisted(() => ({
-  getToolDefinitions: vi.fn(),
+  listTools: vi.fn(),
   executeTool: vi.fn(),
   streamFactory: vi.fn(),
 }));
 
-vi.mock("../src/modules/agent/agent-tools", () => ({
-  getToolDefinitions: loopMocks.getToolDefinitions,
-  executeTool: loopMocks.executeTool,
+vi.mock("../src/modules/operations-tools", () => ({
+  opsFlowToolRegistry: {
+    list: loopMocks.listTools,
+    execute: loopMocks.executeTool,
+  },
 }));
 
 vi.mock("@anthropic-ai/sdk", () => ({
@@ -58,8 +60,8 @@ describe("runAgentLoop", () => {
   });
 
   it("accumulates assistant text across tool-use iterations", async () => {
-    loopMocks.getToolDefinitions.mockReturnValue([]);
-    loopMocks.executeTool.mockResolvedValueOnce({ items: [{ id: "customer-1" }] });
+    loopMocks.listTools.mockReturnValue([]);
+    loopMocks.executeTool.mockResolvedValueOnce({ customers: [{ id: "customer-1" }] });
     loopMocks.streamFactory
       .mockResolvedValueOnce(
         buildStream(["先查一下客户。"], {
@@ -72,7 +74,7 @@ describe("runAgentLoop", () => {
             {
               type: "tool_use",
               id: "tool-1",
-              name: "list_customers",
+              name: "search_customers",
               input: { q: "王先生" },
             },
           ],
@@ -129,9 +131,9 @@ describe("runAgentLoop", () => {
     );
     expect(result.toolCalls).toEqual([
       {
-        name: "list_customers",
+        name: "search_customers",
         input: { q: "王先生" },
-        result: { items: [{ id: "customer-1" }] },
+        result: { customers: [{ id: "customer-1" }] },
       },
     ]);
   });

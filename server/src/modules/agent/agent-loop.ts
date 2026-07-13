@@ -9,11 +9,7 @@ import {
   type AiToolResultBlock,
 } from "../ai";
 import type { DispatchProposal } from "./agent.service";
-import { executeTool, getToolDefinitions } from "./agent-tools";
-import {
-  opsFlowToolRegistry,
-  replacedLegacyReadToolNames,
-} from "../operations-tools";
+import { opsFlowToolRegistry } from "../operations-tools";
 import { toAnthropicTool } from "./adapters/anthropic-tool-adapter";
 import {
   classifyAgentIntentWithEnhancement,
@@ -95,7 +91,7 @@ function buildSystemPrompt(
 - confidence: ${intentClassification.confidence}
 - reason: ${intentClassification.reason}
 - extracted: ${JSON.stringify(intentClassification.extracted)}
-Use this as guidance, but still verify business targets with resolver/read tools before saving any proposal.
+Use this as guidance, but still verify business targets with search/read tools before saving any proposal.
 The extracted fields are hints only; never treat them as database identities.
 `
     : "";
@@ -105,40 +101,26 @@ The extracted fields are hints only; never treat them as database identities.
 Your job is to help a manager prepare confirm-first operational proposals, not to directly execute business mutations.
 
 Capabilities:
-- Classify user intent
-- Resolve customer, job, staff, and schedule targets
-- Search customers
-- Search jobs
-- Search active team members
-- Check activity feed
-- Check schedule conflicts
-- Save a typed structured proposal for manager confirmation
+- Search and inspect customers and jobs
+- Search active staff and check schedule conflicts
+- Create narrow, structured proposals for customer and job operations
+- Return proposals for explicit manager confirmation in OpsFlow
 
 Rules:
 - Always respond in the same language the user writes in.
 - Current date/time (UTC): ${new Date().toISOString()}
 - User timezone: ${timezone}
-- For natural-language schedule times, do not calculate UTC offsets yourself. Call resolve_time_window with localDate (YYYY-MM-DD), localStartTime (HH:mm), localEndTime (HH:mm), timezone="${timezone}", and localEndDate only if the end date differs. Copy the returned schedule fields into the proposal.
-- When the user wants to create, schedule, or assign work, you must gather context with read tools first.
+- For natural-language schedule times, pass localDate (YYYY-MM-DD), localStartTime (HH:mm), localEndTime (HH:mm), timezone="${timezone}", and localEndDate only when the end date differs. Proposal tools perform deterministic timezone conversion.
+- Before changing an existing customer or job, use search/get tools and copy only IDs returned by those tools. Never invent an ID.
 - Do not attempt to directly create jobs, assign staff, or transition status.
-- For write-like requests, use the router preclassification above when present. If it is absent, call classify_intent. Then resolve the relevant targets before saving a proposal.
-- Prefer save_typed_proposal for new proposals. Use save_dispatch_proposal only for legacy dispatch flows.
-- The proposal should include a typed proposal type, resolved targets, customer resolution, job draft, schedule draft, assignee draft, warnings, and confidence.
-- Existing job rule: if the user chooses or refers to an existing job found through search_jobs/get_job, do NOT create a new job. Set intent="update_existing_job" and include that job ID as jobDraft.existingJobId. Keep the current job title in jobDraft.title.
-- If multiple existing jobs match a write-like request, do not only ask in chat. Save a typed proposal without target.jobId/jobDraft.existingJobId and include the resolver candidates under review.candidates.jobs. The proposal review panel will let the user choose the correct job.
-- When checking schedule conflicts for an existing job, pass excludeJobId=jobDraft.existingJobId.
-- If a save proposal tool returns an EXISTING_JOB_REQUIRED error, do not present the failed plan as saved. Use details.candidateJobs to retry with an existing job target when exactly one job is clearly correct; otherwise save a typed unresolved proposal with those jobs under review.candidates.jobs.
-- Do not translate or rename an existing job when saving a proposal; preserve the existing job title from search_jobs/get_job.
-- Treat addresses as job service locations, not customer profile fields. For new jobs, put the site address in jobDraft.serviceAddress.
-- Customer profile proposals must never contain an address. Customer updates may only change name, phone, email, or notes.
-- If the user wants to create a customer, you should still prepare a proposal instead of refusing. Use intent="create_customer", set customer.status="new", and include any provided phone, email, or notes.
-- If the user wants to create both a customer and a job, use customer.status="new" and prepare the job as part of the same proposal.
-- If customer or assignee matching is ambiguous, mention it clearly in warnings and keep the proposal confirm-first.
-- Assignee resolution rules (strictly follow these for assigneeDraft):
-  - "matched": you found exactly one staff member AND have their membershipId. Always include membershipId in the proposal.
-  - "ambiguous": you found multiple possible staff members. Include all candidates in matches[]. Do NOT set status="matched".
-  - "missing": the requested person was not found, or no assignee was mentioned. Set status="missing". Do NOT set status="matched" without a membershipId.
-  - Never set status="matched" without including a valid membershipId — this will cause the confirmation to fail.
+- Use propose_create_customer and propose_update_customer for customer-only changes.
+- Use propose_create_job for a new job. It can include a new customer, schedule, and assignee in one proposal.
+- Use propose_update_job only for title, service address, or description changes on an existing job.
+- Use propose_dispatch_job for assignment and/or scheduling of an existing job. When both are requested, make one tool call so the user receives one approval.
+- Use propose_change_job_status for non-cancellation transitions and propose_cancel_job for cancellation.
+- If search returns multiple plausible targets, ask the user to choose before creating a proposal.
+- Proposal tools reload current database records and recheck authorization and conflicts. Do not reproduce database snapshots yourself.
+- A successful proposal is still pending. Never claim the business change has happened until the user confirms it.
 - Be concise and operational in your final response.${routerContext}`;
 }
 
@@ -190,15 +172,7 @@ export async function runAgentLoop(
     auth,
     audience: "web-agent",
   });
-  const canonicalToolNames = new Set(canonicalTools.map((tool) => tool.name));
-  const tools = [
-    ...canonicalTools.map(toAnthropicTool),
-    ...getToolDefinitions(auth).filter(
-      (tool) =>
-        !replacedLegacyReadToolNames.has(tool.name) &&
-        !canonicalToolNames.has(tool.name),
-    ),
-  ];
+  const tools = canonicalTools.map(toAnthropicTool);
   const allToolCalls: AgentLoopResult["toolCalls"] = [];
   let fullText = "";
   let proposal: DispatchProposal | undefined;
@@ -268,21 +242,17 @@ export async function runAgentLoop(
 
     for (const toolUse of toolUseBlocks) {
       callbacks.onToolUse(toolUse.name, toolUse.input);
-      const result = opsFlowToolRegistry.has(toolUse.name)
-        ? await opsFlowToolRegistry.execute({
-            auth,
-            audience: "web-agent",
-            toolName: toolUse.name,
-            arguments: toolUse.input,
-            context: {
-              source: "WEB_AGENT",
-              invocationId: randomUUID(),
-              conversationId: input.conversationId,
-            },
-          })
-        : await executeTool(auth, toolUse.name, toolUse.input, {
-            conversationId: input.conversationId,
-          });
+      const result = await opsFlowToolRegistry.execute({
+        auth,
+        audience: "web-agent",
+        toolName: toolUse.name,
+        arguments: toolUse.input,
+        context: {
+          source: "WEB_AGENT",
+          invocationId: randomUUID(),
+          conversationId: input.conversationId,
+        },
+      });
       callbacks.onToolResult(toolUse.name, result);
 
       const maybeProposal = (result as { proposal?: DispatchProposal } | undefined)?.proposal;

@@ -34,20 +34,20 @@ type ActiveToolCall = {
 };
 
 const TOOL_LABELS: Record<string, string> = {
-  classify_intent: "Classifying request",
-  resolve_customer_target: "Resolving customer",
-  resolve_job_target: "Resolving job",
-  resolve_staff_target: "Resolving staff",
-  resolve_time_window: "Resolving time",
-  list_jobs: "Searching jobs",
-  get_job_detail: "Loading job detail",
-  list_customers: "Searching customers",
-  get_customer_detail: "Loading customer detail",
-  list_memberships: "Searching staff",
-  list_activity_feed: "Checking activity",
+  search_jobs: "Searching jobs",
+  get_job: "Loading job detail",
+  search_customers: "Searching customers",
+  get_customer: "Loading customer detail",
+  search_staff: "Searching staff",
+  get_activity_feed: "Checking activity",
   check_schedule_conflicts: "Checking schedule conflicts",
-  save_dispatch_proposal: "Saving dispatch plan",
-  save_typed_proposal: "Saving typed plan",
+  propose_create_customer: "Preparing customer plan",
+  propose_update_customer: "Preparing customer update",
+  propose_create_job: "Preparing new job",
+  propose_update_job: "Preparing job update",
+  propose_dispatch_job: "Preparing dispatch plan",
+  propose_change_job_status: "Preparing status change",
+  propose_cancel_job: "Preparing cancellation",
 };
 
 const PLANNER_SUGGESTIONS = [
@@ -948,18 +948,22 @@ export function AgentChat() {
           setConversations(list);
         }
 
-        const rememberedConversationId = readActiveConversationId(activeConversationKey);
-        if (!rememberedConversationId || cancelled) {
+        const linkedConversationId = new URLSearchParams(window.location.search).get(
+          "conversationId",
+        );
+        const initialConversationId =
+          linkedConversationId ?? readActiveConversationId(activeConversationKey);
+        if (!initialConversationId || cancelled) {
           return;
         }
 
-        if (!list.some((conversation) => conversation.id === rememberedConversationId)) {
+        if (!list.some((conversation) => conversation.id === initialConversationId)) {
           clearActiveConversation();
           return;
         }
 
         try {
-          await loadConversation(rememberedConversationId);
+          await loadConversation(initialConversationId);
         } catch {
           if (!cancelled) {
             clearActiveConversation();

@@ -1462,11 +1462,26 @@ describeIfDb("agent persistence integration", () => {
       details: { code: "PROPOSAL_CONFIRMATION_REQUIRED" },
     });
 
-    const first = await executeProposal(owner.auth, proposal.id, {
-      source: "WEB_AGENT",
-      confirmationText: "OK",
-      appendReceiptMessage: false,
-    });
+    const concurrentAttempts = await Promise.allSettled([
+      executeProposal(owner.auth, proposal.id, {
+        source: "WEB_AGENT",
+        confirmationText: "OK",
+        appendReceiptMessage: false,
+      }),
+      executeProposal(owner.auth, proposal.id, {
+        source: "WEB_AGENT",
+        confirmationText: "OK",
+        appendReceiptMessage: false,
+      }),
+    ]);
+    const first = concurrentAttempts.find(
+      (attempt): attempt is PromiseFulfilledResult<Awaited<ReturnType<typeof executeProposal>>> =>
+        attempt.status === "fulfilled",
+    )?.value;
+    if (!first) {
+      throw new Error("At least one concurrent proposal execution must succeed.");
+    }
+
     const repeated = await executeProposal(owner.auth, proposal.id, {
       source: "WEB_AGENT",
       confirmationText: "OK",

@@ -209,6 +209,14 @@ export type ConfirmProposalResult = {
   transitionedTo?: string;
 };
 
+export type ExecuteProposalToolResult = {
+  executed: true;
+  proposalId: string;
+  conversationId: string;
+  status: "CONFIRMED";
+  result: ConfirmProposalResult;
+};
+
 export type SSEEvent =
   | { type: "text_delta"; text: string }
   | { type: "tool_use"; tool: string; input: unknown }

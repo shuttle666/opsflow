@@ -137,4 +137,126 @@ describe("runAgentLoop", () => {
       },
     ]);
   });
+
+  it("instructs the model to require a later verbatim confirmation", async () => {
+    loopMocks.listTools.mockReturnValue([]);
+    loopMocks.streamFactory.mockResolvedValueOnce(
+      buildStream([], {
+        stop_reason: "end_turn",
+        content: [{ type: "text", text: "Waiting for confirmation." }],
+      } as Anthropic.Message),
+    );
+
+    await runAgentLoop(
+      [{ role: "user", content: "创建一个工作" }],
+      buildAuth(),
+      { conversationId: "conversation-1", timezone: "Australia/Adelaide" },
+      {
+        onTextDelta: vi.fn(),
+        onToolUse: vi.fn(),
+        onToolResult: vi.fn(),
+        onProposal: vi.fn(),
+      },
+    );
+
+    expect(loopMocks.streamFactory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining(
+          "Pass that latest user message verbatim as confirmationText",
+        ),
+      }),
+    );
+    expect(loopMocks.streamFactory.mock.calls[0]?.[0]?.system).toContain(
+      "Never call execute_proposal in the same agent run",
+    );
+    expect(loopMocks.streamFactory.mock.calls[0]?.[0]?.system).toContain(
+      "asks a question, requests any change",
+    );
+  });
+
+  it("passes an LLM-selected explicit confirmation to the execution tool", async () => {
+    loopMocks.listTools.mockReturnValue([]);
+    loopMocks.executeTool.mockResolvedValueOnce({
+      executed: true,
+      proposalId: "proposal-1",
+      conversationId: "conversation-1",
+      status: "CONFIRMED",
+      result: { proposalId: "proposal-1", entityType: "job" },
+    });
+    loopMocks.streamFactory
+      .mockResolvedValueOnce(
+        buildStream([], {
+          stop_reason: "tool_use",
+          content: [
+            {
+              type: "tool_use",
+              id: "tool-execute",
+              name: "execute_proposal",
+              input: {
+                proposalId: "proposal-1",
+                confirmationText: "就这样执行",
+              },
+            },
+          ],
+        } as Anthropic.Message),
+      )
+      .mockResolvedValueOnce(
+        buildStream(["已执行。"], {
+          stop_reason: "end_turn",
+          content: [{ type: "text", text: "已执行。" }],
+        } as Anthropic.Message),
+      );
+
+    const result = await runAgentLoop(
+      [{ role: "user", content: "就这样执行" }],
+      buildAuth(),
+      { conversationId: "conversation-1", timezone: "Australia/Adelaide" },
+      {
+        onTextDelta: vi.fn(),
+        onToolUse: vi.fn(),
+        onToolResult: vi.fn(),
+        onProposal: vi.fn(),
+      },
+    );
+
+    expect(loopMocks.executeTool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolName: "execute_proposal",
+        arguments: {
+          proposalId: "proposal-1",
+          confirmationText: "就这样执行",
+        },
+      }),
+    );
+    expect(result.toolCalls).toEqual([
+      expect.objectContaining({ name: "execute_proposal" }),
+    ]);
+  });
+
+  it.each(["不要执行", "可以改到下午吗", "这个方案可以再调整吗"])(
+    "does not execute when the model treats %s as rejection or revision",
+    async (message) => {
+      loopMocks.listTools.mockReturnValue([]);
+      loopMocks.streamFactory.mockResolvedValueOnce(
+        buildStream(["我会保留当前提案。"], {
+          stop_reason: "end_turn",
+          content: [{ type: "text", text: "我会保留当前提案。" }],
+        } as Anthropic.Message),
+      );
+
+      await runAgentLoop(
+        [{ role: "user", content: message }],
+        buildAuth(),
+        { conversationId: "conversation-1", timezone: "Australia/Adelaide" },
+        {
+          onTextDelta: vi.fn(),
+          onToolUse: vi.fn(),
+          onToolResult: vi.fn(),
+          onProposal: vi.fn(),
+        },
+      );
+
+      expect(loopMocks.executeTool).not.toHaveBeenCalled();
+    },
+  );
 });

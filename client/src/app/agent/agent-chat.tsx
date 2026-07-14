@@ -23,6 +23,7 @@ import type {
   ConfirmProposalResult,
   ConversationSummary,
   DispatchProposal,
+  ExecuteProposalToolResult,
   UpdateProposalReviewInput,
 } from "@/types/agent";
 
@@ -48,7 +49,58 @@ const TOOL_LABELS: Record<string, string> = {
   propose_dispatch_job: "Preparing dispatch plan",
   propose_change_job_status: "Preparing status change",
   propose_cancel_job: "Preparing cancellation",
+  get_proposal: "Checking proposal",
+  execute_proposal: "Executing confirmed plan",
 };
+
+function executedProposalResult(
+  result: unknown,
+): ExecuteProposalToolResult | null {
+  if (
+    typeof result !== "object" ||
+    result === null ||
+    !("executed" in result) ||
+    result.executed !== true ||
+    !("result" in result) ||
+    typeof result.result !== "object" ||
+    result.result === null
+  ) {
+    return null;
+  }
+
+  return result as ExecuteProposalToolResult;
+}
+
+function executionToolError(result: unknown): {
+  message: string;
+  approvalUrl?: string;
+} | null {
+  if (
+    typeof result !== "object" ||
+    result === null ||
+    !("error" in result) ||
+    result.error !== true ||
+    !("message" in result) ||
+    typeof result.message !== "string"
+  ) {
+    return null;
+  }
+
+  const details =
+    "details" in result &&
+    typeof result.details === "object" &&
+    result.details !== null
+      ? result.details
+      : undefined;
+  const approvalUrl =
+    details &&
+    "approvalUrl" in details &&
+    typeof details.approvalUrl === "string"
+      ? details.approvalUrl
+      : undefined;
+
+  return { message: result.message, ...(approvalUrl ? { approvalUrl } : {}) };
+}
 
 const PLANNER_SUGGESTIONS = [
   "Assign Archie Wright's dishwasher leak job to Alex Nguyen tomorrow 9-11",
@@ -858,6 +910,7 @@ export function AgentChat() {
   const [streamingText, setStreamingText] = useState("");
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [webApprovalUrl, setWebApprovalUrl] = useState<string | null>(null);
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
   const [pendingProposal, setPendingProposal] = useState<DispatchProposal | null>(null);
@@ -915,6 +968,7 @@ export function AgentChat() {
       rememberActiveConversation(id);
       setMessages(detail.messages);
       setPendingProposal(latestProposal(detail.messages));
+      setWebApprovalUrl(null);
       if (!options?.preserveConfirmResult) {
         setConfirmResult(null);
       }
@@ -996,11 +1050,11 @@ export function AgentChat() {
 
     setInput("");
     setError(null);
+    setWebApprovalUrl(null);
     setIsStreaming(true);
     setStreamingText("");
     setActiveToolCalls([]);
     setConfirmResult(null);
-    setPendingProposal(null);
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -1051,6 +1105,22 @@ export function AgentChat() {
           if (maybeProposal) {
             latestGeneratedProposal = maybeProposal;
             setPendingProposal(maybeProposal);
+            setWebApprovalUrl(null);
+          }
+
+          if (tool === "execute_proposal") {
+            const executed = executedProposalResult(result);
+            const toolError = executionToolError(result);
+
+            if (executed) {
+              setPendingProposal(null);
+              setConfirmResult(executed.result);
+              setError(null);
+              setWebApprovalUrl(null);
+            } else if (toolError) {
+              setError(toolError.message);
+              setWebApprovalUrl(toolError.approvalUrl ?? null);
+            }
           }
 
           setActiveToolCalls((current) =>
@@ -1099,6 +1169,7 @@ export function AgentChat() {
 
     setIsConfirming(true);
     setError(null);
+    setWebApprovalUrl(null);
 
     try {
       const result = await withAccessTokenRetry((accessToken) =>
@@ -1106,6 +1177,7 @@ export function AgentChat() {
       );
       await loadConversation(conversationId, { preserveConfirmResult: true });
       setConfirmResult(result);
+      setWebApprovalUrl(null);
       await refreshConversations();
     } catch (confirmError) {
       setError(
@@ -1125,6 +1197,7 @@ export function AgentChat() {
 
     setIsUpdatingProposal(true);
     setError(null);
+    setWebApprovalUrl(null);
     setConfirmResult(null);
 
     try {
@@ -1158,6 +1231,7 @@ export function AgentChat() {
     setPendingProposal(null);
     setConfirmResult(null);
     setError(null);
+    setWebApprovalUrl(null);
     setStreamingText("");
     setActiveToolCalls([]);
     clearActiveConversation();
@@ -1255,6 +1329,14 @@ export function AgentChat() {
               {error ? (
                 <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-danger-soft)] px-4 py-3 text-sm text-[var(--color-danger)]">
                   {error}
+                  {webApprovalUrl ? (
+                    <>
+                      {" "}
+                      <Link href={webApprovalUrl} className="font-semibold underline">
+                        Review in Web
+                      </Link>
+                    </>
+                  ) : null}
                 </div>
               ) : null}
 

@@ -13,6 +13,7 @@ import {
   updateProposalReviewRequest,
 } from "@/features/agent";
 import { useAuthStore } from "@/store/auth-store";
+import type { DispatchProposal } from "@/types/agent";
 
 vi.mock("react-markdown", () => ({
   default: ({ children }: { children?: ReactNode }) => <>{children}</>,
@@ -26,6 +27,36 @@ vi.mock("@/features/agent", () => ({
   openMessageStreamRequest: vi.fn(),
   updateProposalReviewRequest: vi.fn(),
 }));
+
+function pendingScheduleProposal(): DispatchProposal {
+  return {
+    id: "proposal-conversation-confirm",
+    conversationId: "conversation-1",
+    type: "SCHEDULE_JOB",
+    intent: "schedule_job",
+    target: { customerId: "customer-1", jobId: "job-1" },
+    customer: {
+      status: "matched",
+      matchedCustomerId: "customer-1",
+      name: "Archie Wright",
+      matches: [{ id: "customer-1", name: "Archie Wright" }],
+    },
+    jobDraft: {
+      existingJobId: "job-1",
+      title: "Dishwasher leak investigation",
+      serviceAddress: "8 Mount Barker Road",
+    },
+    scheduleDraft: {
+      scheduledStartAt: "2026-04-24T00:00:00.000Z",
+      scheduledEndAt: "2026-04-24T02:00:00.000Z",
+      timezone: "Australia/Adelaide",
+    },
+    review: { status: "READY", blockers: [], warnings: [] },
+    warnings: [],
+    confidence: 0.94,
+    createdAt: "2026-04-01T00:00:00.000Z",
+  };
+}
 
 describe("AgentChat", () => {
   beforeEach(() => {
@@ -190,6 +221,131 @@ describe("AgentChat", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("What will change")).toBeInTheDocument();
     expect(screen.getByText("Open job #job-1")).toBeInTheDocument();
+  });
+
+  it("keeps the current proposal when a later message does not execute it", async () => {
+    vi.mocked(openMessageStreamRequest).mockResolvedValue(new Response("ok"));
+    vi.mocked(consumeMessageStream)
+      .mockImplementationOnce(async (_response, callbacks) => {
+        callbacks.onToolResult("propose_dispatch_job", {
+          proposal: pendingScheduleProposal(),
+        });
+        callbacks.onTextDelta("方案已准备好，请确认。");
+        callbacks.onDone();
+      })
+      .mockImplementationOnce(async (_response, callbacks) => {
+        callbacks.onTextDelta("好的，我不会执行，当前方案仍保留待确认。");
+        callbacks.onDone();
+      });
+
+    const user = userEvent.setup();
+    render(<AgentChat />);
+
+    await user.type(
+      screen.getByPlaceholderText("Ask the AI Planner..."),
+      "安排这个工作",
+    );
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByRole("button", { name: "Confirm plan" })).toBeInTheDocument();
+
+    await user.type(
+      screen.getByPlaceholderText("Ask the AI Planner..."),
+      "不要执行",
+    );
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(
+      await screen.findByText("好的，我不会执行，当前方案仍保留待确认。"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirm plan" })).toBeInTheDocument();
+  });
+
+  it("clears the proposal and shows the receipt after conversational execution", async () => {
+    vi.mocked(openMessageStreamRequest).mockResolvedValue(new Response("ok"));
+    vi.mocked(consumeMessageStream)
+      .mockImplementationOnce(async (_response, callbacks) => {
+        callbacks.onToolResult("propose_dispatch_job", {
+          proposal: pendingScheduleProposal(),
+        });
+        callbacks.onDone();
+      })
+      .mockImplementationOnce(async (_response, callbacks) => {
+        callbacks.onToolResult("execute_proposal", {
+          executed: true,
+          proposalId: "proposal-conversation-confirm",
+          conversationId: "conversation-1",
+          status: "CONFIRMED",
+          result: {
+            proposalId: "proposal-conversation-confirm",
+            proposalType: "SCHEDULE_JOB",
+            entityType: "job",
+            createdJobId: "job-1",
+            createdJobTitle: "Dishwasher leak investigation",
+            updatedExistingJob: true,
+          },
+        });
+        callbacks.onTextDelta("已按你的确认执行。");
+        callbacks.onDone();
+      });
+
+    const user = userEvent.setup();
+    render(<AgentChat />);
+
+    await user.type(screen.getByPlaceholderText("Ask the AI Planner..."), "安排这个工作");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByRole("button", { name: "Confirm plan" })).toBeInTheDocument();
+
+    await user.type(screen.getByPlaceholderText("Ask the AI Planner..."), "可以了");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByRole("link", { name: "Open job" })).toHaveAttribute(
+      "href",
+      "/jobs/job-1",
+    );
+    expect(screen.getByText("Dishwasher leak investigation")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Confirm plan" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the proposal and exposes the Web fallback after execution failure", async () => {
+    vi.mocked(openMessageStreamRequest).mockResolvedValue(new Response("ok"));
+    vi.mocked(consumeMessageStream)
+      .mockImplementationOnce(async (_response, callbacks) => {
+        callbacks.onToolResult("propose_dispatch_job", {
+          proposal: pendingScheduleProposal(),
+        });
+        callbacks.onDone();
+      })
+      .mockImplementationOnce(async (_response, callbacks) => {
+        callbacks.onToolResult("execute_proposal", {
+          error: true,
+          message: "This proposal requires approval in the OpsFlow Web app.",
+          code: "PROPOSAL_WEB_APPROVAL_REQUIRED",
+          details: {
+            approvalUrl:
+              "http://localhost:3000/agent?conversationId=conversation-1&proposalId=proposal-conversation-confirm",
+          },
+        });
+        callbacks.onDone();
+      });
+
+    const user = userEvent.setup();
+    render(<AgentChat />);
+
+    await user.type(screen.getByPlaceholderText("Ask the AI Planner..."), "安排这个工作");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByRole("button", { name: "Confirm plan" })).toBeInTheDocument();
+
+    await user.type(screen.getByPlaceholderText("Ask the AI Planner..."), "OK");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(
+      await screen.findByText("This proposal requires approval in the OpsFlow Web app."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Review in Web" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("proposal-conversation-confirm"),
+    );
+    expect(screen.getByRole("button", { name: "Confirm plan" })).toBeInTheDocument();
   });
 
   it("lets users hide and reopen the proposal panel", async () => {

@@ -14,6 +14,12 @@ describe("agent eval definitions", () => {
         "missing staff cannot become matched assignee",
         "schedule conflict is surfaced before saving proposal",
         "regression kitchen tap assignment does not create translated duplicate",
+        "conversation confirmation OK executes proposal",
+        "conversation confirmation Chinese approval executes proposal",
+        "conversation confirmation explicit execute phrase executes proposal",
+        "conversation schedule revision does not execute proposal",
+        "conversation adjustment question does not execute proposal",
+        "conversation rejection does not execute proposal",
       ]),
     );
   });

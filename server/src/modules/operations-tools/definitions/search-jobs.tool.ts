@@ -39,6 +39,7 @@ export const searchJobsTool: OpsFlowTool<
     idempotent: true,
     openWorld: false,
   },
+  conversationContext: "none",
   execute: async (auth, input) => {
     const result = await jobService.listJobs(auth, {
       q: input.q,

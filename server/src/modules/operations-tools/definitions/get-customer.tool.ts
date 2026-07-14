@@ -41,6 +41,7 @@ export const getCustomerTool: OpsFlowTool<
     idempotent: true,
     openWorld: false,
   },
+  conversationContext: "none",
   execute: async (auth, input) => ({
     customer: await customerService.getCustomerDetail(auth, input.customerId),
   }),

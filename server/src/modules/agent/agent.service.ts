@@ -257,6 +257,57 @@ export type ExecutedProposal = {
   result: ConfirmedProposalResult;
 };
 
+export type ProposalApprovalMode = "CONVERSATIONAL_OR_WEB" | "WEB_ONLY";
+
+export type ProposalExecutionSnapshot = {
+  proposalId: string;
+  conversationId: string;
+  status: AgentProposalStatus;
+  proposal: DispatchProposal;
+  confirmationResult?: ConfirmedProposalResult;
+};
+
+const conversationalExecutionTypes = new Set<AgentProposalType>([
+  "CREATE_JOB",
+  "ASSIGN_JOB",
+  "SCHEDULE_JOB",
+]);
+
+export function getProposalApprovalUrl(
+  conversationId: string,
+  proposalId: string,
+) {
+  return `${env.CLIENT_URL}/agent?conversationId=${encodeURIComponent(
+    conversationId,
+  )}&proposalId=${encodeURIComponent(proposalId)}`;
+}
+
+export function getProposalApprovalPolicy(
+  proposal: Pick<DispatchProposal, "type">,
+): {
+  approvalMode: ProposalApprovalMode;
+  executionTool: "execute_proposal" | null;
+  confirmationPrompt: string;
+} {
+  const conversational = Boolean(
+    proposal.type && conversationalExecutionTypes.has(proposal.type),
+  );
+
+  return conversational
+    ? {
+        approvalMode: "CONVERSATIONAL_OR_WEB",
+        executionTool: "execute_proposal",
+        confirmationPrompt:
+          "Review the proposal above, then reply in a new message with an explicit confirmation if you want it executed.",
+      }
+    : {
+        approvalMode: "WEB_ONLY",
+        executionTool: null,
+        confirmationPrompt:
+          "This proposal must be reviewed and confirmed in the OpsFlow Web app.",
+      };
+}
+
 type ProposalJobTargetInput = Pick<
   DispatchProposalPayload,
   "intent" | "customer" | "jobDraft" | "scheduleDraft" | "assigneeDraft"
@@ -827,6 +878,67 @@ export async function appendExternalProposalMessage(
   });
 }
 
+export async function appendExternalProposalExecutionMessage(
+  auth: AuthContext,
+  input: {
+    conversationId: string;
+    toolName: string;
+    toolInput: unknown;
+    toolResult: unknown;
+    proposalId: string;
+  },
+): Promise<void> {
+  const conversation = await getConversationRecord(auth, input.conversationId);
+  if (!conversation) {
+    throw new Error("Conversation not found.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const existingReceipt = await tx.agentToolCall.findFirst({
+      where: {
+        conversationId: input.conversationId,
+        toolName: input.toolName,
+        result: {
+          path: ["proposalId"],
+          equals: input.proposalId,
+        },
+      },
+      select: { id: true },
+    });
+
+    if (existingReceipt) {
+      return;
+    }
+
+    const message = await tx.agentMessage.create({
+      data: {
+        conversationId: input.conversationId,
+        role: AgentMessageRole.ASSISTANT,
+        content: "An external MCP client confirmed and executed this proposal.",
+      },
+    });
+
+    await tx.agentToolCall.create({
+      data: {
+        conversationId: input.conversationId,
+        messageId: message.id,
+        toolName: input.toolName,
+        input: toJsonValue(input.toolInput),
+        result: toJsonValue(input.toolResult),
+        callOrder: 0,
+      },
+    });
+
+    await tx.agentConversation.update({
+      where: { id: input.conversationId },
+      data: {
+        preview: `External MCP: ${input.toolName}`,
+        updatedAt: new Date(),
+      },
+    });
+  });
+}
+
 export async function getProposal(
   auth: AuthContext,
   conversationId: string,
@@ -843,6 +955,39 @@ export async function getProposal(
   });
 
   return proposal ? proposalFromRecord(proposal) : null;
+}
+
+export async function getProposalForExecution(
+  auth: AuthContext,
+  proposalId: string,
+): Promise<ProposalExecutionSnapshot> {
+  if (auth.role === MembershipRole.STAFF) {
+    throw new ApiError(403, "Only owners and managers can view dispatch plans.");
+  }
+
+  const proposalRecord = await prisma.agentProposal.findFirst({
+    where: {
+      id: proposalId,
+      tenantId: auth.tenantId,
+      userId: auth.userId,
+    },
+  });
+
+  if (!proposalRecord) {
+    throw new ApiError(404, "Proposal not found.");
+  }
+
+  const confirmationResult = confirmedProposalResultFromJson(
+    proposalRecord.confirmationResult,
+  );
+
+  return {
+    proposalId: proposalRecord.id,
+    conversationId: proposalRecord.conversationId,
+    status: proposalRecord.status,
+    proposal: proposalFromRecord(proposalRecord),
+    ...(confirmationResult ? { confirmationResult } : {}),
+  };
 }
 
 export async function updateProposalReview(
@@ -2591,21 +2736,9 @@ async function confirmTypedProposalInTransaction(
   }
 }
 
-const conversationalExecutionTypes = new Set<AgentProposalType>([
-  "CREATE_JOB",
-  "ASSIGN_JOB",
-  "SCHEDULE_JOB",
-]);
-
-function proposalApprovalUrl(conversationId: string, proposalId: string) {
-  return `${env.CLIENT_URL}/agent?conversationId=${encodeURIComponent(
-    conversationId,
-  )}&proposalId=${encodeURIComponent(proposalId)}`;
-}
-
 function requireConfirmationText(options: ExecuteProposalOptions) {
-  const confirmationText = options.confirmationText?.trim();
-  if (!confirmationText) {
+  const confirmationText = options.confirmationText;
+  if (!confirmationText?.trim()) {
     throw new ApiError(400, "Explicit confirmation text is required.", {
       code: "PROPOSAL_CONFIRMATION_REQUIRED",
     });
@@ -2627,7 +2760,7 @@ async function assertWebAgentConfirmation(
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   });
 
-  if (!latestUserMessage || latestUserMessage.content.trim() !== confirmationText) {
+  if (!latestUserMessage || latestUserMessage.content !== confirmationText) {
     throw new ApiError(
       409,
       "A newer user message matching confirmationText is required before this proposal can be executed.",
@@ -2644,13 +2777,13 @@ function assertConversationalExecutionAllowed(
     return;
   }
 
-  if (!proposal.type || !conversationalExecutionTypes.has(proposal.type)) {
+  if (getProposalApprovalPolicy(proposal).approvalMode === "WEB_ONLY") {
     throw new ApiError(
       409,
       "This proposal requires approval in the OpsFlow Web app.",
       {
         code: "PROPOSAL_WEB_APPROVAL_REQUIRED",
-        approvalUrl: proposalApprovalUrl(proposal.conversationId, proposal.id),
+        approvalUrl: getProposalApprovalUrl(proposal.conversationId, proposal.id),
       },
     );
   }

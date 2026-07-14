@@ -42,6 +42,7 @@ export const getActivityFeedTool: OpsFlowTool<
     idempotent: true,
     openWorld: false,
   },
+  conversationContext: "none",
   execute: async (auth, input) => {
     const result = await auditService.listActivityFeed(auth, input);
     return { activities: result.items, pagination: result.pagination };

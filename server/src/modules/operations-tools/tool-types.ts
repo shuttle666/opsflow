@@ -21,6 +21,8 @@ export type ToolAnnotations = {
   openWorld: boolean;
 };
 
+export type ToolConversationContext = "required" | "none";
+
 export type OpsFlowTool<TInput = unknown, TOutput = unknown> = {
   name: string;
   title: string;
@@ -30,6 +32,7 @@ export type OpsFlowTool<TInput = unknown, TOutput = unknown> = {
   inputSchema: z.ZodType<TInput>;
   outputSchema: z.ZodType<TOutput>;
   annotations: ToolAnnotations;
+  conversationContext: ToolConversationContext;
   execute: (
     auth: AuthContext,
     input: TInput,

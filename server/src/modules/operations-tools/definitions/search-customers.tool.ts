@@ -31,6 +31,7 @@ export const searchCustomersTool: OpsFlowTool<
     idempotent: true,
     openWorld: false,
   },
+  conversationContext: "none",
   execute: async (auth, input) => {
     const result = await customerService.listCustomers(auth, {
       q: input.q,

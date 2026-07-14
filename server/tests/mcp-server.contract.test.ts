@@ -9,6 +9,7 @@ import { z } from "zod";
 import { createOpsFlowMcpServer } from "../src/modules/mcp/mcp-server";
 import { OpsFlowToolRegistry } from "../src/modules/operations-tools";
 import type { AuthContext } from "../src/types/auth";
+import { ApiError } from "../src/utils/api-error";
 
 const auth: AuthContext = {
   userId: "user-1",
@@ -33,6 +34,7 @@ function buildRegistry(recordInvocation?: ReturnType<typeof vi.fn>) {
       idempotent: true,
       openWorld: false,
     },
+    conversationContext: "none",
     execute: async (_auth, input) => ({
       id: input.query,
       seenAt: new Date("2026-07-14T00:00:00.000Z"),
@@ -59,6 +61,7 @@ function buildRegistry(recordInvocation?: ReturnType<typeof vi.fn>) {
       idempotent: false,
       openWorld: false,
     },
+    conversationContext: "required",
     execute: async (_auth, _input, context) => ({
       proposalId: "proposal-1",
       approvalUrl: "http://localhost:3000/agent?conversationId=conversation-1",
@@ -68,6 +71,71 @@ function buildRegistry(recordInvocation?: ReturnType<typeof vi.fn>) {
       },
     }),
   });
+  registry.register({
+    name: "get_proposal",
+    title: "Get proposal",
+    description: "Read a proposal without creating a conversation.",
+    audiences: ["external-mcp"],
+    allowedRoles: [MembershipRole.MANAGER],
+    inputSchema: z.object({ proposalId: z.string() }).strict(),
+    outputSchema: z.object({
+      proposalId: z.string(),
+      conversationId: z.string(),
+      status: z.literal("PENDING"),
+    }),
+    annotations: {
+      readOnly: true,
+      destructive: false,
+      idempotent: true,
+      openWorld: false,
+    },
+    conversationContext: "none",
+    execute: async (_auth, input) => ({
+      proposalId: input.proposalId,
+      conversationId: "conversation-original",
+      status: "PENDING" as const,
+    }),
+  });
+  registry.register({
+    name: "execute_proposal",
+    title: "Execute proposal",
+    description: "Execute only after a later explicit user confirmation.",
+    audiences: ["external-mcp"],
+    allowedRoles: [MembershipRole.MANAGER],
+    inputSchema: z
+      .object({ proposalId: z.string(), confirmationText: z.string() })
+      .strict(),
+    outputSchema: z.object({
+      executed: z.literal(true),
+      proposalId: z.string(),
+      conversationId: z.string(),
+      status: z.literal("CONFIRMED"),
+      result: z.object({ proposalId: z.string() }),
+    }),
+    annotations: {
+      readOnly: false,
+      destructive: true,
+      idempotent: true,
+      openWorld: false,
+    },
+    conversationContext: "none",
+    execute: async (_auth, input) => {
+      if (input.proposalId === "web-only") {
+        throw new ApiError(409, "Use Web approval.", {
+          code: "PROPOSAL_WEB_APPROVAL_REQUIRED",
+          approvalUrl: "http://localhost:3000/agent?proposalId=web-only",
+        });
+      }
+
+      return {
+        executed: true as const,
+        proposalId: input.proposalId,
+        conversationId: "conversation-original",
+        status: "CONFIRMED" as const,
+        result: { proposalId: input.proposalId },
+      };
+    },
+  });
 
   return registry;
 }
@@ -75,24 +143,34 @@ function buildRegistry(recordInvocation?: ReturnType<typeof vi.fn>) {
 async function connectTestClient(input?: {
   role?: MembershipRole;
   persistProposalMessage?: ReturnType<typeof vi.fn>;
+  persistProposalExecutionMessage?: ReturnType<typeof vi.fn>;
   recordInvocation?: ReturnType<typeof vi.fn>;
   resolveAuth?: ReturnType<typeof vi.fn>;
 }) {
   const getConversationId = vi.fn(async () => "conversation-1");
   const persistProposalMessage = input?.persistProposalMessage ?? vi.fn(async () => {});
+  const persistProposalExecutionMessage =
+    input?.persistProposalExecutionMessage ?? vi.fn(async () => {});
   const server = createOpsFlowMcpServer({
     auth: { ...auth, role: input?.role ?? auth.role },
     resolveAuth: input?.resolveAuth,
     registry: buildRegistry(input?.recordInvocation),
     getConversationId,
     persistProposalMessage,
+    persistProposalExecutionMessage,
   });
   const client = new Client({ name: "opsflow-contract-test", version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
   await client.connect(clientTransport);
 
-  return { client, server, getConversationId, persistProposalMessage };
+  return {
+    client,
+    server,
+    getConversationId,
+    persistProposalMessage,
+    persistProposalExecutionMessage,
+  };
 }
 
 describe("OpsFlow MCP server contract", () => {
@@ -104,6 +182,8 @@ describe("OpsFlow MCP server contract", () => {
       expect(result.tools.map((tool) => tool.name)).toEqual([
         "find_example",
         "propose_example",
+        "get_proposal",
+        "execute_proposal",
       ]);
       expect(result.tools[0]).toEqual(
         expect.objectContaining({
@@ -119,6 +199,15 @@ describe("OpsFlow MCP server contract", () => {
         expect.objectContaining({
           type: "object",
           required: ["query"],
+        }),
+      );
+      expect(result.tools[3]).toEqual(
+        expect.objectContaining({
+          annotations: expect.objectContaining({
+            readOnlyHint: false,
+            destructiveHint: true,
+            idempotentHint: true,
+          }),
         }),
       );
     } finally {
@@ -187,6 +276,85 @@ describe("OpsFlow MCP server contract", () => {
           proposalId: "proposal-1",
         }),
       );
+    } finally {
+      await connection.client.close();
+      await connection.server.close();
+    }
+  });
+
+  it("executes against the proposal conversation without creating a new one", async () => {
+    const recordInvocation = vi.fn(async () => {});
+    const persistProposalExecutionMessage = vi.fn(async () => {});
+    const connection = await connectTestClient({
+      recordInvocation,
+      persistProposalExecutionMessage,
+    });
+
+    try {
+      const result = await connection.client.callTool({
+        name: "execute_proposal",
+        arguments: {
+          proposalId: "proposal-1",
+          confirmationText: "OK, execute it",
+        },
+      });
+
+      expect(result.isError).not.toBe(true);
+      expect(result.structuredContent).toEqual(
+        expect.objectContaining({
+          executed: true,
+          proposalId: "proposal-1",
+          conversationId: "conversation-original",
+        }),
+      );
+      expect(connection.getConversationId).not.toHaveBeenCalled();
+      expect(persistProposalExecutionMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          auth,
+          conversationId: "conversation-original",
+          toolName: "execute_proposal",
+          proposalId: "proposal-1",
+        }),
+      );
+      expect(recordInvocation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: ToolInvocationSource.MCP,
+          conversationId: "conversation-original",
+          toolName: "execute_proposal",
+          proposalId: "proposal-1",
+          inputKeys: ["confirmationText", "proposalId"],
+          status: ToolInvocationStatus.SUCCEEDED,
+        }),
+      );
+      expect(JSON.stringify(recordInvocation.mock.calls)).not.toContain(
+        "OK, execute it",
+      );
+    } finally {
+      await connection.client.close();
+      await connection.server.close();
+    }
+  });
+
+  it("preserves structured proposal errors and Web fallback details", async () => {
+    const connection = await connectTestClient();
+
+    try {
+      const result = await connection.client.callTool({
+        name: "execute_proposal",
+        arguments: { proposalId: "web-only", confirmationText: "OK" },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toEqual({
+        error: true,
+        message: "Use Web approval.",
+        code: "PROPOSAL_WEB_APPROVAL_REQUIRED",
+        details: {
+          code: "PROPOSAL_WEB_APPROVAL_REQUIRED",
+          approvalUrl: "http://localhost:3000/agent?proposalId=web-only",
+        },
+      });
+      expect(connection.getConversationId).not.toHaveBeenCalled();
     } finally {
       await connection.client.close();
       await connection.server.close();

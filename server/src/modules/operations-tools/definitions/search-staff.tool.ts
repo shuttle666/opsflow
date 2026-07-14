@@ -39,6 +39,7 @@ export const searchStaffTool: OpsFlowTool<
     idempotent: true,
     openWorld: false,
   },
+  conversationContext: "none",
   execute: async (auth, input) => {
     const result = await membershipService.listMemberships(auth, {
       q: input.q,

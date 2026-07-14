@@ -2,7 +2,10 @@ import { randomUUID } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import type { AuthContext } from "../../types/auth";
-import { appendExternalProposalMessage } from "../agent/agent.service";
+import {
+  appendExternalProposalExecutionMessage,
+  appendExternalProposalMessage,
+} from "../agent/agent.service";
 import {
   opsFlowToolRegistry,
   type OpsFlowToolRegistry,
@@ -15,6 +18,12 @@ type ProposalResult = {
     id: string;
     conversationId: string;
   };
+};
+
+type ProposalExecutionResult = {
+  executed: true;
+  proposalId: string;
+  conversationId: string;
 };
 
 type ProposalPersistenceInput = {
@@ -32,6 +41,9 @@ export type CreateOpsFlowMcpServerOptions = {
   registry?: OpsFlowToolRegistry;
   getConversationId: () => Promise<string>;
   persistProposalMessage?: (input: ProposalPersistenceInput) => Promise<void>;
+  persistProposalExecutionMessage?: (
+    input: ProposalPersistenceInput,
+  ) => Promise<void>;
 };
 
 function isToolError(result: unknown): result is ToolErrorResult {
@@ -58,6 +70,21 @@ function isProposalResult(result: unknown): result is ProposalResult {
   );
 }
 
+function isProposalExecutionResult(
+  result: unknown,
+): result is ProposalExecutionResult {
+  if (typeof result !== "object" || result === null) {
+    return false;
+  }
+
+  const candidate = result as Partial<ProposalExecutionResult>;
+  return (
+    candidate.executed === true &&
+    typeof candidate.proposalId === "string" &&
+    typeof candidate.conversationId === "string"
+  );
+}
+
 function toStructuredContent(result: unknown): Record<string, unknown> {
   const serialized = JSON.parse(JSON.stringify(result)) as unknown;
   if (typeof serialized === "object" && serialized !== null && !Array.isArray(serialized)) {
@@ -77,12 +104,27 @@ async function defaultPersistProposalMessage(input: ProposalPersistenceInput) {
   });
 }
 
+async function defaultPersistProposalExecutionMessage(
+  input: ProposalPersistenceInput,
+) {
+  await appendExternalProposalExecutionMessage(input.auth, {
+    conversationId: input.conversationId,
+    toolName: input.toolName,
+    toolInput: input.toolInput,
+    toolResult: input.toolResult,
+    proposalId: input.proposalId,
+  });
+}
+
 export function createOpsFlowMcpServer(
   options: CreateOpsFlowMcpServerOptions,
 ): McpServer {
   const registry = options.registry ?? opsFlowToolRegistry;
   const persistProposalMessage =
     options.persistProposalMessage ?? defaultPersistProposalMessage;
+  const persistProposalExecutionMessage =
+    options.persistProposalExecutionMessage ??
+    defaultPersistProposalExecutionMessage;
   const tools = registry.list({
     auth: options.auth,
     audience: "external-mcp",
@@ -116,9 +158,10 @@ export function createOpsFlowMcpServer(
         const currentAuth = options.resolveAuth
           ? await options.resolveAuth()
           : options.auth;
-        const conversationId = tool.annotations.readOnly
-          ? undefined
-          : await options.getConversationId();
+        const conversationId =
+          tool.conversationContext === "required"
+            ? await options.getConversationId()
+            : undefined;
         const result = await registry.execute({
           auth: currentAuth,
           audience: "external-mcp",
@@ -134,9 +177,13 @@ export function createOpsFlowMcpServer(
         });
 
         if (isToolError(result)) {
+          const structuredContent = toStructuredContent(result);
           return {
             isError: true,
-            content: [{ type: "text" as const, text: result.message }],
+            content: [
+              { type: "text" as const, text: JSON.stringify(structuredContent) },
+            ],
+            structuredContent,
           };
         }
 
@@ -145,6 +192,16 @@ export function createOpsFlowMcpServer(
           await persistProposalMessage({
             auth: currentAuth,
             conversationId,
+            toolName: tool.name,
+            toolInput,
+            toolResult: structuredContent,
+            proposalId: result.proposalId,
+          });
+        }
+        if (isProposalExecutionResult(result)) {
+          await persistProposalExecutionMessage({
+            auth: currentAuth,
+            conversationId: result.conversationId,
             toolName: tool.name,
             toolInput,
             toolResult: structuredContent,

@@ -1,5 +1,4 @@
 import { JobStatus } from "@prisma/client";
-import { env } from "../../config/env";
 import type { AuthContext } from "../../types/auth";
 import { ApiError } from "../../utils/api-error";
 import {
@@ -7,6 +6,8 @@ import {
   type SaveTypedProposalToolInput,
 } from "../agent/agent-schemas";
 import {
+  getProposalApprovalPolicy,
+  getProposalApprovalUrl,
   storeTypedProposal,
   type DispatchProposal,
 } from "../agent/agent.service";
@@ -142,14 +143,15 @@ async function saveCanonicalProposal(
 }
 
 function proposalResult(proposal: DispatchProposal) {
+  const approvalPolicy = getProposalApprovalPolicy(proposal);
+
   return {
     saved: true as const,
     proposalId: proposal.id,
     reviewStatus: proposal.review?.status ?? "READY",
     approvalRequired: true as const,
-    approvalUrl: `${env.CLIENT_URL}/agent?conversationId=${encodeURIComponent(
-      proposal.conversationId,
-    )}&proposalId=${encodeURIComponent(proposal.id)}`,
+    approvalUrl: getProposalApprovalUrl(proposal.conversationId, proposal.id),
+    ...approvalPolicy,
     blockers: proposal.review?.blockers ?? [],
     warnings: proposal.review?.warnings ?? proposal.warnings,
     proposal,

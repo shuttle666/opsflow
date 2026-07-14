@@ -12,10 +12,12 @@ import { hashPassword } from "../src/modules/auth/auth-password";
 import {
   addUserMessage,
   appendAssistantMessage,
+  appendExternalProposalExecutionMessage,
   confirmDispatchProposal,
   createConversation,
   executeProposal,
   getConversation,
+  getProposalForExecution,
   listConversations,
   storeDispatchProposal,
   storeTypedProposal,
@@ -1482,6 +1484,35 @@ describeIfDb("agent persistence integration", () => {
         }),
       }),
     );
+    await expect(
+      getProposalForExecution(owner.auth, proposal.id),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        proposalId: proposal.id,
+        conversationId: conversation.id,
+        status: AgentProposalStatus.CONFIRMED,
+        confirmationResult: first.result,
+      }),
+    );
+
+    const executionReceipt = {
+      conversationId: conversation.id,
+      toolName: "execute_proposal",
+      toolInput: { proposalId: proposal.id, confirmationText: "OK" },
+      toolResult: first,
+      proposalId: proposal.id,
+    };
+    await appendExternalProposalExecutionMessage(owner.auth, executionReceipt);
+    await appendExternalProposalExecutionMessage(owner.auth, executionReceipt);
+
+    await expect(
+      prisma.agentToolCall.count({
+        where: {
+          conversationId: conversation.id,
+          toolName: "execute_proposal",
+        },
+      }),
+    ).resolves.toBe(1);
     await expect(
       prisma.job.count({
         where: {

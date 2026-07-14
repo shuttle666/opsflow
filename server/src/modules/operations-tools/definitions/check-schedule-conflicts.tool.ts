@@ -53,5 +53,6 @@ export const checkScheduleConflictsTool: OpsFlowTool<
     idempotent: true,
     openWorld: false,
   },
+  conversationContext: "none",
   execute: (auth, input) => jobService.checkScheduleConflicts(auth, input),
 };

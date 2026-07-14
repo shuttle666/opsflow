@@ -39,6 +39,7 @@ export const proposalTools: AnyOpsFlowTool[] = [
     inputSchema: createCustomerProposalInputSchema,
     outputSchema: proposalToolOutputSchema,
     annotations: proposalAnnotations,
+    conversationContext: "required",
     execute: proposeCreateCustomer,
   },
   {
@@ -51,18 +52,20 @@ export const proposalTools: AnyOpsFlowTool[] = [
     inputSchema: updateCustomerProposalInputSchema,
     outputSchema: proposalToolOutputSchema,
     annotations: proposalAnnotations,
+    conversationContext: "required",
     execute: proposeUpdateCustomer,
   },
   {
     name: "propose_create_job",
     title: "Propose creating a job",
     description:
-      "Create one pending proposal for a new job, optionally with a new customer, assignee, and schedule.",
+      "Create one pending proposal for a new job, optionally with a new customer, assignee, and schedule. Display the returned proposal and wait for a later user confirmation before using execute_proposal; the Web approval URL remains available as a fallback.",
     audiences: ["web-agent", "external-mcp"],
     allowedRoles: managerRoles,
     inputSchema: createJobProposalInputSchema,
     outputSchema: proposalToolOutputSchema,
     annotations: proposalAnnotations,
+    conversationContext: "required",
     execute: proposeCreateJob,
   },
   {
@@ -75,18 +78,20 @@ export const proposalTools: AnyOpsFlowTool[] = [
     inputSchema: updateJobProposalInputSchema,
     outputSchema: proposalToolOutputSchema,
     annotations: proposalAnnotations,
+    conversationContext: "required",
     execute: proposeUpdateJob,
   },
   {
     name: "propose_dispatch_job",
     title: "Propose dispatching a job",
     description:
-      "Create one pending proposal to assign and/or schedule an existing job. Resolve job and staff IDs first.",
+      "Create one pending proposal to assign and/or schedule an existing job. Resolve job and staff IDs first, display the returned proposal, and wait for a later user confirmation before using execute_proposal; the Web approval URL remains available as a fallback.",
     audiences: ["web-agent", "external-mcp"],
     allowedRoles: managerRoles,
     inputSchema: dispatchJobProposalInputSchema,
     outputSchema: proposalToolOutputSchema,
     annotations: proposalAnnotations,
+    conversationContext: "required",
     execute: proposeDispatchJob,
   },
   {
@@ -99,6 +104,7 @@ export const proposalTools: AnyOpsFlowTool[] = [
     inputSchema: changeJobStatusProposalInputSchema,
     outputSchema: proposalToolOutputSchema,
     annotations: proposalAnnotations,
+    conversationContext: "required",
     execute: proposeChangeJobStatus,
   },
   {
@@ -111,6 +117,7 @@ export const proposalTools: AnyOpsFlowTool[] = [
     inputSchema: cancelJobProposalInputSchema,
     outputSchema: proposalToolOutputSchema,
     annotations: proposalAnnotations,
+    conversationContext: "required",
     execute: proposeCancelJob,
   },
 ];

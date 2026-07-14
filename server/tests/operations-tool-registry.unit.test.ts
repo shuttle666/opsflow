@@ -32,6 +32,7 @@ function buildTool() {
       idempotent: true,
       openWorld: false,
     },
+    conversationContext: "none" as const,
     execute: vi.fn(async (_auth, input: { value: string }) => input),
   };
 }

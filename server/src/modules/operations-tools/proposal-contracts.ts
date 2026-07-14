@@ -109,7 +109,7 @@ export const cancelJobProposalInputSchema = z
   })
   .strict();
 
-const proposalSchema = z
+export const proposalSchema = z
   .object({
     id: z.string(),
     conversationId: z.string(),
@@ -125,6 +125,9 @@ export const proposalToolOutputSchema = z.object({
   reviewStatus: z.enum(["READY", "NEEDS_RESOLUTION", "HAS_WARNINGS"]),
   approvalRequired: z.literal(true),
   approvalUrl: z.string().url(),
+  approvalMode: z.enum(["CONVERSATIONAL_OR_WEB", "WEB_ONLY"]),
+  executionTool: z.literal("execute_proposal").nullable(),
+  confirmationPrompt: z.string(),
   blockers: z.array(z.string()),
   warnings: z.array(z.string()),
   proposal: proposalSchema,

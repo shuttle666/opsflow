@@ -183,6 +183,19 @@ function proposalId(result: unknown): string | undefined {
   return undefined;
 }
 
+function conversationId(result: unknown): string | undefined {
+  if (
+    typeof result === "object" &&
+    result !== null &&
+    "conversationId" in result &&
+    typeof result.conversationId === "string"
+  ) {
+    return result.conversationId;
+  }
+
+  return undefined;
+}
+
 function buildInvocationAuditEvent(input: {
   auth: AuthContext;
   context: ToolExecutionContext;
@@ -200,14 +213,15 @@ function buildInvocationAuditEvent(input: {
     source: input.context.source,
     invocationId: input.context.invocationId,
     requestId: input.context.requestId,
-    conversationId: input.context.conversationId,
+    conversationId:
+      input.context.conversationId ?? conversationId(input.parsedOutput),
     toolName: input.toolName,
     status: isToolError(input.result)
       ? ToolInvocationStatus.FAILED
       : ToolInvocationStatus.SUCCEEDED,
     durationMs: Math.max(0, Date.now() - input.startedAt),
     errorCode,
-    proposalId: proposalId(input.result),
+    proposalId: proposalId(input.result) ?? proposalId(input.parsedInput),
     inputKeys: objectKeys(input.parsedInput),
     outputKeys: objectKeys(input.parsedOutput),
   };

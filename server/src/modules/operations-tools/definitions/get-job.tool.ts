@@ -47,6 +47,7 @@ export const getJobTool: OpsFlowTool<
     idempotent: true,
     openWorld: false,
   },
+  conversationContext: "none",
   execute: async (auth, input) => ({
     job: await jobService.getJobDetail(auth, input.jobId),
   }),

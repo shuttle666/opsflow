@@ -6,6 +6,8 @@ const serviceMocks = vi.hoisted(() => ({
   getCustomerDetail: vi.fn(),
   getAssignableStaffMembership: vi.fn(),
   storeTypedProposal: vi.fn(),
+  getProposalForExecution: vi.fn(),
+  executeProposal: vi.fn(),
 }));
 
 vi.mock("../src/modules/job/job.service", () => ({
@@ -26,6 +28,22 @@ vi.mock("../src/modules/audit/audit.service", () => ({
 }));
 vi.mock("../src/modules/agent/agent.service", () => ({
   storeTypedProposal: serviceMocks.storeTypedProposal,
+  getProposalForExecution: serviceMocks.getProposalForExecution,
+  executeProposal: serviceMocks.executeProposal,
+  getProposalApprovalUrl: (conversationId: string, proposalId: string) =>
+    `http://localhost:3000/agent?conversationId=${conversationId}&proposalId=${proposalId}`,
+  getProposalApprovalPolicy: (proposal: { type?: string }) =>
+    ["CREATE_JOB", "ASSIGN_JOB", "SCHEDULE_JOB"].includes(proposal.type ?? "")
+      ? {
+          approvalMode: "CONVERSATIONAL_OR_WEB",
+          executionTool: "execute_proposal",
+          confirmationPrompt: "Confirm in a new message.",
+        }
+      : {
+          approvalMode: "WEB_ONLY",
+          executionTool: null,
+          confirmationPrompt: "Confirm in the Web app.",
+        },
 }));
 
 import {
@@ -33,6 +51,7 @@ import {
   proposeUpdateCustomer,
 } from "../src/modules/operations-tools/proposal-builder";
 import { proposalTools } from "../src/modules/operations-tools/definitions/proposal-tools";
+import { proposalExecutionTools } from "../src/modules/operations-tools/definitions/proposal-execution-tools";
 import { OpsFlowToolRegistry } from "../src/modules/operations-tools/tool-registry";
 
 const auth: AuthContext = {
@@ -145,6 +164,8 @@ describe("canonical proposal tools", () => {
         saved: true,
         proposalId: proposal.id,
         approvalRequired: true,
+        approvalMode: "CONVERSATIONAL_OR_WEB",
+        executionTool: "execute_proposal",
         reviewStatus: "READY",
         proposal,
       }),
@@ -192,15 +213,76 @@ describe("canonical proposal tools", () => {
     );
   });
 
-  it("exposes only create-job and dispatch proposals to MCP", () => {
+  it("exposes proposal creation, retrieval, and execution to MCP", () => {
     const registry = new OpsFlowToolRegistry();
-    proposalTools.forEach((tool) => registry.register(tool));
+    [...proposalTools, ...proposalExecutionTools].forEach((tool) =>
+      registry.register(tool),
+    );
 
     expect(
       registry
         .list({ auth, audience: "external-mcp" })
         .map((tool) => tool.name),
-    ).toEqual(["propose_create_job", "propose_dispatch_job"]);
+    ).toEqual([
+      "propose_create_job",
+      "propose_dispatch_job",
+      "get_proposal",
+      "execute_proposal",
+    ]);
+  });
+
+  it("reads and executes proposals without requiring a new conversation context", async () => {
+    const proposal = buildStoredProposal("CREATE_JOB");
+    serviceMocks.getProposalForExecution.mockResolvedValueOnce({
+      proposalId: proposal.id,
+      conversationId: proposal.conversationId,
+      status: "PENDING",
+      proposal,
+    });
+    serviceMocks.executeProposal.mockResolvedValueOnce({
+      executed: true,
+      proposalId: proposal.id,
+      conversationId: proposal.conversationId,
+      status: "CONFIRMED",
+      result: {
+        proposalId: proposal.id,
+        proposalType: "CREATE_JOB",
+        entityType: "job",
+        createdJobId: jobId,
+        createdJobTitle: "Dishwasher leak",
+      },
+    });
+    const registry = new OpsFlowToolRegistry();
+    proposalExecutionTools.forEach((tool) => registry.register(tool));
+
+    const fetched = await registry.execute({
+      auth,
+      audience: "external-mcp",
+      toolName: "get_proposal",
+      arguments: { proposalId: proposal.id },
+      context: { source: "MCP", invocationId: "invocation-get" },
+    });
+    const executed = await registry.execute({
+      auth,
+      audience: "external-mcp",
+      toolName: "execute_proposal",
+      arguments: { proposalId: proposal.id, confirmationText: "  OK  " },
+      context: { source: "MCP", invocationId: "invocation-execute" },
+    });
+
+    expect(fetched).toEqual(
+      expect.objectContaining({
+        proposalId: proposal.id,
+        conversationId: proposal.conversationId,
+        approvalMode: "CONVERSATIONAL_OR_WEB",
+      }),
+    );
+    expect(serviceMocks.executeProposal).toHaveBeenCalledWith(auth, proposal.id, {
+      source: "MCP",
+      confirmationText: "  OK  ",
+      appendReceiptMessage: false,
+    });
+    expect(executed).toEqual(expect.objectContaining({ executed: true }));
   });
 
   it("rejects proposal creation without a conversation context", async () => {

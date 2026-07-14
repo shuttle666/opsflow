@@ -8,6 +8,7 @@ import {
   MembershipStatus,
   type Prisma,
 } from "@prisma/client";
+import { env } from "../../config/env";
 import { prisma } from "../../lib/prisma";
 import type { AuthContext } from "../../types/auth";
 import { ApiError } from "../../utils/api-error";
@@ -239,6 +240,23 @@ export type ConfirmedProposalResult = {
   transitionedTo?: JobStatus;
 };
 
+export type ProposalExecutionSource = "WEB_BUTTON" | "WEB_AGENT" | "MCP";
+
+export type ExecuteProposalOptions = {
+  source: ProposalExecutionSource;
+  confirmationText?: string;
+  appendReceiptMessage: boolean;
+  expectedConversationId?: string;
+};
+
+export type ExecutedProposal = {
+  executed: true;
+  proposalId: string;
+  conversationId: string;
+  status: "CONFIRMED";
+  result: ConfirmedProposalResult;
+};
+
 type ProposalJobTargetInput = Pick<
   DispatchProposalPayload,
   "intent" | "customer" | "jobDraft" | "scheduleDraft" | "assigneeDraft"
@@ -337,6 +355,23 @@ function proposalFromRecord(record: ProposalRecord): DispatchProposal {
     ...payload,
     intent: payload.intent || record.intent,
   };
+}
+
+function confirmedProposalResultFromJson(
+  value: Prisma.JsonValue | null,
+): ConfirmedProposalResult | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (
+    typeof value.proposalId !== "string" ||
+    (value.entityType !== "customer" && value.entityType !== "job")
+  ) {
+    return null;
+  }
+
+  return value as ConfirmedProposalResult;
 }
 
 function mapConversationMessage(
@@ -2146,6 +2181,7 @@ async function completeProposalConfirmationInTransaction(
   result: ConfirmedProposalResult,
   conversationId: string,
   assistantMessage: string,
+  appendReceiptMessage: boolean,
 ) {
   await tx.agentProposal.update({
     where: { id: proposalId },
@@ -2158,13 +2194,15 @@ async function completeProposalConfirmationInTransaction(
     },
   });
 
-  await tx.agentMessage.create({
-    data: {
-      conversationId,
-      role: AgentMessageRole.ASSISTANT,
-      content: assistantMessage,
-    },
-  });
+  if (appendReceiptMessage) {
+    await tx.agentMessage.create({
+      data: {
+        conversationId,
+        role: AgentMessageRole.ASSISTANT,
+        content: assistantMessage,
+      },
+    });
+  }
 
   await tx.agentConversation.update({
     where: { id: conversationId },
@@ -2211,6 +2249,7 @@ async function confirmCustomerUpdateInTransaction(
   auth: AuthContext,
   proposal: DispatchProposal,
   conversationId: string,
+  appendReceiptMessage: boolean,
 ) {
   const customerId = customerIdFromProposalTarget(proposal);
 
@@ -2278,6 +2317,7 @@ async function confirmCustomerUpdateInTransaction(
     result,
     conversationId,
     `Plan confirmed. Updated customer **${updated.name}**.`,
+    appendReceiptMessage,
   );
 
   return {
@@ -2291,6 +2331,7 @@ async function confirmTypedCreateCustomerInTransaction(
   auth: AuthContext,
   proposal: DispatchProposal,
   conversationId: string,
+  appendReceiptMessage: boolean,
 ) {
   const customer = await resolveCustomerForConfirmation(tx, auth, proposal);
   const result: ConfirmedProposalResult = {
@@ -2311,6 +2352,7 @@ async function confirmTypedCreateCustomerInTransaction(
     customer.usedExistingCustomer
       ? `Plan confirmed. Reused existing customer **${customer.customerName ?? "Existing customer"}**.`
       : `Plan confirmed. Created customer **${customer.customerName ?? "New customer"}**.`,
+    appendReceiptMessage,
   );
 
   return {
@@ -2324,6 +2366,7 @@ async function confirmTypedCreateJobInTransaction(
   auth: AuthContext,
   proposal: DispatchProposal,
   conversationId: string,
+  appendReceiptMessage: boolean,
 ) {
   const customer = await resolveCustomerForConfirmation(tx, auth, proposal);
   const membershipId = resolveMembershipIdFromProposal(proposal);
@@ -2379,6 +2422,7 @@ async function confirmTypedCreateJobInTransaction(
     result,
     conversationId,
     `Plan confirmed. Created job **${createdJob.title}**${assignedToName ? ` and assigned it to **${assignedToName}**` : ""}${transitionedTo ? `, then moved it to **${transitionedTo}**.` : "."}`,
+    appendReceiptMessage,
   );
 
   return {
@@ -2392,6 +2436,7 @@ async function confirmTypedExistingJobInTransaction(
   auth: AuthContext,
   proposal: DispatchProposal,
   conversationId: string,
+  appendReceiptMessage: boolean,
 ) {
   const existingJobId = existingJobIdFromProposal(proposal);
 
@@ -2488,6 +2533,7 @@ async function confirmTypedExistingJobInTransaction(
     result,
     conversationId,
     `Plan confirmed. Updated job **${effectiveTitle}**${assignedToName ? ` and assigned it to **${assignedToName}**` : ""}${transitionedTo ? `, then moved it to **${transitionedTo}**.` : "."}`,
+    appendReceiptMessage,
   );
 
   return {
@@ -2501,30 +2547,120 @@ async function confirmTypedProposalInTransaction(
   auth: AuthContext,
   proposal: DispatchProposal,
   conversationId: string,
+  appendReceiptMessage: boolean,
 ) {
   switch (proposal.type) {
     case "CREATE_CUSTOMER":
-      return confirmTypedCreateCustomerInTransaction(tx, auth, proposal, conversationId);
+      return confirmTypedCreateCustomerInTransaction(
+        tx,
+        auth,
+        proposal,
+        conversationId,
+        appendReceiptMessage,
+      );
     case "UPDATE_CUSTOMER":
-      return confirmCustomerUpdateInTransaction(tx, auth, proposal, conversationId);
+      return confirmCustomerUpdateInTransaction(
+        tx,
+        auth,
+        proposal,
+        conversationId,
+        appendReceiptMessage,
+      );
     case "CREATE_JOB":
-      return confirmTypedCreateJobInTransaction(tx, auth, proposal, conversationId);
+      return confirmTypedCreateJobInTransaction(
+        tx,
+        auth,
+        proposal,
+        conversationId,
+        appendReceiptMessage,
+      );
     case "UPDATE_JOB":
     case "ASSIGN_JOB":
     case "SCHEDULE_JOB":
     case "CHANGE_JOB_STATUS":
     case "CANCEL_JOB":
-      return confirmTypedExistingJobInTransaction(tx, auth, proposal, conversationId);
+      return confirmTypedExistingJobInTransaction(
+        tx,
+        auth,
+        proposal,
+        conversationId,
+        appendReceiptMessage,
+      );
     default:
       throw new ApiError(400, "Unsupported proposal type.");
   }
 }
 
-export async function confirmDispatchProposal(
+const conversationalExecutionTypes = new Set<AgentProposalType>([
+  "CREATE_JOB",
+  "ASSIGN_JOB",
+  "SCHEDULE_JOB",
+]);
+
+function proposalApprovalUrl(conversationId: string, proposalId: string) {
+  return `${env.CLIENT_URL}/agent?conversationId=${encodeURIComponent(
+    conversationId,
+  )}&proposalId=${encodeURIComponent(proposalId)}`;
+}
+
+function requireConfirmationText(options: ExecuteProposalOptions) {
+  const confirmationText = options.confirmationText?.trim();
+  if (!confirmationText) {
+    throw new ApiError(400, "Explicit confirmation text is required.", {
+      code: "PROPOSAL_CONFIRMATION_REQUIRED",
+    });
+  }
+
+  return confirmationText;
+}
+
+async function assertWebAgentConfirmation(
+  proposal: ProposalRecord,
+  confirmationText: string,
+) {
+  const latestUserMessage = await prisma.agentMessage.findFirst({
+    where: {
+      conversationId: proposal.conversationId,
+      role: AgentMessageRole.USER,
+      createdAt: { gt: proposal.createdAt },
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  });
+
+  if (!latestUserMessage || latestUserMessage.content.trim() !== confirmationText) {
+    throw new ApiError(
+      409,
+      "A newer user message matching confirmationText is required before this proposal can be executed.",
+      { code: "PROPOSAL_CONFIRMATION_REQUIRED" },
+    );
+  }
+}
+
+function assertConversationalExecutionAllowed(
+  proposal: DispatchProposal,
+  options: ExecuteProposalOptions,
+) {
+  if (options.source === "WEB_BUTTON") {
+    return;
+  }
+
+  if (!proposal.type || !conversationalExecutionTypes.has(proposal.type)) {
+    throw new ApiError(
+      409,
+      "This proposal requires approval in the OpsFlow Web app.",
+      {
+        code: "PROPOSAL_WEB_APPROVAL_REQUIRED",
+        approvalUrl: proposalApprovalUrl(proposal.conversationId, proposal.id),
+      },
+    );
+  }
+}
+
+export async function executeProposal(
   auth: AuthContext,
-  conversationId: string,
   proposalId: string,
-): Promise<ConfirmedProposalResult> {
+  options: ExecuteProposalOptions,
+): Promise<ExecutedProposal> {
   if (auth.role === MembershipRole.STAFF) {
     throw new ApiError(403, "Only owners and managers can confirm dispatch plans.");
   }
@@ -2532,7 +2668,9 @@ export async function confirmDispatchProposal(
   const proposalRecord = await prisma.agentProposal.findFirst({
     where: {
       id: proposalId,
-      conversationId,
+      ...(options.expectedConversationId
+        ? { conversationId: options.expectedConversationId }
+        : {}),
       tenantId: auth.tenantId,
       userId: auth.userId,
     },
@@ -2542,11 +2680,52 @@ export async function confirmDispatchProposal(
     throw new ApiError(404, "Proposal not found.");
   }
 
-  if (proposalRecord.status !== AgentProposalStatus.PENDING) {
-    throw new ApiError(409, "Dispatch proposal has already been resolved.");
+  const proposal = proposalFromRecord(proposalRecord);
+  const conversationId = proposalRecord.conversationId;
+  assertConversationalExecutionAllowed(proposal, options);
+
+  if (proposalRecord.status === AgentProposalStatus.CONFIRMED) {
+    const result = confirmedProposalResultFromJson(
+      proposalRecord.confirmationResult,
+    );
+    if (!result) {
+      throw new ApiError(500, "Confirmed proposal result is unavailable.", {
+        code: "PROPOSAL_RESULT_UNAVAILABLE",
+      });
+    }
+
+    return {
+      executed: true,
+      proposalId: proposal.id,
+      conversationId,
+      status: "CONFIRMED",
+      result,
+    };
   }
 
-  const proposal = proposalFromRecord(proposalRecord);
+  if (proposalRecord.status === AgentProposalStatus.CONFIRMING) {
+    throw new ApiError(409, "Dispatch proposal is already being confirmed.", {
+      code: "PROPOSAL_CONFIRMATION_IN_PROGRESS",
+    });
+  }
+
+  if (proposalRecord.status === AgentProposalStatus.FAILED) {
+    throw new ApiError(
+      409,
+      proposalRecord.failureMessage ?? "Dispatch proposal execution previously failed.",
+      { code: "PROPOSAL_EXECUTION_FAILED" },
+    );
+  }
+
+  if (options.source === "WEB_AGENT") {
+    await assertWebAgentConfirmation(
+      proposalRecord,
+      requireConfirmationText(options),
+    );
+  } else if (options.source === "MCP") {
+    requireConfirmationText(options);
+  }
+
   if (proposal.review?.status === "NEEDS_RESOLUTION") {
     throw new ApiError(
       409,
@@ -2576,11 +2755,23 @@ export async function confirmDispatchProposal(
     if (proposal.type) {
       const { result, notifications } = await prisma.$transaction(async (tx) => {
         await assertProposalJobTargetIsSafe(tx, auth, proposal);
-        return confirmTypedProposalInTransaction(tx, auth, proposal, conversationId);
+        return confirmTypedProposalInTransaction(
+          tx,
+          auth,
+          proposal,
+          conversationId,
+          options.appendReceiptMessage,
+        );
       });
 
       await publishConfirmationNotifications(notifications);
-      return result;
+      return {
+        executed: true,
+        proposalId: proposal.id,
+        conversationId,
+        status: "CONFIRMED",
+        result,
+      };
     }
 
     const createCustomerOnly = isCreateCustomerOnlyIntent(proposal.intent);
@@ -2663,6 +2854,7 @@ export async function confirmDispatchProposal(
           result,
           conversationId,
           `Plan confirmed. Updated job **${job.title}**${assignedToName ? ` and assigned it to **${assignedToName}**` : ""}${transitionedTo ? `, then moved it to **${transitionedTo}**.` : "."}`,
+          options.appendReceiptMessage,
         );
 
         return {
@@ -2691,6 +2883,7 @@ export async function confirmDispatchProposal(
           customer.usedExistingCustomer
             ? `Plan confirmed. Reused existing customer **${customer.customerName ?? "Existing customer"}**.`
             : `Plan confirmed. Created customer **${customer.customerName ?? "New customer"}**.`,
+          options.appendReceiptMessage,
         );
 
         return {
@@ -2755,6 +2948,7 @@ export async function confirmDispatchProposal(
         result,
         conversationId,
         `Plan confirmed. Created job **${createdJob.title}**${assignedToName ? ` and assigned it to **${assignedToName}**` : ""}${transitionedTo ? `, then moved it to **${transitionedTo}**.` : "."}`,
+        options.appendReceiptMessage,
       );
 
       return {
@@ -2764,10 +2958,30 @@ export async function confirmDispatchProposal(
     });
 
     await publishConfirmationNotifications(notifications);
-    return result;
+    return {
+      executed: true,
+      proposalId: proposal.id,
+      conversationId,
+      status: "CONFIRMED",
+      result,
+    };
   } catch (error) {
     const message = confirmationFailureMessage(error);
     await markProposalFailed(proposal.id, message);
     rethrowConfirmationFailure(error, message);
   }
+}
+
+export async function confirmDispatchProposal(
+  auth: AuthContext,
+  conversationId: string,
+  proposalId: string,
+): Promise<ConfirmedProposalResult> {
+  const executed = await executeProposal(auth, proposalId, {
+    source: "WEB_BUTTON",
+    appendReceiptMessage: true,
+    expectedConversationId: conversationId,
+  });
+
+  return executed.result;
 }

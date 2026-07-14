@@ -14,6 +14,7 @@ import {
   appendAssistantMessage,
   confirmDispatchProposal,
   createConversation,
+  executeProposal,
   getConversation,
   listConversations,
   storeDispatchProposal,
@@ -1403,5 +1404,141 @@ describeIfDb("agent persistence integration", () => {
       where: { id: proposal.id },
     });
     expect(stillPending.status).toBe(AgentProposalStatus.PENDING);
+  });
+
+  it("requires a post-proposal user message for Web Agent execution and returns the confirmed result idempotently", async () => {
+    const owner = await seedTenantUser({
+      email: "owner-conversational-execution@agent-persistence.test",
+      displayName: "Conversational Execution Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Conversational Execution Tenant",
+      tenantSlug: "conversational-execution-tenant",
+    });
+    const customer = await prisma.customer.create({
+      data: {
+        tenantId: owner.tenant.id,
+        createdById: owner.user.id,
+        name: "Conversational Customer",
+      },
+    });
+    const conversation = await createConversation(owner.auth);
+    const proposal = await storeTypedProposal(owner.auth, conversation.id, {
+      type: "CREATE_JOB",
+      target: { customerId: customer.id },
+      customer: {
+        status: "matched",
+        matchedCustomerId: customer.id,
+        matches: [{ id: customer.id, name: customer.name }],
+      },
+      jobDraft: {
+        title: "Conversation-confirmed job",
+        serviceAddress: "18 Collins Street, Melbourne VIC 3000",
+      },
+      warnings: [],
+      confidence: 1,
+    });
+
+    await expect(
+      executeProposal(owner.auth, proposal.id, {
+        source: "WEB_AGENT",
+        confirmationText: "OK",
+        appendReceiptMessage: false,
+      }),
+    ).rejects.toMatchObject({
+      details: { code: "PROPOSAL_CONFIRMATION_REQUIRED" },
+    });
+
+    await addUserMessage(owner.auth, conversation.id, "OK");
+
+    await expect(
+      executeProposal(owner.auth, proposal.id, {
+        source: "WEB_AGENT",
+        confirmationText: "Confirm",
+        appendReceiptMessage: false,
+      }),
+    ).rejects.toMatchObject({
+      details: { code: "PROPOSAL_CONFIRMATION_REQUIRED" },
+    });
+
+    const first = await executeProposal(owner.auth, proposal.id, {
+      source: "WEB_AGENT",
+      confirmationText: "OK",
+      appendReceiptMessage: false,
+    });
+    const repeated = await executeProposal(owner.auth, proposal.id, {
+      source: "WEB_AGENT",
+      confirmationText: "OK",
+      appendReceiptMessage: false,
+    });
+
+    expect(repeated).toEqual(first);
+    expect(first).toEqual(
+      expect.objectContaining({
+        executed: true,
+        conversationId: conversation.id,
+        status: "CONFIRMED",
+        result: expect.objectContaining({
+          createdJobTitle: "Conversation-confirmed job",
+        }),
+      }),
+    );
+    await expect(
+      prisma.job.count({
+        where: {
+          tenantId: owner.tenant.id,
+          title: "Conversation-confirmed job",
+        },
+      }),
+    ).resolves.toBe(1);
+  });
+
+  it("keeps unsupported conversational proposal types behind Web approval", async () => {
+    const owner = await seedTenantUser({
+      email: "owner-web-only-proposal@agent-persistence.test",
+      displayName: "Web Only Proposal Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Web Only Proposal Tenant",
+      tenantSlug: "web-only-proposal-tenant",
+    });
+    const customer = await prisma.customer.create({
+      data: {
+        tenantId: owner.tenant.id,
+        createdById: owner.user.id,
+        name: "Web Only Customer",
+      },
+    });
+    const conversation = await createConversation(owner.auth);
+    const proposal = await storeTypedProposal(owner.auth, conversation.id, {
+      type: "UPDATE_CUSTOMER",
+      target: { customerId: customer.id },
+      customer: {
+        status: "matched",
+        matchedCustomerId: customer.id,
+        matches: [{ id: customer.id, name: customer.name }],
+      },
+      changes: [{ field: "name", from: customer.name, to: "Updated in Web" }],
+      warnings: [],
+      confidence: 1,
+    });
+    await addUserMessage(owner.auth, conversation.id, "可以了");
+
+    await expect(
+      executeProposal(owner.auth, proposal.id, {
+        source: "WEB_AGENT",
+        confirmationText: "可以了",
+        appendReceiptMessage: false,
+      }),
+    ).rejects.toMatchObject({
+      details: expect.objectContaining({
+        code: "PROPOSAL_WEB_APPROVAL_REQUIRED",
+        approvalUrl: expect.stringContaining(proposal.id),
+      }),
+    });
+
+    await expect(
+      prisma.agentProposal.findUniqueOrThrow({ where: { id: proposal.id } }),
+    ).resolves.toEqual(
+      expect.objectContaining({ status: AgentProposalStatus.PENDING }),
+    );
   });
 });

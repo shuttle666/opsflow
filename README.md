@@ -11,7 +11,7 @@ OpsFlow is designed to be evaluated quickly as a portfolio project while still h
 - **Full-stack product thinking:** The app covers the full loop from authentication and tenant onboarding to scheduling, field execution, review, notifications, and operational reporting.
 - **Real SaaS boundaries:** API requests derive tenant context from authenticated membership, RBAC is enforced server-side, and job workflow transitions are constrained by a domain state machine.
 - **Production-style engineering:** The project includes CI, database-backed integration tests, seeded demo data, Docker-based local development, AWS deployment assets, request IDs, structured logs, and health checks.
-- **AI inside a controlled workflow:** A provider-neutral Tool Registry powers both the Web Agent and a local MCP server. Natural-language requests become structured proposals, while business writes still require explicit confirmation.
+- **AI inside a controlled workflow:** A provider-neutral Tool Registry powers both the Web Agent and a local MCP server. Natural-language requests become structured proposals; eligible job proposals can be confirmed in the current conversation, while Web approval remains available as a fallback.
 
 ## Quick Local Start
 
@@ -63,8 +63,8 @@ For the quickest walkthrough, use the demo accounts in this order:
 - Team invitations, membership management, and tenant onboarding flows
 - Activity feed and audit logging for operational traceability
 - In-app notifications with unread state and SSE updates
-- AI-assisted dispatch planner with human confirmation before writes
-- Local stdio MCP server backed by the same tenant-aware tools as the Web Agent
+- AI-assisted dispatch planner with Proposal-first writes and explicit conversational or Web confirmation
+- Local stdio MCP server with read, Proposal, status, and idempotent execution tools backed by the same tenant-aware services as the Web Agent
 
 ## Engineering Highlights
 
@@ -86,10 +86,17 @@ For the quickest walkthrough, use the demo accounts in this order:
 flowchart LR
   Browser["Next.js Client"] --> Api["Express API"]
   Api --> WebAgent["Web Agent loop"]
-  McpHost["External MCP host"] --> Stdio["Local stdio MCP adapter"]
+  McpUser["External AI user"] --> McpHost["MCP host"]
+  McpHost --> Stdio["Local stdio MCP adapter"]
   WebAgent --> Registry["OpsFlow Tool Registry"]
   Stdio --> Registry
+  Registry --> Proposals["Pending Proposals"]
+  Proposals --> Executor["Idempotent execution service"]
+  WebAgent --> Executor
+  Stdio --> Executor
+  Stdio -. "Web fallback URL" .-> Browser
   Registry --> Services["Tenant-aware domain services"]
+  Executor --> Services
   Services --> Prisma
   Api --> Prisma["Prisma ORM"]
   Prisma --> Postgres["PostgreSQL / Amazon RDS"]
@@ -122,8 +129,12 @@ It can help turn natural-language requests into structured dispatch proposals by
 - drafting a schedule window
 - suggesting a likely assignee
 - generating a structured proposal before any write happens
+- showing the pending change and waiting for a new, explicit confirmation message
+- executing eligible job creation, assignment, and scheduling proposals idempotently
 
-The MCP surface intentionally exposes a narrower set of read and proposal tools. Proposal calls return an OpsFlow approval URL; the final action still requires confirmation in the Web app, so both entry points stay inside the same controlled operational flow.
+The MCP surface intentionally exposes a narrower set of tools. `propose_create_job` and `propose_dispatch_job` create pending Proposals; `get_proposal` reads their current state; and `execute_proposal` can execute only `CREATE_JOB`, `ASSIGN_JOB`, or `SCHEDULE_JOB` after the host has shown the Proposal and received a later confirmation message. The returned `approvalUrl` and the Web `Confirm plan` button remain available as a fallback. Customer changes, job detail/status changes, and cancellations stay Web-only.
+
+For the Web Agent, OpsFlow verifies that the confirmation is a newer persisted User Message and that `confirmationText` matches it exactly. An external MCP server cannot independently prove that text came from a human, so it relies on the MCP host's conversation and native tool-approval behavior; this trust boundary is documented explicitly.
 
 See [Local MCP Integration](docs/engineering/mcp.md) for the architecture, exposed tools, access-token setup, client configuration, and current local-only scope.
 

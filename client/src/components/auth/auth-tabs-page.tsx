@@ -80,6 +80,10 @@ function AuthField({
 function AuthTabsPageContent({ initialMode = "login" }: AuthTabsPageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const requestedDemoRole = searchParams.get("demo")?.toLowerCase();
+  const requestedDemoAccount = seededAccounts.find(
+    (account) => account.label.toLowerCase() === requestedDemoRole,
+  );
   const login = useAuthStore((state) => state.login);
   const registerUser = useAuthStore((state) => state.register);
   const status = useAuthStore((state) => state.status);
@@ -87,7 +91,9 @@ function AuthTabsPageContent({ initialMode = "login" }: AuthTabsPageProps) {
     searchParams.get("mode") === "register" ? "register" : initialMode,
   );
   const [submitError, setSubmitError] = useState<ApiErrorView | null>(null);
-  const [selectedDemoEmail, setSelectedDemoEmail] = useState<string | null>(null);
+  const [selectedDemoEmail, setSelectedDemoEmail] = useState<string | null>(
+    requestedDemoAccount?.email ?? null,
+  );
 
   const rawNext = searchParams.get("next");
   const nextPath = rawNext && rawNext.startsWith("/") ? rawNext : "/dashboard";
@@ -106,8 +112,8 @@ function AuthTabsPageContent({ initialMode = "login" }: AuthTabsPageProps) {
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: "",
-      password: "",
+      email: requestedDemoAccount?.email ?? "",
+      password: requestedDemoAccount?.password ?? "",
     },
   });
 

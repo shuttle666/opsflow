@@ -38,7 +38,7 @@ import {
 type PublicShellProps = {
   children: React.ReactNode;
   className?: string;
-  variant?: "default" | "immersive";
+  variant?: "default" | "immersive" | "landing";
 };
 
 type WorkspaceShellProps = {
@@ -368,13 +368,16 @@ export function PublicShell({
 }: PublicShellProps) {
   const status = useAuthStore((state) => state.status);
   const isImmersive = variant === "immersive";
+  const isLanding = variant === "landing";
+  const isOverlayHeader = isImmersive || isLanding;
   const isFloatingHeaderVisible = useScrollReveal();
+  const isHeaderVisible = isLanding || isFloatingHeaderVisible;
 
   const header = (
     <header
       className={cn(
         "flex items-center justify-between gap-2",
-        isImmersive
+        isOverlayHeader
           ? "mx-auto max-w-[1240px] rounded-[22px] border border-[color-mix(in_srgb,var(--color-text)_10%,transparent)] bg-[color-mix(in_srgb,var(--color-app-panel)_72%,transparent)] px-3 py-2.5 shadow-[0_18px_60px_-42px_rgba(15,23,42,0.58)] backdrop-blur-xl sm:px-5 sm:py-3"
           : "border-b border-[var(--color-app-border)] py-3",
       )}
@@ -384,7 +387,7 @@ export function PublicShell({
           variant="wordmark"
           decorative={false}
           className={cn(
-            isImmersive
+            isOverlayHeader
               ? "h-8 w-[142px] sm:h-9 sm:w-[166px]"
               : "h-9 w-[166px] sm:h-11 sm:w-[208px]",
           )}
@@ -397,7 +400,7 @@ export function PublicShell({
             key={item.href}
             href={item.href}
             className={cn(
-              isImmersive
+              isOverlayHeader
                 ? "inline-flex min-h-11 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--color-text)_14%,transparent)] bg-[color-mix(in_srgb,var(--color-app-panel)_34%,transparent)] px-3.5 text-[13px] font-semibold text-[var(--color-text)] shadow-sm backdrop-blur transition hover:border-[color-mix(in_srgb,var(--color-text)_24%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-app-panel)_58%,transparent)] sm:min-h-9"
                 : cn(subtleButtonClassName, "inline-flex px-4"),
             )}
@@ -417,17 +420,17 @@ export function PublicShell({
     </header>
   );
 
-  if (isImmersive) {
+  if (isOverlayHeader) {
     return (
       <div className={cn("relative min-h-screen bg-[var(--color-app)]", className)}>
         <div
           className={cn(
             "fixed inset-x-0 top-0 z-50 px-4 py-4 transition-[opacity,transform] duration-300 ease-out sm:px-6",
-            isFloatingHeaderVisible
+            isHeaderVisible
               ? "visible translate-y-0 opacity-100"
               : "pointer-events-none invisible -translate-y-4 opacity-0",
           )}
-          aria-hidden={!isFloatingHeaderVisible}
+          aria-hidden={!isHeaderVisible}
         >
           {header}
         </div>

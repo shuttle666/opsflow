@@ -51,4 +51,13 @@ describe("theme toggle", () => {
     expect(useThemeStore.getState().mode).toBe("dark");
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
+
+  it("keeps landing navigation visible over the opening video", () => {
+    render(<PublicShell variant="landing">Content</PublicShell>);
+
+    const overlay = screen.getByRole("banner").parentElement;
+
+    expect(overlay).toHaveAttribute("aria-hidden", "false");
+    expect(overlay).toHaveClass("fixed", "visible");
+  });
 });

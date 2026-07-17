@@ -4,9 +4,9 @@ import { AppProviders } from "@/providers/app-providers";
 import "./globals.css";
 
 const siteUrl = "https://opsflow.aboutwenduo.wang";
-const siteTitle = "OpsFlow | Full-Stack Field Service Operations Platform";
+const siteTitle = "OpsFlow | Human-Approved AI for Field Operations";
 const siteDescription =
-  "A full-stack SaaS demo built with Next.js, Express, Prisma, PostgreSQL, Docker, AWS, and AI-assisted dispatch planning.";
+  "An independent full-stack engineering case study for tenant-aware field operations, where AI prepares reviewable proposals and authorized people approve execution.";
 const socialImage = "/opsflow-logo-full.png";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
@@ -49,7 +49,7 @@ export const metadata: Metadata = {
         url: socialImage,
         width: 1420,
         height: 300,
-        alt: "OpsFlow full-stack field service operations platform",
+        alt: "OpsFlow human-approved AI for field operations",
       },
     ],
   },

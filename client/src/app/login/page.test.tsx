@@ -7,19 +7,21 @@ import { useAuthStore } from "@/store/auth-store";
 
 const pushMock = vi.fn();
 const replaceMock = vi.fn();
+let searchParamsMock = new URLSearchParams();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: pushMock,
     replace: replaceMock,
   }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => searchParamsMock,
 }));
 
 describe("login page", () => {
   beforeEach(() => {
     pushMock.mockReset();
     replaceMock.mockReset();
+    searchParamsMock = new URLSearchParams();
     useAuthStore.setState({
       status: "unauthenticated",
       user: null,
@@ -67,6 +69,18 @@ describe("login page", () => {
     expect(screen.getByRole("heading", { name: "Create your workspace" })).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Full name")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create workspace" })).toBeInTheDocument();
+  });
+
+  it("prefills the Owner demo without signing in automatically", () => {
+    searchParamsMock = new URLSearchParams("demo=owner");
+    const login = vi.fn();
+    useAuthStore.setState({ login });
+
+    render(<LoginPage />);
+
+    expect(screen.getByLabelText("Email")).toHaveValue("owner@acme.example");
+    expect(screen.getByLabelText("Password")).toHaveValue("owner-password-123");
+    expect(login).not.toHaveBeenCalled();
   });
 
   it("submits credentials entered by the user and redirects to dashboard", async () => {

@@ -1,5 +1,13 @@
 # CODING AGENTS: READ THIS FIRST
 
+> **Portfolio provenance:** This directory preserves an AI-assisted visual design
+> handoff used as one input to OpsFlow. The handoff voice below belongs to the
+> exported artifact; it is not an authorship claim for the production application.
+> Wenduo Wang retained responsibility for product scope, architecture and security
+> decisions, implementation review, verification, and final acceptance. See the
+> [Engineering Case Study](../../engineering/case-study.md) for the contribution and
+> AI-use boundary. The production application lives under [`client`](../../../client).
+
 This is a **handoff bundle** from Claude Design (claude.ai/design).
 
 A user mocked up designs in HTML/CSS/JS using an AI design tool, then exported this bundle so a coding agent can implement the designs for real.

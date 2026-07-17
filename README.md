@@ -11,7 +11,7 @@
   <a href="#90-second-walkthrough">90-Second Walkthrough</a> ·
   <a href="https://github.com/shuttle666/opsflow">View Source</a> ·
   <a href="docs/engineering/architecture.md">Architecture</a> ·
-  <a href="docs/engineering/mcp.md">MCP Case Study</a> ·
+  <a href="docs/engineering/case-study.md">Engineering Case Study</a> ·
   <a href="https://aboutwenduo.wang">Portfolio</a>
 </p>
 
@@ -23,7 +23,7 @@
 
 OpsFlow is a production-style, multi-tenant platform for service teams to manage customers, jobs, schedules, assignments, field evidence, and completion review in one operational workflow.
 
-Its differentiator is not another AI chat box. The in-app Web Agent and a local MCP server share the same tenant-aware Tool Registry. AI-initiated business changes stop at a structured pending proposal; an Owner or Manager must review and confirm the plan in OpsFlow before customer or job data is changed.
+Its differentiator is not another AI chat box. The in-app Web Agent and a local MCP server share the same tenant-aware Tool Registry. AI-initiated business changes stop at a structured pending proposal. The Web flow does not accept the original request as confirmation; the MCP contract requires the same later checkpoint and explicitly treats faithful confirmation handling as the external host's responsibility. An Owner or Manager must review and authorize the proposal before customer or job data is changed.
 
 **Demo Owner:** `owner@acme.example` / `owner-password-123`
 
@@ -57,7 +57,9 @@ For the full role-based loop, continue as Staff to progress an assigned job, upl
 
 OpsFlow treats model output as an untrusted plan, not as permission to operate the business.
 
-Read tools can inspect role-appropriate, tenant-scoped data. Write-oriented AI tools can persist a proposal, but they do not directly mutate customers or jobs. Final confirmation is a separate authenticated Web action restricted to the Owner or Manager who owns that conversation and proposal.
+Read tools can inspect role-appropriate, tenant-scoped data. Write-oriented AI tools can persist a proposal, but they do not directly mutate customers or jobs. Execution is a separate authenticated step restricted to the Owner or Manager who owns that conversation and proposal.
+
+The strongest path is the Web **Confirm plan** button because it does not depend on an LLM interpreting consent. A deliberately limited set of job proposals (`CREATE_JOB`, `ASSIGN_JOB`, and `SCHEDULE_JOB`) may also execute through `execute_proposal`, but only after the proposal has been shown and the user sends a later, explicit confirmation message. The Web Agent verifies that confirmation against a persisted post-proposal user message; an external MCP host is an explicit trust boundary and is responsible for presenting the proposal and forwarding the later confirmation faithfully.
 
 At confirmation time, OpsFlow claims the pending proposal with a single-execution guard, reloads current tenant-scoped targets, checks key domain rules, and applies the approved changes inside a database transaction.
 
@@ -69,21 +71,25 @@ flowchart LR
   Mcp --> Registry
   Registry --> Reads["Tenant-aware read tools"]
   Registry --> Proposal["Persisted pending proposal"]
-  Proposal --> Review["Owner / Manager review in OpsFlow"]
-  Review --> Recheck["Current targets + domain checks"]
+  Proposal --> WebReview["Web Confirm plan (no LLM)"]
+  Proposal --> LaterConfirm["Later explicit confirmation"]
+  LaterConfirm --> Execute["execute_proposal (eligible types)"]
+  WebReview --> Recheck["Current targets + domain checks"]
+  Execute --> Recheck
   Recheck --> Mutation["Transactional business change"]
 ```
 
-The MCP surface is deliberately narrower than the Web Agent. It exposes selected read tools plus job proposal tools, then returns an approval URL that hands the final decision back to the authenticated Web application.
+The MCP surface is deliberately narrower than the Web Agent. It exposes selected reads, job proposal inspection, and conversational execution only for the eligible job operations above. Every proposal still returns an approval URL: it is the fallback for hosts without a suitable confirmation flow and the required path for Web-only proposal types such as customer changes, job detail/status changes, and cancellations.
 
 ### Risk → Control → Evidence
 
 | Risk | Control | Repository evidence |
 | --- | --- | --- |
-| A model applies an unintended business change | AI write tools persist a pending proposal; confirmation is a separate authenticated Web action | [Proposal tools](server/src/modules/operations-tools/definitions/proposal-tools.ts), [approval boundary](docs/engineering/mcp.md#security-and-approval-boundary) |
+| A model applies an unintended business change | AI write tools persist a pending proposal; the Web button is a separate non-LLM action, and Web Agent execution requires a matching post-proposal user message; the external-host limitation is documented rather than hidden | [Proposal tools](server/src/modules/operations-tools/definitions/proposal-tools.ts), [confirmation boundary](docs/engineering/mcp.md#confirmation-and-trust-boundary) |
 | A caller invokes a hidden or role-restricted tool directly | Audience and role policies are checked during discovery and checked again during Registry execution; inputs and outputs are validated with Zod | [Tool Registry](server/src/modules/operations-tools/tool-registry.ts) |
 | A proposal points to stale or invalid operational data | Confirmation reloads key tenant-scoped targets and enforces active-staff, target-safety, and workflow rules before commit | [Proposal confirmation](server/src/modules/agent/agent.service.ts) |
 | Two requests try to confirm the same proposal | A conditional `PENDING → CONFIRMING` transition allows only one confirmation path to proceed | [Confirmation guard](server/src/modules/agent/agent.service.ts) |
+| An external host misrepresents user consent | The MCP contract requires a later verbatim confirmation, marks execution destructive, and documents the host as a trust boundary; Web confirmation remains the stronger fallback | [MCP trust boundary](docs/engineering/mcp.md#confirmation-and-trust-boundary) |
 | Web and MCP behavior drift apart | Both adapters use the same canonical tool schemas, access policies, and execution handlers | [MCP architecture](docs/engineering/mcp.md#architecture) |
 | Invocation audit duplicates raw customer or job values | The dedicated `ToolInvocation` record stores source, status, duration, correlation IDs, and top-level field names rather than raw argument or result values | [Invocation audit](server/src/modules/operations-tools/tool-invocation-audit.ts) |
 
@@ -109,6 +115,7 @@ The product also includes tenant invitations, customer archiving, schedule confl
 | Tenant isolation | Requests derive tenant context from authenticated membership; business queries and relationships remain tenant-scoped |
 | Authorization | Server routes, domain services, and AI tools enforce role-aware access for Owner, Manager, and Staff |
 | Workflow integrity | Job status transitions are constrained, recorded in history, and surfaced in the UI |
+| Client server state | TanStack Query caches are scoped by tenant, user, and role; mutations reconcile entity caches and invalidate affected workflows |
 | Persisted AI workflow | Conversations, tool traces, proposals, review state, and confirmation evidence are stored in PostgreSQL |
 | Operational debugging | API responses carry `X-Request-Id`; error responses and client error surfaces preserve it; backend request and error logs are structured |
 | Delivery | CI validates client and server builds and runs PostgreSQL-backed migration and integration tests before the main branch deploys |
@@ -121,12 +128,13 @@ The public application is deployed to AWS with EC2, RDS, Docker Compose, Nginx, 
 - [Job state machine](server/src/modules/job/job-status-machine.ts) — operational status changes are constrained by domain rules.
 - [Canonical Tool Registry](server/src/modules/operations-tools/tool-registry.ts) — Web and MCP tools share schemas, audience rules, role rules, execution, and invocation audit hooks.
 - [Proposal confirmation](server/src/modules/agent/agent.service.ts) — approved plans re-check key targets and execute through transactional domain services.
+- [Authorization-scoped Query keys](client/src/lib/query-keys.ts) — REST caches include tenant, user, and role context before domain and request parameters.
 - [Database-backed CI](.github/workflows/ci.yml) — migrations and integration tests run against a real PostgreSQL service.
 - [OpenAPI contract](docs/engineering/openapi.yaml) — the implemented HTTP surface is documented as a machine-readable contract.
 
 ## Tech stack
 
-- **Frontend:** Next.js 16, React 19, TypeScript, Tailwind CSS, Zustand, React Hook Form, Zod
+- **Frontend:** Next.js 16, React 19, TypeScript, Tailwind CSS, TanStack Query, Zustand, React Hook Form, Zod
 - **Backend:** Express 5, TypeScript, Prisma, PostgreSQL
 - **AI:** Anthropic SDK, Model Context Protocol TypeScript SDK, shared Zod Tool Registry, SSE streaming
 - **Testing:** Vitest, Testing Library, Supertest, Playwright, PostgreSQL integration tests
@@ -184,6 +192,7 @@ OpsFlow is production-shaped rather than presented as production-complete.
 
 ## Deeper documentation
 
+- [Engineering case study: role, scope, trade-offs, and retrospective](docs/engineering/case-study.md)
 - [Architecture](docs/engineering/architecture.md)
 - [MCP design and security boundary](docs/engineering/mcp.md)
 - [API design](docs/engineering/api-design.md)
@@ -192,8 +201,8 @@ OpsFlow is production-shaped rather than presented as production-complete.
 - [Product requirements](docs/product/prd.md)
 - [Roadmap](docs/product/roadmap.md)
 
-## About
+## About and contribution
 
-OpsFlow is a portfolio engineering case study by [Wenduo Wang](https://aboutwenduo.wang).
+OpsFlow is an independently owned portfolio engineering case study by [Wenduo Wang](https://aboutwenduo.wang). I defined the product and architecture, implemented and reviewed the system, set its security boundaries, and own verification and final acceptance. AI tools assisted design exploration, implementation, and review; the [Engineering Case Study](docs/engineering/case-study.md) explains that workflow and the decisions that remained mine.
 
 [GitHub profile](https://github.com/shuttle666) · [Project source](https://github.com/shuttle666/opsflow) · [Portfolio](https://aboutwenduo.wang)

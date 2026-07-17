@@ -27,12 +27,16 @@ OpsFlow centralizes the operational workflow so owners, managers, and staff can 
 - Tenant activity feed backed by audit logs
 - In-app notifications with unread state and authenticated SSE streaming
 - AI dispatch planner that can draft customer/job/schedule/assignee proposals and requires manager confirmation before writes
+- TanStack Query-managed REST state for dashboard, customer, job, schedule, membership, activity, invitation, notification, and Agent conversation surfaces, with authorization-scoped keys and mutation-driven cache reconciliation
+- Request correlation through `X-Request-Id`, stable API error codes, structured request/error logs, and request IDs on primary frontend error surfaces
 - Docker Compose local development and production deployment through GitHub Actions, EC2, Nginx, and Certbot
 
 ## Current Constraints
-- The dashboard has a live today's schedule card and schedule-derived stats, but it does not yet have a dedicated summary API for broader tenant metrics.
+- `GET /api/dashboard/summary` supports the shipped daily dispatch surface; broader tenant analytics such as customer totals and full job-status breakdowns are not part of the current response.
 - AI planner conversations, tool traces, and proposals are persisted for restart recovery and audit.
 - Job evidence uses local disk storage in the current deployment shape, with a storage abstraction that can be replaced later.
+- Streaming connections, file downloads, and ephemeral UI state remain imperative or local by design rather than being forced into the server-state cache.
+- Current observability is a request-level baseline written to application stdout. Centralized log aggregation, metrics, distributed tracing, and external error monitoring are not implemented.
 - There is no customer-facing portal yet.
 
 ## Out Of Scope For Now
@@ -41,7 +45,7 @@ OpsFlow centralizes the operational workflow so owners, managers, and staff can 
 - Advanced route optimization
 - Third-party integrations
 - Customer self-service portal
-- Full observability stack, including request IDs, structured logs, and external error monitoring
+- A full production observability stack beyond the implemented request-correlation and structured-log baseline
 
 ## Goal
 Build a production-style full-stack SaaS project that demonstrates secure multi-tenant operations, realistic service workflows, thoughtful UI, test coverage, CI/CD, and a controlled AI-assisted workflow.

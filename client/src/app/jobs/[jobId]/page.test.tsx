@@ -1,4 +1,3 @@
-import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,6 +13,7 @@ import {
   transitionJobStatusRequest,
 } from "@/features/job/job-api";
 import { useAuthStore } from "@/store/auth-store";
+import { render, screen, waitFor } from "@/test/render";
 import type { JobDetail, JobHistoryResult } from "@/types/job";
 
 const baseJob: JobDetail = {

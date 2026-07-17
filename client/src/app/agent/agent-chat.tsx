@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import {
   ChevronDown,
@@ -15,8 +16,22 @@ import {
   primaryButtonClassName,
   surfaceClassName,
 } from "@/components/ui/styles";
-import { confirmProposalRequest, consumeMessageStream, createConversationRequest, getConversationRequest, listConversationsRequest, openMessageStreamRequest, updateProposalReviewRequest } from "@/features/agent";
+import {
+  consumeMessageStream,
+  openMessageStreamRequest,
+} from "@/features/agent/agent-api";
+import {
+  appendAgentConversationMessageCache,
+  invalidateAgentExecutionDependencies,
+  markAgentConversationListStale,
+  useAgentConversationQuery,
+  useAgentConversationsQuery,
+  useConfirmAgentProposalMutation,
+  useCreateAgentConversationMutation,
+  useUpdateAgentProposalMutation,
+} from "@/features/agent/agent-queries";
 import { formatScheduleRange } from "@/features/job";
+import { useAuthenticatedQueryScope } from "@/hooks/use-authenticated-query";
 import { useAuthStore } from "@/store/auth-store";
 import type {
   ChatMessage,
@@ -110,6 +125,8 @@ const PLANNER_SUGGESTIONS = [
 ];
 
 const PLANNER_TAGS = ["Schedule", "Assign", "Update", "Review"] as const;
+const EMPTY_CONVERSATIONS: ConversationSummary[] = [];
+const EMPTY_MESSAGES: ChatMessage[] = [];
 
 const agentHeaderButtonClassName =
   "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-3 text-[12px] font-semibold text-[var(--color-brand)] shadow-sm transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-soft)] disabled:cursor-not-allowed disabled:opacity-50";
@@ -154,6 +171,18 @@ function readActiveConversationId(storageKey: string | null) {
   } catch {
     return null;
   }
+}
+
+function readRequestedConversationId(storageKey: string | null) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const linkedConversationId = new URLSearchParams(window.location.search).get(
+    "conversationId",
+  );
+
+  return linkedConversationId ?? readActiveConversationId(storageKey);
 }
 
 function writeActiveConversationId(storageKey: string | null, conversationId: string) {
@@ -323,6 +352,21 @@ function proposalScheduleInputValue(
       : proposal.scheduleDraft.scheduledEndAt,
     timezone,
   );
+}
+
+function proposalEditorKey(proposal: DispatchProposal) {
+  const schedule = proposal.scheduleDraft;
+
+  return [
+    proposal.id,
+    schedule.scheduledStartAt,
+    schedule.scheduledEndAt,
+    schedule.localDate,
+    schedule.localEndDate,
+    schedule.localStartTime,
+    schedule.localEndTime,
+    schedule.timezone,
+  ].join(":");
 }
 
 function parseDateTimeLocalValue(value: string) {
@@ -543,13 +587,6 @@ function ProposalCard({
   const jobId = proposal.target?.jobId ?? proposal.jobDraft.existingJobId;
   const assignee = review?.snapshots?.assignee;
   const changeRows = buildChangeRows(proposal);
-
-  useEffect(() => {
-    setScheduledStartAt(proposalScheduleInputValue(proposal, "start"));
-    setScheduledEndAt(proposalScheduleInputValue(proposal, "end"));
-  }, [
-    proposal,
-  ]);
 
   return (
     <div className="overflow-hidden rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] shadow-[var(--shadow-panel)]">
@@ -903,40 +940,80 @@ export function AgentChat() {
   const userId = useAuthStore((state) => state.user?.id);
   const currentTenant = useAuthStore((state) => state.currentTenant);
   const canUse = canUsePlanner(currentTenant?.role);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [conversationId, setConversationId] = useState<string | null>(null);
-  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const queryClient = useQueryClient();
+  const queryScope = useAuthenticatedQueryScope();
+  const activeConversationKey = useMemo(
+    () => activeConversationStorageKey(userId, currentTenant?.tenantId),
+    [currentTenant?.tenantId, userId],
+  );
+  const [conversationSelection, setConversationSelection] = useState<{
+    storageKey: string | null;
+    id: string | null;
+  }>(() => ({
+    storageKey: activeConversationKey,
+    id: readRequestedConversationId(activeConversationKey),
+  }));
+  const requestedConversationId =
+    conversationSelection.storageKey === activeConversationKey
+      ? conversationSelection.id
+      : readRequestedConversationId(activeConversationKey);
+  const conversationsQuery = useAgentConversationsQuery({ enabled: canUse });
+  const conversations = conversationsQuery.data ?? EMPTY_CONVERSATIONS;
+  const conversationId =
+    requestedConversationId &&
+    conversations.some(
+      (conversation) => conversation.id === requestedConversationId,
+    )
+      ? requestedConversationId
+      : null;
+  const conversationQuery = useAgentConversationQuery(conversationId, {
+    enabled: canUse,
+  });
+  const createConversationMutation = useCreateAgentConversationMutation();
+  const confirmProposalMutation = useConfirmAgentProposalMutation();
+  const updateProposalMutation = useUpdateAgentProposalMutation();
+  const messages = conversationQuery.data?.messages ?? EMPTY_MESSAGES;
   const [activeToolCalls, setActiveToolCalls] = useState<ActiveToolCall[]>([]);
   const [streamingText, setStreamingText] = useState("");
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [webApprovalUrl, setWebApprovalUrl] = useState<string | null>(null);
-  const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [pendingProposal, setPendingProposal] = useState<DispatchProposal | null>(null);
-  const [isProposalPanelOpen, setIsProposalPanelOpen] = useState(false);
-  const [isConfirming, setIsConfirming] = useState(false);
-  const [isUpdatingProposal, setIsUpdatingProposal] = useState(false);
+  const [streamingProposal, setStreamingProposal] =
+    useState<DispatchProposal | null>(null);
+  const [resolvedProposalId, setResolvedProposalId] =
+    useState<string | null>(null);
+  const [closedProposalId, setClosedProposalId] = useState<string | null>(null);
   const [confirmResult, setConfirmResult] = useState<ConfirmProposalResult | null>(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const lastOpenedProposalIdRef = useRef<string | null>(null);
-  const activeConversationKey = useMemo(
-    () => activeConversationStorageKey(userId, currentTenant?.tenantId),
-    [currentTenant?.tenantId, userId],
+  const cachedProposal = latestProposal(messages);
+  const proposalCandidate = streamingProposal ?? cachedProposal;
+  const pendingProposal =
+    proposalCandidate?.id === resolvedProposalId ? null : proposalCandidate;
+  const isProposalPanelOpen = Boolean(
+    pendingProposal && pendingProposal.id !== closedProposalId,
   );
-
-  const rememberActiveConversation = useCallback(
-    (id: string) => {
-      writeActiveConversationId(activeConversationKey, id);
-    },
-    [activeConversationKey],
-  );
+  const isLoadingConversations =
+    conversationsQuery.isLoading ||
+    Boolean(conversationId && conversationQuery.isLoading);
 
   const clearActiveConversation = useCallback(() => {
     removeActiveConversationId(activeConversationKey);
   }, [activeConversationKey]);
+
+  const selectConversation = useCallback(
+    (id: string | null) => {
+      setConversationSelection({ storageKey: activeConversationKey, id });
+      if (id) {
+        writeActiveConversationId(activeConversationKey, id);
+      } else {
+        removeActiveConversationId(activeConversationKey);
+      }
+    },
+    [activeConversationKey],
+  );
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -947,98 +1024,47 @@ export function AgentChat() {
   }, [messages, streamingText, activeToolCalls, scrollToBottom]);
 
   useEffect(() => {
-    const proposalId = pendingProposal?.id ?? null;
-
-    if (!proposalId) {
-      lastOpenedProposalIdRef.current = null;
-      setIsProposalPanelOpen(false);
-      return;
-    }
-
-    if (lastOpenedProposalIdRef.current !== proposalId) {
-      lastOpenedProposalIdRef.current = proposalId;
-      setIsProposalPanelOpen(true);
-    }
-  }, [pendingProposal?.id]);
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
   const loadConversation = useCallback(
-    async (id: string, options?: { preserveConfirmResult?: boolean }) => {
-      const detail = await withAccessTokenRetry((token) => getConversationRequest(token, id));
-      setConversationId(id);
-      rememberActiveConversation(id);
-      setMessages(detail.messages);
-      setPendingProposal(latestProposal(detail.messages));
+    (id: string) => {
+      selectConversation(id);
       setWebApprovalUrl(null);
-      if (!options?.preserveConfirmResult) {
-        setConfirmResult(null);
-      }
+      setConfirmResult(null);
       setStreamingText("");
       setActiveToolCalls([]);
+      setStreamingProposal(null);
+      setResolvedProposalId(null);
+      setClosedProposalId(null);
     },
-    [rememberActiveConversation, withAccessTokenRetry],
+    [selectConversation],
   );
 
-  const refreshConversations = useCallback(async () => {
-    try {
-      const list = await withAccessTokenRetry((token) => listConversationsRequest(token));
-      setConversations(list);
-    } catch {
-      // Ignore refresh failures in the chat surface.
-    }
-  }, [withAccessTokenRetry]);
-
   useEffect(() => {
-    if (!canUse) {
-      setIsLoadingConversations(false);
+    if (
+      !canUse ||
+      !conversationsQuery.isSuccess ||
+      !requestedConversationId
+    ) {
       return;
     }
 
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        const list = await withAccessTokenRetry((token) => listConversationsRequest(token));
-        if (!cancelled) {
-          setConversations(list);
-        }
-
-        const linkedConversationId = new URLSearchParams(window.location.search).get(
-          "conversationId",
-        );
-        const initialConversationId =
-          linkedConversationId ?? readActiveConversationId(activeConversationKey);
-        if (!initialConversationId || cancelled) {
-          return;
-        }
-
-        if (!list.some((conversation) => conversation.id === initialConversationId)) {
-          clearActiveConversation();
-          return;
-        }
-
-        try {
-          await loadConversation(initialConversationId);
-        } catch {
-          if (!cancelled) {
-            clearActiveConversation();
-          }
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoadingConversations(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+    if (
+      !conversations.some(
+        (conversation) => conversation.id === requestedConversationId,
+      )
+    ) {
+      clearActiveConversation();
+    }
   }, [
-    activeConversationKey,
     canUse,
     clearActiveConversation,
-    loadConversation,
-    withAccessTokenRetry,
+    conversations,
+    conversationsQuery.isSuccess,
+    requestedConversationId,
   ]);
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -1062,19 +1088,26 @@ export function AgentChat() {
       content: trimmed,
       createdAt: new Date().toISOString(),
     };
-    setMessages((current) => [...current, userMessage]);
 
     try {
       let activeConversationId = conversationId;
       if (!activeConversationId) {
-        const created = await withAccessTokenRetry((accessToken) => createConversationRequest(accessToken));
+        createConversationMutation.reset();
+        const created = await createConversationMutation.mutateAsync();
         activeConversationId = created.id;
-        setConversationId(created.id);
-        rememberActiveConversation(created.id);
+        selectConversation(created.id);
       }
+      appendAgentConversationMessageCache(
+        queryClient,
+        queryScope,
+        activeConversationId,
+        userMessage,
+        { preview: trimmed.slice(0, 100) },
+      );
 
       let fullText = "";
       let latestGeneratedProposal: DispatchProposal | null = null;
+      let didExecuteBusinessMutation = false;
 
       const controller = new AbortController();
       abortRef.current = controller;
@@ -1104,7 +1137,9 @@ export function AgentChat() {
           const maybeProposal = (result as { proposal?: DispatchProposal } | undefined)?.proposal;
           if (maybeProposal) {
             latestGeneratedProposal = maybeProposal;
-            setPendingProposal(maybeProposal);
+            setStreamingProposal(maybeProposal);
+            setResolvedProposalId(null);
+            setClosedProposalId(null);
             setWebApprovalUrl(null);
           }
 
@@ -1113,7 +1148,11 @@ export function AgentChat() {
             const toolError = executionToolError(result);
 
             if (executed) {
-              setPendingProposal(null);
+              didExecuteBusinessMutation = true;
+              setResolvedProposalId(executed.proposalId);
+              setStreamingProposal((current) =>
+                current?.id === executed.proposalId ? null : current,
+              );
               setConfirmResult(executed.result);
               setError(null);
               setWebApprovalUrl(null);
@@ -1135,9 +1174,11 @@ export function AgentChat() {
           setError(message);
         },
         onDone: () => {
-          if (fullText) {
-            setMessages((current) => [
-              ...current,
+          if (fullText || latestGeneratedProposal) {
+            appendAgentConversationMessageCache(
+              queryClient,
+              queryScope,
+              activeConversationId,
               {
                 id: crypto.randomUUID(),
                 role: "assistant",
@@ -1145,13 +1186,20 @@ export function AgentChat() {
                 proposal: latestGeneratedProposal ?? undefined,
                 createdAt: new Date().toISOString(),
               },
-            ]);
+            );
           }
 
+          setStreamingProposal((current) =>
+            current?.id === latestGeneratedProposal?.id ? null : current,
+          );
           setStreamingText("");
           setActiveToolCalls([]);
           setIsStreaming(false);
-          void refreshConversations();
+          abortRef.current = null;
+          markAgentConversationListStale(queryClient, queryScope);
+          if (didExecuteBusinessMutation) {
+            invalidateAgentExecutionDependencies(queryClient, queryScope);
+          }
         },
       });
     } catch (submitError) {
@@ -1159,83 +1207,82 @@ export function AgentChat() {
         submitError instanceof Error ? submitError.message : "Failed to send message.",
       );
       setIsStreaming(false);
+      abortRef.current = null;
     }
   };
 
-  const handleConfirmProposal = useCallback(async () => {
+  async function handleConfirmProposal() {
     if (!conversationId || !pendingProposal) {
       return;
     }
 
-    setIsConfirming(true);
     setError(null);
     setWebApprovalUrl(null);
+    confirmProposalMutation.reset();
 
     try {
-      const result = await withAccessTokenRetry((accessToken) =>
-        confirmProposalRequest(accessToken, conversationId, pendingProposal.id),
-      );
-      await loadConversation(conversationId, { preserveConfirmResult: true });
+      const result = await confirmProposalMutation.mutateAsync({
+        conversationId,
+        proposalId: pendingProposal.id,
+      });
+      setResolvedProposalId(pendingProposal.id);
+      setStreamingProposal(null);
       setConfirmResult(result);
       setWebApprovalUrl(null);
-      await refreshConversations();
     } catch (confirmError) {
       setError(
         confirmError instanceof Error
           ? confirmError.message
           : "Failed to confirm dispatch plan.",
       );
-    } finally {
-      setIsConfirming(false);
     }
-  }, [conversationId, loadConversation, pendingProposal, refreshConversations, withAccessTokenRetry]);
+  }
 
-  const handleProposalReviewUpdate = useCallback(async (input: UpdateProposalReviewInput) => {
+  async function handleProposalReviewUpdate(input: UpdateProposalReviewInput) {
     if (!conversationId || !pendingProposal) {
       return;
     }
 
-    setIsUpdatingProposal(true);
     setError(null);
     setWebApprovalUrl(null);
     setConfirmResult(null);
+    updateProposalMutation.reset();
 
     try {
-      const updated = await withAccessTokenRetry((accessToken) =>
-        updateProposalReviewRequest(accessToken, conversationId, pendingProposal.id, input),
-      );
-      setPendingProposal(updated);
-      setMessages((current) =>
-        current.map((message) =>
-          message.proposal?.id === updated.id ? { ...message, proposal: updated } : message,
-        ),
-      );
-      await refreshConversations();
+      const updated = await updateProposalMutation.mutateAsync({
+        conversationId,
+        proposalId: pendingProposal.id,
+        input,
+      });
+      if (streamingProposal?.id === updated.id) {
+        setStreamingProposal(updated);
+      }
     } catch (updateError) {
       setError(
         updateError instanceof Error
           ? updateError.message
           : "Failed to update dispatch plan.",
       );
-    } finally {
-      setIsUpdatingProposal(false);
     }
-  }, [conversationId, pendingProposal, refreshConversations, withAccessTokenRetry]);
+  }
 
-  const historyItems = useMemo(() => conversations, [conversations]);
+  const historyItems = conversations;
   const isEmptyConversation = messages.length === 0 && !isStreaming;
 
-  const resetComposerState = useCallback(() => {
-    setConversationId(null);
-    setMessages([]);
-    setPendingProposal(null);
+  function resetComposerState() {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    selectConversation(null);
+    setStreamingProposal(null);
+    setResolvedProposalId(null);
+    setClosedProposalId(null);
     setConfirmResult(null);
     setError(null);
     setWebApprovalUrl(null);
     setStreamingText("");
     setActiveToolCalls([]);
-    clearActiveConversation();
-  }, [clearActiveConversation]);
+    setIsStreaming(false);
+  }
 
   if (!canUse) {
     return (
@@ -1353,12 +1400,13 @@ export function AgentChat() {
                 <span className="proposal-glow-border" aria-hidden="true" />
                 <div className="proposal-glow-content max-h-[min(74dvh,720px)] overflow-y-auto">
                   <ProposalCard
+                    key={proposalEditorKey(pendingProposal)}
                     proposal={pendingProposal}
                     onConfirm={handleConfirmProposal}
                     onUpdate={handleProposalReviewUpdate}
-                    onHide={() => setIsProposalPanelOpen(false)}
-                    confirming={isConfirming}
-                    updating={isUpdatingProposal}
+                    onHide={() => setClosedProposalId(pendingProposal.id)}
+                    confirming={confirmProposalMutation.isPending}
+                    updating={updateProposalMutation.isPending}
                     result={confirmResult}
                   />
                 </div>
@@ -1367,7 +1415,7 @@ export function AgentChat() {
           ) : (
             <button
               type="button"
-              onClick={() => setIsProposalPanelOpen(true)}
+              onClick={() => setClosedProposalId(null)}
               className="absolute inset-x-3 bottom-[76px] z-20 mx-auto flex min-h-12 w-[calc(100%-1.5rem)] max-w-3xl items-center justify-between gap-3 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] px-4 py-2.5 text-left shadow-[var(--shadow-floating)] transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-soft)] sm:inset-x-5 sm:w-[calc(100%-2.5rem)]"
               aria-label="Show proposal panel"
             >

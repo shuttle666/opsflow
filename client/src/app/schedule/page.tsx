@@ -27,15 +27,13 @@ import {
   surfaceClassName,
   subtleButtonClassName,
 } from "@/components/ui/styles";
-import { listMembershipsRequest } from "@/features/membership";
-import {
-  formatTimeRange,
-  getScheduleRangeRequest,
-} from "@/features/job";
-import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
+import { formatTimeRange } from "@/features/job";
+import { useScheduleRangeQuery } from "@/features/job/schedule-queries";
+import { useMembershipsQuery } from "@/features/membership/membership-queries";
+import { getApiErrorView } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 import type { MembershipListItem } from "@/types/membership";
-import type { ScheduleDayJobItem, ScheduleLane, ScheduleRangeResult } from "@/types/job";
+import type { ScheduleDayJobItem, ScheduleLane } from "@/types/job";
 
 type ViewMode = "day" | "week" | "month";
 
@@ -1153,22 +1151,40 @@ function CalendarToolbar({
 
 export default function SchedulePage() {
   const currentTenant = useAuthStore((state) => state.currentTenant);
-  const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
   const datePickerRef = useRef<HTMLInputElement>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [anchorDate, setAnchorDate] = useState(todayLocalDate);
   const [selectedDate, setSelectedDate] = useState(todayLocalDate);
-  const [memberships, setMemberships] = useState<MembershipListItem[]>([]);
   const [selectedAssigneeId, setSelectedAssigneeId] = useState("");
-  const [schedule, setSchedule] = useState<ScheduleRangeResult | null>(null);
-  const [isLoadingMembers, setIsLoadingMembers] = useState(true);
-  const [isLoadingSchedule, setIsLoadingSchedule] = useState(true);
-  const [error, setError] = useState<ApiErrorView | null>(null);
 
   const allowManage = canManageSchedule(currentTenant?.role);
   const allowView = canViewSchedule(currentTenant?.role);
   const isStaffView = currentTenant?.role === "STAFF";
   const period = useMemo(() => getPeriod(anchorDate, viewMode), [anchorDate, viewMode]);
+  const membershipsQuery = useMembershipsQuery(
+    {
+      role: "STAFF",
+      status: "ACTIVE",
+      page: 1,
+      pageSize: 50,
+    },
+    allowManage,
+  );
+  const scheduleQuery = useScheduleRangeQuery(
+    {
+      rangeStart: period.start.toISOString(),
+      rangeEnd: period.end.toISOString(),
+      assigneeId: selectedAssigneeId || undefined,
+    },
+    { enabled: allowView },
+  );
+  const memberships = membershipsQuery.data?.items ?? [];
+  const schedule = scheduleQuery.data ?? null;
+  const isLoadingMembers = allowManage && membershipsQuery.isLoading;
+  const isLoadingSchedule = allowView && scheduleQuery.isLoading;
+  const error = scheduleQuery.error
+    ? getApiErrorView(scheduleQuery.error, "Failed to load schedule.")
+    : null;
   const visibleLanes = useMemo(
     () => schedule?.lanes ?? [],
     [schedule],
@@ -1178,88 +1194,6 @@ export default function SchedulePage() {
     [period.start, visibleLanes],
   );
   const visibleJobs = useMemo(() => collectJobs(visibleLanes), [visibleLanes]);
-
-  useEffect(() => {
-    if (!allowManage) {
-      setMemberships([]);
-      setIsLoadingMembers(false);
-      return;
-    }
-
-    let cancelled = false;
-
-    void (async () => {
-      setIsLoadingMembers(true);
-
-      try {
-        const result = await withAccessTokenRetry((accessToken) =>
-          listMembershipsRequest(accessToken, {
-            role: "STAFF",
-            status: "ACTIVE",
-            page: 1,
-            pageSize: 50,
-          }),
-        );
-
-        if (!cancelled) {
-          setMemberships(result.items);
-        }
-      } catch {
-        if (!cancelled) {
-          setMemberships([]);
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoadingMembers(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [allowManage, withAccessTokenRetry]);
-
-  useEffect(() => {
-    if (!allowView) {
-      setSchedule(null);
-      setIsLoadingSchedule(false);
-      return;
-    }
-
-    let cancelled = false;
-
-    void (async () => {
-      setIsLoadingSchedule(true);
-      setError(null);
-
-      try {
-        const result = await withAccessTokenRetry((accessToken) =>
-          getScheduleRangeRequest(accessToken, {
-            rangeStart: period.start.toISOString(),
-            rangeEnd: period.end.toISOString(),
-            assigneeId: selectedAssigneeId || undefined,
-          }),
-        );
-
-        if (!cancelled) {
-          setSchedule(result);
-        }
-      } catch (loadError) {
-        if (!cancelled) {
-          setError(getApiErrorView(loadError, "Failed to load schedule."));
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoadingSchedule(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [allowView, period.end, period.start, selectedAssigneeId, withAccessTokenRetry]);
 
   function handleMovePeriod(direction: -1 | 1) {
     setAnchorDate((current) => {

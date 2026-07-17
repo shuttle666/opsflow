@@ -1,63 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { primaryButtonClassName } from "@/components/ui/styles";
-import { useAuthStore } from "@/store/auth-store";
-import type { MyInvitationItem } from "@/types/auth";
+import {
+  useAcceptInvitationByIdMutation,
+  useMyInvitationsQuery,
+} from "@/features/auth/auth-queries";
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString();
 }
 
 export function InvitationInboxCard() {
-  const listMyInvitations = useAuthStore((state) => state.listMyInvitations);
-  const acceptInvitationById = useAuthStore((state) => state.acceptInvitationById);
-  const [invitations, setInvitations] = useState<MyInvitationItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [actingId, setActingId] = useState<string | null>(null);
-
-  const reload = useCallback(async () => {
-    setError(null);
-    const rows = await listMyInvitations();
-    setInvitations(rows);
-  }, [listMyInvitations]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    void (async () => {
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const rows = await listMyInvitations();
-        if (!cancelled) {
-          setInvitations(rows);
-        }
-      } catch (loadError) {
-        if (!cancelled) {
-          const message =
-            loadError instanceof Error
-              ? loadError.message
-              : "Failed to load pending invitations.";
-          setError(message);
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [listMyInvitations]);
+  const invitationsQuery = useMyInvitationsQuery();
+  const acceptMutation = useAcceptInvitationByIdMutation();
+  const invitations = invitationsQuery.data ?? [];
+  const queryError = invitationsQuery.error?.message ?? null;
+  const visibleError = error ?? queryError;
 
   return (
     <SectionCard
@@ -65,14 +29,14 @@ export function InvitationInboxCard() {
       title="Pending invitations"
       description="Invitations sent to your account email can be accepted in one click."
     >
-      {isLoading ? (
+      {invitationsQuery.isPending ? (
         <p className="text-sm text-[var(--color-text-secondary)]">Loading invitations...</p>
       ) : null}
 
-      {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+      {visibleError ? <p className="text-sm text-rose-600">{visibleError}</p> : null}
       {success ? <p className="text-sm text-emerald-700">{success}</p> : null}
 
-      {!isLoading && invitations.length === 0 ? (
+      {!invitationsQuery.isPending && !visibleError && invitations.length === 0 ? (
         <EmptyStatePanel
           compact
           title="No pending invitations right now."
@@ -103,17 +67,18 @@ export function InvitationInboxCard() {
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"
-                disabled={actingId === invitation.id}
+                disabled={
+                  acceptMutation.isPending &&
+                  acceptMutation.variables === invitation.id
+                }
                 onClick={() => {
                   setSuccess(null);
                   setError(null);
-                  setActingId(invitation.id);
-                  void acceptInvitationById(invitation.id)
+                  void acceptMutation.mutateAsync(invitation.id)
                     .then((result) => {
                       setSuccess(
                         `Joined tenant ${result.tenantId} as ${result.role}.`,
                       );
-                      return reload();
                     })
                     .catch((submitError) => {
                       const message =
@@ -121,14 +86,14 @@ export function InvitationInboxCard() {
                           ? submitError.message
                           : "Failed to accept invitation.";
                       setError(message);
-                    })
-                    .finally(() => {
-                      setActingId(null);
                     });
                 }}
                 className={primaryButtonClassName}
               >
-                {actingId === invitation.id ? "Accepting..." : "Accept"}
+                {acceptMutation.isPending &&
+                acceptMutation.variables === invitation.id
+                  ? "Accepting..."
+                  : "Accept"}
               </button>
             </div>
           </div>

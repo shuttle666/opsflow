@@ -13,8 +13,8 @@ OpsFlow is a modular monolith with a Next.js frontend, an Express API, Prisma, P
 - Next.js App Router
 - React and TypeScript
 - Tailwind CSS
-- Zustand for auth/session state
-- TanStack Query-style server state patterns through feature API modules
+- Zustand for auth/session, active-tenant, theme, and local preference state
+- TanStack Query for scoped REST server state, cache reconciliation, and mutation invalidation
 - React Hook Form and Zod for form handling and validation
 - Vitest and Testing Library for UI tests
 
@@ -28,6 +28,14 @@ Current app surfaces:
 - Schedule calendar
 - AI dispatch planner
 - Notification bell and SSE updates
+
+### Frontend State Ownership
+
+TanStack Query owns the migrated REST-backed operational state for dashboard, customer, job, schedule, membership, activity, invitation, notification, and Agent conversation surfaces. Query keys include the active tenant, user, and role before adding the domain resource and request parameters. This prevents cached data from one authorization scope being reused in another. When that scope changes, the provider evicts the previous authorization scope and clears mutation results and payloads without removing the new scope's active queries.
+
+Authenticated query and mutation hooks run API functions through the auth store's refresh-aware token helper. Successful mutations either update a known entity/list cache directly or invalidate the related domain keys, including dependent dashboard, activity, job, customer, and notification data where appropriate.
+
+Zustand continues to own auth/session, active-tenant, theme, and local preference state. Ephemeral form, dialog, and browser state remains local to components. Notification SSE keeps an imperative connection lifecycle but synchronizes incoming events into the Query cache. AI token streaming and its `AbortController` also remain imperative; completed messages and proposals are reconciled into Agent conversation caches, and successful proposal execution invalidates affected operational domains. File downloads remain commands rather than reusable REST query state.
 
 ## Backend
 - Express 5
@@ -106,11 +114,11 @@ flowchart LR
 
 Each Registry entry owns its canonical name, description, Zod input/output schemas, allowed audiences, allowed roles, MCP-style behavior annotations, and execution handler. The Web Agent converts these definitions to provider tool schemas and keeps its tool-use loop. The local MCP server registers the same definitions over stdio. Neither adapter owns business logic.
 
-Read tools query tenant-aware services. Task-oriented proposal tools reload current database snapshots and create pending proposals instead of directly mutating operational records. Confirmation in the Web app can create or update customers/jobs, assign work, schedule work, and apply approved status transitions.
+Read tools query tenant-aware services. Task-oriented proposal tools reload current database snapshots and create pending proposals instead of directly mutating operational records. The authenticated Web `Confirm plan` button is the strongest approval path because it does not depend on LLM interpretation. Eligible `CREATE_JOB`, `ASSIGN_JOB`, and `SCHEDULE_JOB` proposals can also call the separate destructive `execute_proposal` tool only after displaying the Proposal and receiving an explicit confirmation in a later user turn. Other proposal types are Web-only. Every execution path repeats authorization, ownership, current-target, and domain-rule checks before the transactional mutation.
 
 Agent conversations, messages, tool calls, and proposals are persisted in PostgreSQL. Confirmed proposals are retained with confirmation metadata for audit.
 
-External MCP proposals also create a persisted Agent conversation and assistant message. The MCP result includes an approval URL that opens that proposal in the Web UI. Tool invocations from both entry points record source, status, duration, correlation IDs, and field names without copying raw customer/job values into the invocation audit table.
+External MCP proposals also create a persisted Agent conversation and assistant message. Their approval URL remains a Web fallback for eligible proposals and the required path for Web-only proposals. For conversational MCP execution, OpsFlow authenticates and revalidates the operation, but it cannot independently prove that the external host displayed the Proposal faithfully or that supplied confirmation text came from a human. The host owns that trust boundary and should use native approval for the destructive tool when available. Tool invocations from both entry points record source, status, duration, correlation IDs, and field names without copying raw customer/job values into the invocation audit table.
 
 See [Local MCP Integration](mcp.md) for the current tool catalog, setup, authorization boundary, and deferred remote transport work.
 

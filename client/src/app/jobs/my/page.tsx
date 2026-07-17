@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { AppShell } from "@/components/ui/app-shell";
 import { DataTableCard } from "@/components/ui/data-table-card";
@@ -16,17 +16,16 @@ import {
   selectClassName,
   subtleButtonClassName,
 } from "@/components/ui/styles";
-import { formatDateTime, formatScheduleRange, listMyJobsRequest } from "@/features/job";
+import { formatDateTime, formatScheduleRange } from "@/features/job";
+import { useMyJobsQuery } from "@/features/job/job-queries";
 import {
   DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
   PAGINATED_LIST_BOTTOM_GAP,
   PAGINATED_TABLE_HEADER_OFFSET,
   useAdaptivePageSize,
 } from "@/hooks/use-adaptive-page-size";
-import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
-import { useAuthStore } from "@/store/auth-store";
-import type { PaginationMeta } from "@/types/customer";
-import type { JobListItem, JobStatus } from "@/types/job";
+import { getApiErrorView } from "@/lib/api-client";
+import type { JobStatus } from "@/types/job";
 
 const MY_JOB_ROW_HEIGHT_PX = 57;
 
@@ -40,8 +39,6 @@ const jobStatuses: Array<{ value: JobStatus; label: string }> = [
 ];
 
 export default function MyJobsPage() {
-  const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
-  const [jobs, setJobs] = useState<JobListItem[]>([]);
   const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<JobStatus | "">("");
@@ -49,14 +46,6 @@ export default function MyJobsPage() {
     "createdAt_desc" | "createdAt_asc" | "scheduledStartAt_asc" | "scheduledStartAt_desc"
   >("createdAt_desc");
   const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState<PaginationMeta>({
-    page: 1,
-    pageSize: DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
-    total: 0,
-    totalPages: 1,
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<ApiErrorView | null>(null);
   const {
     containerRef: myJobsTableAreaRef,
     hasMeasured: hasMeasuredPageSize,
@@ -66,63 +55,29 @@ export default function MyJobsPage() {
     bottomGap: PAGINATED_LIST_BOTTOM_GAP,
     itemHeight: MY_JOB_ROW_HEIGHT_PX,
     topGap: PAGINATED_TABLE_HEADER_OFFSET,
-    dependencies: [error, isLoading, jobs.length],
+    dependencies: [page, query, sort, statusFilter],
   });
-
-  useEffect(() => {
-    if (!hasMeasuredPageSize) {
-      return;
-    }
-
-    let cancelled = false;
-
-    void (async () => {
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const result = await withAccessTokenRetry((accessToken) =>
-          listMyJobsRequest(accessToken, {
-            q: query,
-            status: statusFilter || undefined,
-            page,
-            pageSize: adaptivePageSize,
-            sort,
-          }),
-        );
-
-        if (!cancelled) {
-          setJobs(result.items);
-          setPagination(result.pagination);
-          setPage((current) =>
-            current > result.pagination.totalPages
-              ? result.pagination.totalPages
-              : current,
-          );
-        }
-      } catch (loadError) {
-        if (!cancelled) {
-          setError(getApiErrorView(loadError, "Failed to load assigned jobs."));
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    adaptivePageSize,
-    hasMeasuredPageSize,
+  const jobsQuery = useMyJobsQuery(
+    {
+      q: query,
+      status: statusFilter || undefined,
+      page,
+      pageSize: adaptivePageSize,
+      sort,
+    },
+    { enabled: hasMeasuredPageSize },
+  );
+  const jobs = jobsQuery.data?.items ?? [];
+  const pagination = jobsQuery.data?.pagination ?? {
     page,
-    query,
-    sort,
-    statusFilter,
-    withAccessTokenRetry,
-  ]);
+    pageSize: adaptivePageSize || DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
+    total: 0,
+    totalPages: 1,
+  };
+  const isLoading = !hasMeasuredPageSize || jobsQuery.isLoading;
+  const error = jobsQuery.error
+    ? getApiErrorView(jobsQuery.error, "Failed to load assigned jobs.")
+    : null;
 
   return (
     <AppShell

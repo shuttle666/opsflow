@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ActionCard } from "@/components/ui/info-cards";
 import {
   cn,
@@ -9,13 +9,9 @@ import {
   selectClassName,
   surfaceClassName,
 } from "@/components/ui/styles";
-import {
-  assignJobRequest,
-  unassignJobRequest,
-} from "@/features/job/job-api";
-import { listMembershipsRequest } from "@/features/membership";
+import { useJobAssignmentMutation } from "@/features/job/job-assignment-queries";
+import { useMembershipsQuery } from "@/features/membership/membership-queries";
 import { useAuthStore } from "@/store/auth-store";
-import type { MembershipListItem } from "@/types/membership";
 import type { JobDetail } from "@/types/job";
 
 type JobAssignmentCardProps = {
@@ -29,63 +25,37 @@ function canAssign(role: string | undefined) {
 
 export function JobAssignmentCard({ job, onJobChange }: JobAssignmentCardProps) {
   const currentTenant = useAuthStore((state) => state.currentTenant);
-  const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
-  const [staffMembers, setStaffMembers] = useState<MembershipListItem[]>([]);
   const [selectedMembershipId, setSelectedMembershipId] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   const assignable = canAssign(currentTenant?.role);
-
-  useEffect(() => {
-    if (!assignable) {
-      return;
-    }
-
-    let cancelled = false;
-
-    void (async () => {
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const result = await withAccessTokenRetry((accessToken) =>
-          listMembershipsRequest(accessToken, {
-            status: "ACTIVE",
-            role: "STAFF",
-            page: 1,
-            pageSize: 50,
-          }),
-        );
-
-        if (!cancelled) {
-          setStaffMembers(result.items);
-          const selected = result.items.find(
-            (membership) => membership.userId === job.assignedTo?.id,
-          );
-          setSelectedMembershipId(selected?.id ?? result.items[0]?.id ?? "");
-        }
-      } catch (loadError) {
-        if (!cancelled) {
-          setError(
-            loadError instanceof Error
-              ? loadError.message
-              : "Failed to load assignable staff members.",
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [assignable, job.assignedTo?.id, withAccessTokenRetry]);
+  const staffQuery = useMembershipsQuery(
+    {
+      status: "ACTIVE",
+      role: "STAFF",
+      page: 1,
+      pageSize: 50,
+    },
+    assignable,
+  );
+  const staffMembers = staffQuery.data?.items ?? [];
+  const assignedMembershipId = staffMembers.find(
+    (membership) => membership.userId === job.assignedTo?.id,
+  )?.id;
+  const effectiveSelectedMembershipId = staffMembers.some(
+    (membership) => membership.id === selectedMembershipId,
+  )
+    ? selectedMembershipId
+    : assignedMembershipId ?? staffMembers[0]?.id ?? "";
+  const assignmentMutation = useJobAssignmentMutation();
+  const isLoading = assignable && staffQuery.isLoading;
+  const isSubmitting = assignmentMutation.isPending;
+  const error =
+    actionError ??
+    (staffQuery.error
+      ? staffQuery.error.message || "Failed to load assignable staff members."
+      : null);
 
   return (
     <ActionCard
@@ -135,7 +105,7 @@ export function JobAssignmentCard({ job, onJobChange }: JobAssignmentCardProps) 
                   Assign to staff
                 </span>
                 <select
-                  value={selectedMembershipId}
+                  value={effectiveSelectedMembershipId}
                   onChange={(event) => setSelectedMembershipId(event.target.value)}
                   className={selectClassName}
                 >
@@ -151,30 +121,30 @@ export function JobAssignmentCard({ job, onJobChange }: JobAssignmentCardProps) 
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
-                disabled={isSubmitting || !selectedMembershipId}
+                disabled={isSubmitting || !effectiveSelectedMembershipId}
                 onClick={() => {
-                  setIsSubmitting(true);
-                  setError(null);
+                  setActionError(null);
                   setSuccess(null);
-                  void withAccessTokenRetry((accessToken) =>
-                    assignJobRequest(accessToken, job.id, {
-                      membershipId: selectedMembershipId,
-                    }),
-                  )
-                    .then((updated) => {
-                      onJobChange(updated);
-                      setSuccess("Job assigned successfully.");
-                    })
-                    .catch((submitError) => {
-                      setError(
-                        submitError instanceof Error
-                          ? submitError.message
-                          : "Failed to assign job.",
-                      );
-                    })
-                    .finally(() => {
-                      setIsSubmitting(false);
-                    });
+                  assignmentMutation.mutate(
+                    {
+                      action: "assign",
+                      jobId: job.id,
+                      membershipId: effectiveSelectedMembershipId,
+                    },
+                    {
+                      onSuccess: (updated) => {
+                        onJobChange(updated);
+                        setSuccess("Job assigned successfully.");
+                      },
+                      onError: (submitError) => {
+                        setActionError(
+                          submitError instanceof Error
+                            ? submitError.message
+                            : "Failed to assign job.",
+                        );
+                      },
+                    },
+                  );
                 }}
                 className={primaryButtonClassName}
               >
@@ -186,26 +156,24 @@ export function JobAssignmentCard({ job, onJobChange }: JobAssignmentCardProps) 
                   type="button"
                   disabled={isSubmitting}
                   onClick={() => {
-                    setIsSubmitting(true);
-                    setError(null);
+                    setActionError(null);
                     setSuccess(null);
-                    void withAccessTokenRetry((accessToken) =>
-                      unassignJobRequest(accessToken, job.id),
-                    )
-                      .then((updated) => {
-                        onJobChange(updated);
-                        setSuccess("Job unassigned.");
-                      })
-                      .catch((submitError) => {
-                        setError(
-                          submitError instanceof Error
-                            ? submitError.message
-                            : "Failed to unassign job.",
-                        );
-                      })
-                      .finally(() => {
-                        setIsSubmitting(false);
-                      });
+                    assignmentMutation.mutate(
+                      { action: "unassign", jobId: job.id },
+                      {
+                        onSuccess: (updated) => {
+                          onJobChange(updated);
+                          setSuccess("Job unassigned.");
+                        },
+                        onError: (submitError) => {
+                          setActionError(
+                            submitError instanceof Error
+                              ? submitError.message
+                              : "Failed to unassign job.",
+                          );
+                        },
+                      },
+                    );
                   }}
                   className={secondaryButtonClassName}
                 >

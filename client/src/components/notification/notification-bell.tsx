@@ -1,17 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Bell, BellRing, CheckCircle2 } from "@/components/ui/icons";
 import { cn, subtleButtonClassName } from "@/components/ui/styles";
 import {
   consumeNotificationStream,
-  getUnreadNotificationCountRequest,
-  listNotificationsRequest,
-  markAllNotificationsReadRequest,
-  markNotificationReadRequest,
   openNotificationStreamRequest,
-} from "@/features/notification";
+} from "@/features/notification/notification-api";
+import {
+  notificationPreviewQuery,
+  type NotificationListResult,
+  useMarkAllNotificationsReadMutation,
+  useMarkNotificationReadMutation,
+  useNotificationsQuery,
+  useUnreadNotificationCountQuery,
+} from "@/features/notification/notification-queries";
+import {
+  useAuthenticatedQueryScope,
+} from "@/hooks/use-authenticated-query";
+import { queryKeys } from "@/lib/query-keys";
 import { useAuthStore } from "@/store/auth-store";
 import type { NotificationItem } from "@/types/notification";
 
@@ -46,55 +55,35 @@ export function NotificationBell() {
   const status = useAuthStore((state) => state.status);
   const currentTenant = useAuthStore((state) => state.currentTenant);
   const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
+  const queryClient = useQueryClient();
+  const { tenantId, userId, role } = useAuthenticatedQueryScope();
   const [isOpen, setIsOpen] = useState(false);
-  const [items, setItems] = useState<NotificationItem[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [streamError, setStreamError] = useState<{
+    tenantId: string | null;
+    message: string;
+  } | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isOpenRef = useRef(isOpen);
+  const notificationsQuery = useNotificationsQuery(
+    notificationPreviewQuery,
+    isOpen,
+  );
+  const unreadCountQuery = useUnreadNotificationCountQuery();
+  const markReadMutation = useMarkNotificationReadMutation();
+  const markAllReadMutation = useMarkAllNotificationsReadMutation();
+  const items = notificationsQuery.data?.items ?? [];
+  const unreadCount = unreadCountQuery.data?.unreadCount ?? 0;
+  const isLoading = notificationsQuery.isPending;
+  const error =
+    markReadMutation.error?.message ??
+    markAllReadMutation.error?.message ??
+    notificationsQuery.error?.message ??
+    unreadCountQuery.error?.message ??
+    (streamError?.tenantId === (tenantId ?? null)
+      ? streamError.message
+      : null);
 
-  useEffect(() => {
-    isOpenRef.current = isOpen;
-  }, [isOpen]);
-
-  const loadNotifications = useCallback(async () => {
-    if (status !== "authenticated" || !currentTenant) {
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const result = await withAccessTokenRetry((accessToken) =>
-        listNotificationsRequest(accessToken, {
-          page: 1,
-          pageSize: 10,
-          status: "all",
-        }),
-      );
-      setItems(result.items);
-    } catch (loadError) {
-      setError(
-        loadError instanceof Error ? loadError.message : "Failed to load notifications.",
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentTenant, status, withAccessTokenRetry]);
-
-  useEffect(() => {
-    if (isOpen) {
-      void loadNotifications();
-    }
-  }, [isOpen, loadNotifications]);
-
-  useEffect(() => {
-    setItems([]);
-    setUnreadCount(0);
-    setError(null);
-  }, [currentTenant?.tenantId]);
+  isOpenRef.current = isOpen;
 
   useEffect(() => {
     if (
@@ -120,13 +109,6 @@ export function NotificationBell() {
       controller = new AbortController();
 
       try {
-        const count = await withAccessTokenRetry((accessToken) =>
-          getUnreadNotificationCountRequest(accessToken),
-        );
-        if (!cancelled) {
-          setUnreadCount(count.unreadCount);
-        }
-
         const response = await withAccessTokenRetry((accessToken) =>
           openNotificationStreamRequest(accessToken, controller?.signal),
         );
@@ -136,17 +118,33 @@ export function NotificationBell() {
             if (cancelled) {
               return;
             }
-            setUnreadCount(nextUnreadCount);
-            setItems((current) => mergeNotification(current, notification));
+            const scope = { tenantId, userId, role };
+            queryClient.setQueryData(
+              queryKeys.notifications.unreadCount(scope),
+              { unreadCount: nextUnreadCount },
+            );
+            queryClient.setQueryData<NotificationListResult>(
+              queryKeys.notifications.list(scope, notificationPreviewQuery),
+              (current) =>
+                current
+                  ? {
+                      ...current,
+                      items: mergeNotification(current.items, notification),
+                    }
+                  : current,
+            );
           },
           onUnreadCount: (nextUnreadCount) => {
             if (!cancelled) {
-              setUnreadCount(nextUnreadCount);
+              queryClient.setQueryData(
+                queryKeys.notifications.unreadCount({ tenantId, userId, role }),
+                { unreadCount: nextUnreadCount },
+              );
             }
           },
           onError: (message) => {
             if (!cancelled && isOpenRef.current) {
-              setError(message);
+              setStreamError({ tenantId: tenantId ?? null, message });
             }
           },
         });
@@ -156,11 +154,13 @@ export function NotificationBell() {
           (streamError as Error).name !== "AbortError" &&
           isOpenRef.current
         ) {
-          setError(
-            streamError instanceof Error
-              ? streamError.message
-              : "Notification stream failed.",
-          );
+          setStreamError({
+            tenantId: tenantId ?? null,
+            message:
+              streamError instanceof Error
+                ? streamError.message
+                : "Notification stream failed.",
+          });
         }
       } finally {
         if (!cancelled) {
@@ -178,53 +178,22 @@ export function NotificationBell() {
       controller?.abort();
       clearReconnectTimer();
     };
-  }, [currentTenant, status, withAccessTokenRetry]);
+  }, [
+    currentTenant,
+    queryClient,
+    role,
+    status,
+    tenantId,
+    userId,
+    withAccessTokenRetry,
+  ]);
 
-  const handleMarkRead = async (notification: NotificationItem) => {
-    const wasUnread = !notification.readAt;
-    setError(null);
-
-    try {
-      const updated = await withAccessTokenRetry((accessToken) =>
-        markNotificationReadRequest(accessToken, notification.id),
-      );
-      setItems((current) =>
-        current.map((item) => (item.id === updated.id ? updated : item)),
-      );
-      if (wasUnread) {
-        setUnreadCount((current) => Math.max(0, current - 1));
-      }
-    } catch (markError) {
-      setError(
-        markError instanceof Error
-          ? markError.message
-          : "Failed to mark notification as read.",
-      );
-    }
+  const handleMarkRead = (notification: NotificationItem) => {
+    markReadMutation.mutate(notification);
   };
 
-  const handleMarkAllRead = async () => {
-    setError(null);
-
-    try {
-      await withAccessTokenRetry((accessToken) =>
-        markAllNotificationsReadRequest(accessToken),
-      );
-      const readAt = new Date().toISOString();
-      setItems((current) =>
-        current.map((item) => ({
-          ...item,
-          readAt: item.readAt ?? readAt,
-        })),
-      );
-      setUnreadCount(0);
-    } catch (markError) {
-      setError(
-        markError instanceof Error
-          ? markError.message
-          : "Failed to mark notifications as read.",
-      );
-    }
+  const handleMarkAllRead = () => {
+    markAllReadMutation.mutate();
   };
 
   const hasUnread = unreadCount > 0;
@@ -235,7 +204,12 @@ export function NotificationBell() {
         type="button"
         aria-label="Notifications"
         aria-expanded={isOpen}
-        onClick={() => setIsOpen((current) => !current)}
+        onClick={() => {
+          setIsOpen((current) => !current);
+          setStreamError(null);
+          markReadMutation.reset();
+          markAllReadMutation.reset();
+        }}
         className="relative flex h-11 w-11 items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] shadow-sm transition hover:bg-[var(--color-app-panel-muted)] md:h-9 md:w-9"
       >
         {hasUnread ? (
@@ -331,7 +305,7 @@ export function NotificationBell() {
                       href={href}
                       onClick={() => {
                         setIsOpen(false);
-                        void handleMarkRead(notification);
+                        handleMarkRead(notification);
                       }}
                     >
                       {content}
@@ -340,7 +314,7 @@ export function NotificationBell() {
                     <button
                       key={notification.id}
                       type="button"
-                      onClick={() => void handleMarkRead(notification)}
+                      onClick={() => handleMarkRead(notification)}
                       className="w-full"
                     >
                       {content}

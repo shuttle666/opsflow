@@ -1,25 +1,27 @@
-import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiClientError } from "@/lib/api-client";
 import { AgentChat } from "@/app/agent/agent-chat";
 import {
+  confirmProposalRequest,
   consumeMessageStream,
   createConversationRequest,
   getConversationRequest,
   listConversationsRequest,
   openMessageStreamRequest,
   updateProposalReviewRequest,
-} from "@/features/agent";
+} from "@/features/agent/agent-api";
 import { useAuthStore } from "@/store/auth-store";
+import { render, screen, waitFor } from "@/test/render";
 import type { DispatchProposal } from "@/types/agent";
 
 vi.mock("react-markdown", () => ({
   default: ({ children }: { children?: ReactNode }) => <>{children}</>,
 }));
 
-vi.mock("@/features/agent", () => ({
+vi.mock("@/features/agent/agent-api", () => ({
+  confirmProposalRequest: vi.fn(),
   consumeMessageStream: vi.fn(),
   createConversationRequest: vi.fn(),
   listConversationsRequest: vi.fn(),
@@ -74,6 +76,13 @@ describe("AgentChat", () => {
     vi.mocked(createConversationRequest).mockResolvedValue({
       id: "conversation-1",
       createdAt: "2026-04-01T00:00:00.000Z",
+    });
+    vi.mocked(confirmProposalRequest).mockResolvedValue({
+      proposalId: "proposal-1",
+      entityType: "job",
+      createdJobId: "job-1",
+      createdJobTitle: "Dishwasher leak investigation",
+      updatedExistingJob: true,
     });
     vi.mocked(updateProposalReviewRequest).mockResolvedValue({
       id: "proposal-1",

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@/test/render";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -193,6 +193,10 @@ describe("customer detail page", () => {
   });
 
   it("saves internal notes without losing existing customer fields", async () => {
+    vi.mocked(updateCustomerRequest).mockResolvedValue({
+      ...baseCustomer,
+      notes: "Gate code changed to 4521.",
+    });
     const user = userEvent.setup();
     render(<CustomerDetailPage />);
 

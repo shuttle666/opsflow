@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { CustomerNotesCard } from "@/components/customer/customer-notes-card";
 import { AppShell } from "@/components/ui/app-shell";
@@ -17,14 +16,14 @@ import {
   strongSurfaceClassName,
 } from "@/components/ui/styles";
 import {
-  archiveCustomerRequest,
-  getCustomerDetailRequest,
-  restoreCustomerRequest,
-} from "@/features/customer/customer-api";
+  useArchiveCustomerMutation,
+  useCustomerDetailQuery,
+  useRestoreCustomerMutation,
+} from "@/features/customer/customer-queries";
 import { formatDateTime, formatScheduleRange } from "@/features/job";
-import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
+import { getApiErrorView } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
-import type { CustomerDetail, CustomerJobSummary } from "@/types/customer";
+import type { CustomerJobSummary } from "@/types/customer";
 import type { JobStatus } from "@/types/job";
 
 function canManageCustomers(role: string | undefined) {
@@ -211,50 +210,19 @@ export default function CustomerDetailPage() {
   const params = useParams<{ customerId: string }>();
   const customerId = typeof params.customerId === "string" ? params.customerId : "";
   const currentTenant = useAuthStore((state) => state.currentTenant);
-  const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
-  const [customer, setCustomer] = useState<CustomerDetail | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | ApiErrorView | null>(null);
-  const [actionError, setActionError] = useState<ApiErrorView | null>(null);
-  const [isArchiving, setIsArchiving] = useState(false);
-  const [isRestoring, setIsRestoring] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!customerId) {
-      setError("Customer id is missing.");
-      setIsLoading(false);
-      return;
-    }
-
-    void (async () => {
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const loaded = await withAccessTokenRetry((accessToken) =>
-          getCustomerDetailRequest(accessToken, customerId),
-        );
-
-        if (!cancelled) {
-          setCustomer(loaded);
-        }
-      } catch (loadError) {
-        if (!cancelled) {
-          setError(getApiErrorView(loadError, "Failed to load customer."));
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [customerId, withAccessTokenRetry]);
+  const customerQuery = useCustomerDetailQuery(customerId);
+  const archiveCustomer = useArchiveCustomerMutation();
+  const restoreCustomer = useRestoreCustomerMutation();
+  const customer = customerQuery.data;
+  const error = !customerId
+    ? "Customer id is missing."
+    : customerQuery.error
+      ? getApiErrorView(customerQuery.error, "Failed to load customer.")
+      : null;
+  const actionMutationError = archiveCustomer.error ?? restoreCustomer.error;
+  const actionError = actionMutationError
+    ? getApiErrorView(actionMutationError, "Failed to update customer.")
+    : null;
 
   const allowManage = canManageCustomers(currentTenant?.role);
   const isArchived = Boolean(customer?.archivedAt);
@@ -272,18 +240,13 @@ export default function CustomerDetailPage() {
       return;
     }
 
-    setIsArchiving(true);
-    setActionError(null);
+    archiveCustomer.reset();
+    restoreCustomer.reset();
 
     try {
-      const archived = await withAccessTokenRetry((accessToken) =>
-        archiveCustomerRequest(accessToken, customer.id),
-      );
-      setCustomer({ ...customer, ...archived });
-    } catch (archiveError) {
-      setActionError(getApiErrorView(archiveError, "Failed to delete customer."));
-    } finally {
-      setIsArchiving(false);
+      await archiveCustomer.mutateAsync(customer.id);
+    } catch {
+      // The mutation exposes the request-aware error in the page feedback area.
     }
   }
 
@@ -292,25 +255,20 @@ export default function CustomerDetailPage() {
       return;
     }
 
-    setIsRestoring(true);
-    setActionError(null);
+    archiveCustomer.reset();
+    restoreCustomer.reset();
 
     try {
-      const restored = await withAccessTokenRetry((accessToken) =>
-        restoreCustomerRequest(accessToken, customer.id),
-      );
-      setCustomer({ ...customer, ...restored });
-    } catch (restoreError) {
-      setActionError(getApiErrorView(restoreError, "Failed to restore customer."));
-    } finally {
-      setIsRestoring(false);
+      await restoreCustomer.mutateAsync(customer.id);
+    } catch {
+      // The mutation exposes the request-aware error in the page feedback area.
     }
   }
 
   return (
     <AppShell title="Customer detail">
       <AuthGuard>
-        {isLoading ? <LoadingPanel label="Loading customer..." /> : null}
+        {customerQuery.isLoading ? <LoadingPanel label="Loading customer..." /> : null}
         {error ? <InlineErrorBanner message={error} /> : null}
 
         {customer ? (
@@ -339,11 +297,11 @@ export default function CustomerDetailPage() {
                     {isArchived ? (
                       <button
                         type="button"
-                        disabled={isRestoring}
+                        disabled={restoreCustomer.isPending}
                         onClick={() => void handleRestoreCustomer()}
                         className={primaryButtonClassName}
                       >
-                        {isRestoring ? "Restoring..." : "Restore customer"}
+                        {restoreCustomer.isPending ? "Restoring..." : "Restore customer"}
                       </button>
                     ) : (
                       <>
@@ -361,11 +319,11 @@ export default function CustomerDetailPage() {
                         </Link>
                         <button
                           type="button"
-                          disabled={isArchiving}
+                          disabled={archiveCustomer.isPending}
                           onClick={() => void handleArchiveCustomer()}
                           className={dangerButtonClassName}
                         >
-                          {isArchiving ? "Deleting..." : "Delete customer"}
+                          {archiveCustomer.isPending ? "Deleting..." : "Delete customer"}
                         </button>
                       </>
                     )}
@@ -422,10 +380,7 @@ export default function CustomerDetailPage() {
                   <InfoRow label="Updated" value={formatDateTime(customer.updatedAt)} mono />
                 </DetailCard>
 
-                <CustomerNotesCard
-                  customer={customer}
-                  onCustomerChange={setCustomer}
-                />
+                <CustomerNotesCard customer={customer} />
               </aside>
             </div>
           </div>

@@ -1,14 +1,18 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TeamPage from "@/app/team/page";
-import { listMembershipsRequest, updateMembershipRequest } from "@/features/membership";
+import {
+  listMembershipsRequest,
+  updateMembershipRequest,
+} from "@/features/membership/membership-api";
 import { useAuthStore } from "@/store/auth-store";
 import {
   mockAdaptivePageSizeViewport,
   resetAdaptivePageSizeViewportMock,
 } from "@/test/adaptive-page-size";
+import { render } from "@/test/render";
 
 vi.mock("@/components/ui/app-shell", () => ({
   AppShell: ({
@@ -48,7 +52,7 @@ vi.mock("@/components/auth/invitation-create-card", () => ({
   InvitationCreateCard: () => <div>Invitation management</div>,
 }));
 
-vi.mock("@/features/membership", () => ({
+vi.mock("@/features/membership/membership-api", () => ({
   listMembershipsRequest: vi.fn(),
   updateMembershipRequest: vi.fn(),
 }));

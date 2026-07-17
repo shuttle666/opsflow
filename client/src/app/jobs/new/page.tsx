@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense } from "react";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { JobForm } from "@/components/job/job-form";
 import { AppShell } from "@/components/ui/app-shell";
@@ -12,15 +12,27 @@ import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
 import { LoadingPanel } from "@/components/ui/loading-panel";
 import { secondaryButtonClassName } from "@/components/ui/styles";
 import { getCustomerDetailRequest, listCustomersRequest } from "@/features/customer/customer-api";
-import { createJobRequest, toApiDateTime } from "@/features/job";
+import { toApiDateTime } from "@/features/job";
+import { useCreateJobMutation } from "@/features/job/job-queries";
 import type { JobFormValues } from "@/features/job/job-schema";
-import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
+import {
+  useAuthenticatedQuery,
+  useAuthenticatedQueryScope,
+} from "@/hooks/use-authenticated-query";
+import { getApiErrorView } from "@/lib/api-client";
+import { queryKeys } from "@/lib/query-keys";
 import { useAuthStore } from "@/store/auth-store";
 import type { CustomerListItem } from "@/types/customer";
 
 function canManageJobs(role: string | undefined) {
   return role === "OWNER" || role === "MANAGER";
 }
+
+const customerListQuery = {
+  page: 1,
+  pageSize: 50,
+  sort: "name_asc" as const,
+};
 
 function NewJobPageContent() {
   const router = useRouter();
@@ -30,91 +42,81 @@ function NewJobPageContent() {
       ? searchParams.get("customerId")!.trim()
       : "";
   const currentTenant = useAuthStore((state) => state.currentTenant);
-  const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
-  const [customers, setCustomers] = useState<CustomerListItem[]>([]);
-  const [defaultValues, setDefaultValues] = useState<JobFormValues>({
+  const queryScope = useAuthenticatedQueryScope();
+  const allowManage = canManageJobs(currentTenant?.role);
+  const customersQuery = useAuthenticatedQuery({
+    queryKey: queryKeys.customers.list(queryScope, customerListQuery),
+    queryFn: (accessToken) =>
+      listCustomersRequest(accessToken, customerListQuery),
+    enabled: allowManage && Boolean(queryScope.tenantId),
+  });
+  const listedCustomers = customersQuery.data?.items ?? [];
+  const selectedCustomerIsListed = listedCustomers.some(
+    (customer) => customer.id === selectedCustomerId,
+  );
+  const needsSelectedCustomer = Boolean(
+    selectedCustomerId &&
+      customersQuery.isSuccess &&
+      !selectedCustomerIsListed,
+  );
+  const selectedCustomerQuery = useAuthenticatedQuery({
+    queryKey: queryKeys.customers.detail(queryScope, selectedCustomerId),
+    queryFn: (accessToken) =>
+      getCustomerDetailRequest(accessToken, selectedCustomerId),
+    enabled:
+      allowManage &&
+      Boolean(queryScope.tenantId) &&
+      needsSelectedCustomer,
+  });
+  const selectedCustomerError = needsSelectedCustomer
+    ? selectedCustomerQuery.data?.archivedAt
+      ? new Error("Archived customers cannot be used for new jobs.")
+      : selectedCustomerQuery.error
+    : null;
+  const queryError = customersQuery.error ?? selectedCustomerError;
+  const loadError = queryError
+    ? getApiErrorView(queryError, "Failed to load customers.")
+    : null;
+  const customers: CustomerListItem[] = loadError
+    ? []
+    : needsSelectedCustomer && selectedCustomerQuery.data
+      ? [
+          ...listedCustomers,
+          {
+            id: selectedCustomerQuery.data.id,
+            name: selectedCustomerQuery.data.name,
+            phone: selectedCustomerQuery.data.phone ?? null,
+            email: selectedCustomerQuery.data.email ?? null,
+            notes: selectedCustomerQuery.data.notes ?? null,
+            archivedAt: selectedCustomerQuery.data.archivedAt,
+            createdAt: selectedCustomerQuery.data.createdAt,
+            updatedAt: selectedCustomerQuery.data.updatedAt,
+          },
+        ]
+      : listedCustomers;
+  const defaultValues: JobFormValues = {
     customerId: selectedCustomerId,
     title: "",
     serviceAddress: "",
     description: "",
     scheduledStartAt: "",
     scheduledEndAt: "",
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<ApiErrorView | null>(null);
-  const [submitError, setSubmitError] = useState<ApiErrorView | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    void (async () => {
-      setIsLoading(true);
-      setLoadError(null);
-
-      try {
-        const customerList = await withAccessTokenRetry((accessToken) =>
-          listCustomersRequest(accessToken, {
-            page: 1,
-            pageSize: 50,
-            sort: "name_asc",
-          }),
-        );
-
-        let items = customerList.items;
-
-        if (selectedCustomerId && !items.some((customer) => customer.id === selectedCustomerId)) {
-          const selected = await withAccessTokenRetry((accessToken) =>
-            getCustomerDetailRequest(accessToken, selectedCustomerId),
-          );
-
-          if (selected.archivedAt) {
-            throw new Error("Archived customers cannot be used for new jobs.");
-          }
-
-          items = [
-            ...items,
-            {
-              id: selected.id,
-              name: selected.name,
-              phone: selected.phone ?? null,
-              email: selected.email ?? null,
-              notes: selected.notes ?? null,
-              archivedAt: selected.archivedAt,
-              createdAt: selected.createdAt,
-              updatedAt: selected.updatedAt,
-            },
-          ];
-        }
-
-        if (!cancelled) {
-          setCustomers(items);
-          setDefaultValues((current) => ({
-            ...current,
-            customerId: selectedCustomerId || current.customerId,
-          }));
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setLoadError(getApiErrorView(error, "Failed to load customers."));
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedCustomerId, withAccessTokenRetry]);
+  };
+  const createJobMutation = useCreateJobMutation();
+  const submitError = createJobMutation.error
+    ? getApiErrorView(createJobMutation.error, "Failed to create job.")
+    : null;
+  const isLoading =
+    allowManage &&
+    (customersQuery.isLoading ||
+      (needsSelectedCustomer && selectedCustomerQuery.isLoading));
 
   return (
     <AppShell
       title="Create Job"
     >
       <AuthGuard>
-        {!canManageJobs(currentTenant?.role) ? (
+        {!allowManage ? (
           <EmptyStatePanel
             title="Job creation is unavailable"
             description="Your current role cannot create job records in this workspace."
@@ -137,22 +139,18 @@ function NewJobPageContent() {
                   submittingLabel="Creating job..."
                   submitError={submitError}
                   onSubmit={async (values) => {
-                    setSubmitError(null);
-
                     try {
-                      const created = await withAccessTokenRetry((accessToken) =>
-                        createJobRequest(accessToken, {
+                      const created = await createJobMutation.mutateAsync({
                           customerId: values.customerId,
                           title: values.title,
                           serviceAddress: values.serviceAddress,
                           description: values.description,
                           scheduledStartAt: toApiDateTime(values.scheduledStartAt),
                           scheduledEndAt: toApiDateTime(values.scheduledEndAt),
-                        }),
-                      );
+                        });
                       router.push(`/jobs/${created.id}`);
-                    } catch (error) {
-                      setSubmitError(getApiErrorView(error, "Failed to create job."));
+                    } catch {
+                      // The mutation exposes the API error to the form.
                     }
                   }}
                 />

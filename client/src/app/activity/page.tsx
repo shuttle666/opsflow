@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { ActivityLogCard } from "@/components/activity/activity-log-card";
 import { AppShell } from "@/components/ui/app-shell";
@@ -8,16 +8,17 @@ import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
 import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
 import { SummaryCard } from "@/components/ui/info-cards";
 import { subtleButtonClassName } from "@/components/ui/styles";
-import { listActivityFeedRequest } from "@/features/activity/activity-api";
+import { useActivityFeedQuery } from "@/features/activity/activity-queries";
 import {
   DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
   PAGINATED_LIST_BOTTOM_GAP,
   useAdaptivePageSize,
 } from "@/hooks/use-adaptive-page-size";
-import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
+import { getApiErrorView } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 import type { MembershipRole } from "@/types/auth";
-import type { ActivityFeedItem, ActivityFeedPagination } from "@/types/activity";
+import type { ActivityFeedItem } from "@/types/activity";
+import type { PaginationMeta } from "@/types/customer";
 
 const ACTIVITY_ROW_HEIGHT_PX = 65;
 
@@ -34,19 +35,15 @@ function mapItems(items: ActivityFeedItem[]) {
 
 export default function ActivityPage() {
   const currentTenant = useAuthStore((state) => state.currentTenant);
-  const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
-  const [items, setItems] = useState<ActivityFeedItem[]>([]);
-  const [pagination, setPagination] = useState<ActivityFeedPagination>({
+  const [page, setPage] = useState(1);
+
+  const allowReview = canReviewActivity(currentTenant?.role);
+  const emptyPagination: PaginationMeta = {
     page: 1,
     pageSize: DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
     total: 0,
     totalPages: 1,
-  });
-  const [page, setPage] = useState(1);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<ApiErrorView | null>(null);
-
-  const allowReview = canReviewActivity(currentTenant?.role);
+  };
   const {
     containerRef: activityListAreaRef,
     hasMeasured: hasMeasuredPageSize,
@@ -55,68 +52,18 @@ export default function ActivityPage() {
   } = useAdaptivePageSize<HTMLDivElement, HTMLDivElement>({
     bottomGap: PAGINATED_LIST_BOTTOM_GAP,
     itemHeight: ACTIVITY_ROW_HEIGHT_PX,
-    dependencies: [error, isLoading, items.length],
+    dependencies: [],
   });
-
-  useEffect(() => {
-    if (!allowReview) {
-      setItems([]);
-      setPagination({
-        page: 1,
-        pageSize: DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
-        total: 0,
-        totalPages: 1,
-      });
-      setIsLoading(false);
-      setError(null);
-      return;
-    }
-
-    if (!hasMeasuredPageSize) {
-      return;
-    }
-
-    let cancelled = false;
-
-    void (async () => {
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const result = await withAccessTokenRetry((accessToken) =>
-          listActivityFeedRequest(accessToken, { page, pageSize: adaptivePageSize }),
-        );
-
-        if (!cancelled) {
-          setItems(mapItems(result.items));
-          setPagination(result.pagination);
-          setPage((current) =>
-            current > result.pagination.totalPages
-              ? result.pagination.totalPages
-              : current,
-          );
-        }
-      } catch (loadError) {
-        if (!cancelled) {
-          setError(getApiErrorView(loadError, "Failed to load activity log."));
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    adaptivePageSize,
-    allowReview,
-    hasMeasuredPageSize,
-    page,
-    withAccessTokenRetry,
-  ]);
+  const activityQuery = useActivityFeedQuery(
+    { page, pageSize: adaptivePageSize },
+    allowReview && hasMeasuredPageSize,
+  );
+  const items = mapItems(activityQuery.data?.items ?? []);
+  const pagination = activityQuery.data?.pagination ?? emptyPagination;
+  const isLoading = !hasMeasuredPageSize || activityQuery.isLoading;
+  const error = activityQuery.error
+    ? getApiErrorView(activityQuery.error, "Failed to load activity log.")
+    : null;
 
   return (
     <AppShell title="Activity Log">

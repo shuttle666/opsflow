@@ -1,9 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen } from "@/test/render";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import DashboardPage from "@/app/dashboard/page";
 import { useAuthStore } from "@/store/auth-store";
-import { getDashboardSummaryRequest } from "@/features/dashboard";
+import { getDashboardSummaryRequest } from "@/features/dashboard/dashboard-api";
 import type { DashboardSummary } from "@/types/dashboard";
 
 vi.mock("next/link", () => ({
@@ -38,7 +38,7 @@ vi.mock("@/components/auth/invitation-inbox-card", () => ({
   InvitationInboxCard: () => <div>Invitation inbox</div>,
 }));
 
-vi.mock("@/features/dashboard", () => ({
+vi.mock("@/features/dashboard/dashboard-api", () => ({
   getDashboardSummaryRequest: vi.fn(),
 }));
 

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@/test/render";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { JobAssignmentCard } from "@/components/job/job-assignment-card";
@@ -6,11 +6,11 @@ import {
   assignJobRequest,
   unassignJobRequest,
 } from "@/features/job/job-api";
-import { listMembershipsRequest } from "@/features/membership";
+import { listMembershipsRequest } from "@/features/membership/membership-api";
 import { useAuthStore } from "@/store/auth-store";
 import type { JobDetail } from "@/types/job";
 
-vi.mock("@/features/membership", () => ({
+vi.mock("@/features/membership/membership-api", () => ({
   listMembershipsRequest: vi.fn(),
 }));
 

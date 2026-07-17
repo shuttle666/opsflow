@@ -1,10 +1,10 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@/test/render";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import SchedulePage from "@/app/schedule/page";
-import { getScheduleRangeRequest } from "@/features/job";
-import { listMembershipsRequest } from "@/features/membership";
+import { getScheduleRangeRequest } from "@/features/job/job-api";
+import { listMembershipsRequest } from "@/features/membership/membership-api";
 import { useAuthStore } from "@/store/auth-store";
 
 vi.mock("next/link", () => ({
@@ -48,15 +48,17 @@ vi.mock("@/components/auth/auth-guard", () => ({
   AuthGuard: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
-vi.mock("@/features/job", async () => {
-  const actual = await vi.importActual<typeof import("@/features/job")>("@/features/job");
+vi.mock("@/features/job/job-api", async () => {
+  const actual = await vi.importActual<typeof import("@/features/job/job-api")>(
+    "@/features/job/job-api",
+  );
   return {
     ...actual,
     getScheduleRangeRequest: vi.fn(),
   };
 });
 
-vi.mock("@/features/membership", () => ({
+vi.mock("@/features/membership/membership-api", () => ({
   listMembershipsRequest: vi.fn(),
 }));
 
@@ -193,7 +195,7 @@ describe("schedule page", () => {
     expect(screen.getByRole("button", { name: "Previous week" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Today" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Next week" })).toBeInTheDocument();
-    expect(screen.getAllByText("Assigned visit").length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("Assigned visit")).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Conflict").length).toBeGreaterThan(0);
     expect(screen.queryByText("Assignee")).not.toBeInTheDocument();
     expect(screen.queryByText("Plan with AI")).not.toBeInTheDocument();

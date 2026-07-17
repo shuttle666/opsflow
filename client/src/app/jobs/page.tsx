@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { AppShell } from "@/components/ui/app-shell";
 import { DataTableCard } from "@/components/ui/data-table-card";
@@ -18,17 +18,22 @@ import {
   subtleButtonClassName,
 } from "@/components/ui/styles";
 import { listCustomersRequest } from "@/features/customer/customer-api";
-import { formatDateTime, formatScheduleRange, listJobsRequest } from "@/features/job";
+import { formatDateTime, formatScheduleRange } from "@/features/job";
+import { useJobsQuery } from "@/features/job/job-queries";
 import {
   DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
   PAGINATED_LIST_BOTTOM_GAP,
   PAGINATED_TABLE_HEADER_OFFSET,
   useAdaptivePageSize,
 } from "@/hooks/use-adaptive-page-size";
-import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
+import {
+  useAuthenticatedQuery,
+  useAuthenticatedQueryScope,
+} from "@/hooks/use-authenticated-query";
+import { getApiErrorView } from "@/lib/api-client";
+import { queryKeys } from "@/lib/query-keys";
 import { useAuthStore } from "@/store/auth-store";
-import type { CustomerListItem, PaginationMeta } from "@/types/customer";
-import type { JobListItem, JobStatus } from "@/types/job";
+import type { JobStatus } from "@/types/job";
 
 const JOB_ROW_HEIGHT_PX = 57;
 
@@ -47,9 +52,7 @@ function canManageJobs(role: string | undefined) {
 
 export default function JobsPage() {
   const currentTenant = useAuthStore((state) => state.currentTenant);
-  const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
-  const [jobs, setJobs] = useState<JobListItem[]>([]);
-  const [customers, setCustomers] = useState<CustomerListItem[]>([]);
+  const queryScope = useAuthenticatedQueryScope();
   const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<JobStatus | "">("");
@@ -58,14 +61,6 @@ export default function JobsPage() {
     "createdAt_desc" | "createdAt_asc" | "scheduledStartAt_asc" | "scheduledStartAt_desc"
   >("createdAt_desc");
   const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState<PaginationMeta>({
-    page: 1,
-    pageSize: DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
-    total: 0,
-    totalPages: 1,
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<ApiErrorView | null>(null);
   const allowManage = canManageJobs(currentTenant?.role);
   const {
     containerRef: jobTableAreaRef,
@@ -76,112 +71,42 @@ export default function JobsPage() {
     bottomGap: PAGINATED_LIST_BOTTOM_GAP,
     itemHeight: JOB_ROW_HEIGHT_PX,
     topGap: PAGINATED_TABLE_HEADER_OFFSET,
-    dependencies: [error, isLoading, jobs.length],
+    dependencies: [customerFilter, page, query, sort, statusFilter],
   });
-
-  useEffect(() => {
-    if (!allowManage) {
-      setCustomers([]);
-      return;
-    }
-
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        const result = await withAccessTokenRetry((accessToken) =>
-          listCustomersRequest(accessToken, {
-            page: 1,
-            pageSize: 50,
-            sort: "name_asc",
-          }),
-        );
-
-        if (!cancelled) {
-          setCustomers(result.items);
-        }
-      } catch {
-        if (!cancelled) {
-          setCustomers([]);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [allowManage, withAccessTokenRetry]);
-
-  useEffect(() => {
-    if (!allowManage) {
-      setJobs([]);
-      setPagination({
-        page: 1,
-        pageSize: DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
-        total: 0,
-        totalPages: 1,
-      });
-      setIsLoading(false);
-      setError(null);
-      return;
-    }
-
-    if (!hasMeasuredPageSize) {
-      return;
-    }
-
-    let cancelled = false;
-
-    void (async () => {
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const result = await withAccessTokenRetry((accessToken) =>
-          listJobsRequest(accessToken, {
-            q: query,
-            status: statusFilter || undefined,
-            customerId: customerFilter || undefined,
-            page,
-            pageSize: adaptivePageSize,
-            sort,
-          }),
-        );
-
-        if (!cancelled) {
-          setJobs(result.items);
-          setPagination(result.pagination);
-          setPage((current) =>
-            current > result.pagination.totalPages
-              ? result.pagination.totalPages
-              : current,
-          );
-        }
-      } catch (loadError) {
-        if (!cancelled) {
-          setError(getApiErrorView(loadError, "Failed to load jobs."));
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    adaptivePageSize,
-    allowManage,
-    customerFilter,
-    hasMeasuredPageSize,
+  const customerListQuery = {
+    page: 1,
+    pageSize: 50,
+    sort: "name_asc" as const,
+  };
+  const customersQuery = useAuthenticatedQuery({
+    queryKey: queryKeys.customers.list(queryScope, customerListQuery),
+    queryFn: (accessToken) =>
+      listCustomersRequest(accessToken, customerListQuery),
+    enabled: allowManage && Boolean(queryScope.tenantId),
+  });
+  const jobsQuery = useJobsQuery(
+    {
+      q: query,
+      status: statusFilter || undefined,
+      customerId: customerFilter || undefined,
+      page,
+      pageSize: adaptivePageSize,
+      sort,
+    },
+    { enabled: allowManage && hasMeasuredPageSize },
+  );
+  const jobs = jobsQuery.data?.items ?? [];
+  const customers = customersQuery.data?.items ?? [];
+  const pagination = jobsQuery.data?.pagination ?? {
     page,
-    query,
-    sort,
-    statusFilter,
-    withAccessTokenRetry,
-  ]);
+    pageSize: adaptivePageSize || DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
+    total: 0,
+    totalPages: 1,
+  };
+  const isLoading = allowManage && (!hasMeasuredPageSize || jobsQuery.isLoading);
+  const error = jobsQuery.error
+    ? getApiErrorView(jobsQuery.error, "Failed to load jobs.")
+    : null;
 
   return (
     <AppShell

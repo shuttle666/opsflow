@@ -97,8 +97,19 @@ This roadmap is aligned with the current codebase. Phase names describe the prod
 - Provider-neutral Tool Registry shared by the Web Agent and protocol adapters
 - Task-oriented read/proposal tools with role and audience exposure rules
 - Local stdio MCP server with access-session validation and contract tests
-- MCP proposal handoff to the Web approval flow
+- Separate proposal and execution tools for eligible `CREATE_JOB`, `ASSIGN_JOB`, and `SCHEDULE_JOB` flows, with execution allowed only after a later confirmation turn
+- Authenticated Web-button approval as the strongest path, plus approval-URL fallback and Web-only proposal handling
+- Documented external-host trust boundary and destructive MCP tool hint
 - PII-minimized Web/MCP tool invocation audit records
+
+## Phase 15
+- Status: Completed
+- TanStack Query ownership for migrated operational REST server state
+- Tenant, user, and role-scoped query keys with previous-scope eviction and mutation-cache clearing across authorization boundaries
+- Refresh-aware authenticated queries and mutation-driven cache reconciliation
+- Notification SSE events synchronized into the notification query cache
+- Agent conversation REST state and completed stream results reconciled into scoped caches while token streaming remains imperative
+- Zustand narrowed to auth/session, active-tenant, theme, and local preference state
 
 ## Later Candidates
 - Expanded production observability: broader application logs, rate limiting, error taxonomy, and external error monitoring

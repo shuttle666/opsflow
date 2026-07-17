@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, Suspense, useEffect, useState } from "react";
+import { FormEvent, Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { PublicShell } from "@/components/ui/app-shell";
@@ -11,32 +11,23 @@ import {
   secondaryButtonClassName,
   strongSurfaceClassName,
 } from "@/components/ui/styles";
-import { useAuthStore } from "@/store/auth-store";
+import { useAcceptInvitationTokenMutation } from "@/features/auth/auth-queries";
 import type { InvitationAcceptedResult } from "@/types/auth";
 
 function AcceptInvitationPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const acceptInvitation = useAuthStore((state) => state.acceptInvitation);
-  const [token, setToken] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const acceptMutation = useAcceptInvitationTokenMutation();
+  const [token, setToken] = useState(() => searchParams.get("token") ?? "");
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<InvitationAcceptedResult | null>(null);
 
-  useEffect(() => {
-    const tokenFromQuery = searchParams.get("token");
-    if (tokenFromQuery) {
-      setToken(tokenFromQuery);
-    }
-  }, [searchParams]);
-
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setSubmitting(true);
     setError(null);
 
     try {
-      const accepted = await acceptInvitation(token.trim());
+      const accepted = await acceptMutation.mutateAsync(token.trim());
       setResult(accepted);
     } catch (submitError) {
       const message =
@@ -45,8 +36,6 @@ function AcceptInvitationPageContent() {
           : "Failed to accept invitation.";
       setError(message);
       setResult(null);
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -79,8 +68,8 @@ function AcceptInvitationPageContent() {
                 />
               </label>
 
-              <button type="submit" disabled={submitting} className={primaryButtonClassName}>
-                {submitting ? "Accepting..." : "Accept invitation"}
+              <button type="submit" disabled={acceptMutation.isPending} className={primaryButtonClassName}>
+                {acceptMutation.isPending ? "Accepting..." : "Accept invitation"}
                 <ArrowRight className="h-4 w-4" />
               </button>
             </form>

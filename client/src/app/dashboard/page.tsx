@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import {
   TodaysScheduleCard,
@@ -23,7 +23,7 @@ import {
   secondaryButtonClassName,
   surfaceClassName,
 } from "@/components/ui/styles";
-import { getDashboardSummaryRequest } from "@/features/dashboard";
+import { useDashboardSummaryQuery } from "@/features/dashboard/dashboard-queries";
 import { formatTimeRange } from "@/features/job";
 import { useAuthStore } from "@/store/auth-store";
 import type { DashboardSummary } from "@/types/dashboard";
@@ -78,52 +78,22 @@ function todaySummaryQuery() {
 }
 
 export default function DashboardPage() {
-  const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
   const currentTenant = useAuthStore((state) => state.currentTenant);
   const user = useAuthStore((state) => state.user);
 
-  const [summary, setSummary] = useState<DashboardSummary>(() =>
-    emptyDashboardSummary(),
-  );
-  const [greeting, setGreeting] = useState("Good day");
-  const [isSummaryLoading, setIsSummaryLoading] = useState(true);
-  const allowPlanner = currentTenant?.role === "OWNER" || currentTenant?.role === "MANAGER";
-
-  useEffect(() => {
+  const [greeting] = useState(() => {
     const hour = new Date().getHours();
-    setGreeting(hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening");
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    void (async () => {
-      setIsSummaryLoading(true);
-      const query = todaySummaryQuery();
-
-      try {
-        const result = await withAccessTokenRetry((accessToken) =>
-          getDashboardSummaryRequest(accessToken, query),
-        );
-
-        if (!cancelled) {
-          setSummary(result);
-        }
-      } catch {
-        if (!cancelled) {
-          setSummary(emptyDashboardSummary(query.date));
-        }
-      } finally {
-        if (!cancelled) {
-          setIsSummaryLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [withAccessTokenRetry]);
+    return hour < 12
+      ? "Good morning"
+      : hour < 17
+        ? "Good afternoon"
+        : "Good evening";
+  });
+  const summaryQueryInput = useMemo(() => todaySummaryQuery(), []);
+  const summaryQuery = useDashboardSummaryQuery(summaryQueryInput);
+  const summary = summaryQuery.data ?? emptyDashboardSummary(summaryQueryInput.date);
+  const isSummaryLoading = summaryQuery.isPending;
+  const allowPlanner = currentTenant?.role === "OWNER" || currentTenant?.role === "MANAGER";
 
   const scheduleItems = useMemo<ScheduleItem[]>(
     () =>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { InvitationCreateCard } from "@/components/auth/invitation-create-card";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { AppShell } from "@/components/ui/app-shell";
@@ -16,18 +16,17 @@ import {
   subtleButtonClassName,
 } from "@/components/ui/styles";
 import {
-  listMembershipsRequest,
-  updateMembershipRequest,
-} from "@/features/membership";
+  useMembershipsQuery,
+  useUpdateMembershipMutation,
+} from "@/features/membership/membership-queries";
 import {
   PAGINATED_LIST_BOTTOM_GAP,
   useAdaptivePageSize,
 } from "@/hooks/use-adaptive-page-size";
-import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
+import { getApiErrorView } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 import type { PaginationMeta } from "@/types/customer";
 import type { MembershipRole, MembershipStatus } from "@/types/auth";
-import type { MembershipListItem } from "@/types/membership";
 
 type MembershipDraft = {
   role: MembershipRole;
@@ -104,23 +103,16 @@ function getTeamGridItemsPerRow(itemArea: Element | null) {
 
 export default function TeamPage() {
   const currentTenant = useAuthStore((state) => state.currentTenant);
-  const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
-  const [memberships, setMemberships] = useState<MembershipListItem[]>([]);
   const [drafts, setDrafts] = useState<Record<string, MembershipDraft>>({});
   const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<MembershipStatus | "">("");
   const [roleFilter, setRoleFilter] = useState<MembershipRole | "">("");
   const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState<PaginationMeta>({
-    page: 1,
-    pageSize: TEAM_MIN_PAGE_SIZE,
-    total: 0,
-    totalPages: 1,
-  });
-  const [isLoading, setIsLoading] = useState(true);
   const [actingId, setActingId] = useState<string | null>(null);
-  const [error, setError] = useState<ApiErrorView | null>(null);
+  const [actionError, setActionError] = useState<ReturnType<
+    typeof getApiErrorView
+  > | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
 
@@ -138,8 +130,35 @@ export default function TeamPage() {
     min: TEAM_MIN_PAGE_SIZE,
     minRows: 1,
     rowGap: TEAM_GRID_ROW_GAP_PX,
-    dependencies: [error, isLoading, memberships.length, success],
+    dependencies: [actionError, success],
   });
+  const membershipQueryInput = {
+    q: query,
+    status: statusFilter || undefined,
+    role: roleFilter || undefined,
+    page,
+    pageSize: adaptivePageSize,
+  };
+  const membershipsQuery = useMembershipsQuery(
+    membershipQueryInput,
+    allowReview && hasMeasuredPageSize,
+  );
+  const updateMutation = useUpdateMembershipMutation();
+  const memberships = useMemo(
+    () => membershipsQuery.data?.items ?? [],
+    [membershipsQuery.data?.items],
+  );
+  const pagination: PaginationMeta = membershipsQuery.data?.pagination ?? {
+    page: 1,
+    pageSize: TEAM_MIN_PAGE_SIZE,
+    total: 0,
+    totalPages: 1,
+  };
+  const isLoading = membershipsQuery.isPending;
+  const queryError = membershipsQuery.error
+    ? getApiErrorView(membershipsQuery.error, "Failed to load team members.")
+    : null;
+  const error = actionError ?? queryError;
   const teamStats = useMemo(
     () => [
       { label: "Total", value: String(pagination.total || memberships.length), color: "var(--color-text)" },
@@ -149,82 +168,6 @@ export default function TeamPage() {
     ],
     [memberships, pagination.total],
   );
-
-  useEffect(() => {
-    if (!allowReview) {
-      setMemberships([]);
-      setIsLoading(false);
-      return;
-    }
-
-    if (!hasMeasuredPageSize) {
-      return;
-    }
-
-    let cancelled = false;
-
-    void (async () => {
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const result = await withAccessTokenRetry((accessToken) =>
-          listMembershipsRequest(accessToken, {
-            q: query,
-            status: statusFilter || undefined,
-            role: roleFilter || undefined,
-            page,
-            pageSize: adaptivePageSize,
-          }),
-        );
-
-        if (!cancelled) {
-          setMemberships(result.items);
-          setPagination(result.pagination);
-          setPage((current) =>
-            current > result.pagination.totalPages
-              ? result.pagination.totalPages
-              : current,
-          );
-          setDrafts(
-            Object.fromEntries(
-              result.items
-                .filter((membership) => membership.status !== "INVITED")
-                .map((membership) => [
-                  membership.id,
-                  {
-                    role: membership.role,
-                    status:
-                      membership.status === "DISABLED" ? "DISABLED" : "ACTIVE",
-                  },
-                ]),
-            ),
-          );
-        }
-      } catch (loadError) {
-        if (!cancelled) {
-          setError(getApiErrorView(loadError, "Failed to load team members."));
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    adaptivePageSize,
-    allowReview,
-    hasMeasuredPageSize,
-    page,
-    query,
-    roleFilter,
-    statusFilter,
-    withAccessTokenRetry,
-  ]);
 
   const roleOptions = useMemo<MembershipRole[]>(() => ["OWNER", "MANAGER", "STAFF"], []);
 
@@ -344,7 +287,17 @@ export default function TeamPage() {
                     className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3"
                   >
                     {memberships.map((membership) => {
-                  const draft = drafts[membership.id];
+                  const draft =
+                    drafts[membership.id] ??
+                    (membership.status === "INVITED"
+                      ? undefined
+                      : {
+                          role: membership.role,
+                          status:
+                            membership.status === "DISABLED"
+                              ? "DISABLED"
+                              : "ACTIVE",
+                        });
                   const canEdit =
                     allowManage && membership.status !== "INVITED" && !!draft;
                   const changed =
@@ -457,38 +410,29 @@ export default function TeamPage() {
                               };
 
                               setActingId(membership.id);
-                              setError(null);
+                              setActionError(null);
                               setSuccess(null);
 
-                              void withAccessTokenRetry((accessToken) =>
-                                updateMembershipRequest(
-                                  accessToken,
-                                  membership.id,
-                                  payload,
-                                ),
-                              )
+                              void updateMutation
+                                .mutateAsync({
+                                  membershipId: membership.id,
+                                  input: payload,
+                                })
                                 .then((updated) => {
-                                  setMemberships((current) =>
-                                    current.map((item) =>
-                                      item.id === updated.id ? updated : item,
-                                    ),
-                                  );
                                   setDrafts((current) => ({
-                                    ...current,
-                                    [updated.id]: {
-                                      role: updated.role,
-                                      status:
-                                        updated.status === "DISABLED"
-                                          ? "DISABLED"
-                                          : "ACTIVE",
-                                    },
+                                    ...Object.fromEntries(
+                                      Object.entries(current).filter(
+                                        ([membershipId]) =>
+                                          membershipId !== updated.id,
+                                      ),
+                                    ),
                                   }));
                                   setSuccess(`Updated membership for ${updated.email}.`);
                                 })
-                                .catch((actionError) => {
-                                  setError(
+                                .catch((mutationError) => {
+                                  setActionError(
                                     getApiErrorView(
-                                      actionError,
+                                      mutationError,
                                       "Failed to update membership.",
                                     ),
                                   );
@@ -524,7 +468,7 @@ export default function TeamPage() {
                 <button
                   type="button"
                   disabled={pagination.page <= 1}
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  onClick={() => setPage(Math.max(1, pagination.page - 1))}
                   className={subtleButtonClassName}
                 >
                   Previous
@@ -533,7 +477,7 @@ export default function TeamPage() {
                   type="button"
                   disabled={pagination.page >= pagination.totalPages}
                   onClick={() =>
-                    setPage((current) => Math.min(pagination.totalPages, current + 1))
+                    setPage(Math.min(pagination.totalPages, pagination.page + 1))
                   }
                   className={subtleButtonClassName}
                 >

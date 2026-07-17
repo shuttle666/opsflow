@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { JobEvidencePanel } from "@/components/job/job-evidence-panel";
 import { JobAssignmentCard } from "@/components/job/job-assignment-card";
@@ -19,29 +20,29 @@ import {
   surfaceClassName,
   strongSurfaceClassName,
 } from "@/components/ui/styles";
+import { downloadJobEvidenceRequest } from "@/features/job/job-api";
 import {
-  deleteJobEvidenceRequest,
-  downloadJobEvidenceRequest,
-  approveJobCompletionReviewRequest,
-  getLatestJobCompletionReviewRequest,
-  getJobDetailRequest,
-  getJobHistoryRequest,
-  listJobEvidenceRequest,
-  returnJobCompletionReviewRequest,
-  submitJobCompletionReviewRequest,
-  transitionJobStatusRequest,
-  uploadJobEvidenceRequest,
-} from "@/features/job/job-api";
+  useApproveJobCompletionReviewMutation,
+  useDeleteJobEvidenceMutation,
+  useJobCompletionReviewQuery,
+  useJobDetailQuery,
+  useJobEvidenceQuery,
+  useJobHistoryQuery,
+  useReturnJobCompletionReviewMutation,
+  useSubmitJobCompletionReviewMutation,
+  useTransitionJobStatusMutation,
+  useUploadJobEvidenceMutation,
+} from "@/features/job/job-queries";
+import { useAuthenticatedQueryScope } from "@/hooks/use-authenticated-query";
 import { formatDateTime, formatScheduleRange } from "@/features/job";
 import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
+import { queryKeys } from "@/lib/query-keys";
 import { useAuthStore } from "@/store/auth-store";
 import type {
   JobDetail,
   JobCompletionReviewItem,
-  JobCompletionReviewMutationResult,
   JobEvidenceItem,
   JobHistoryItem,
-  JobHistoryResult,
   JobStatus,
 } from "@/types/job";
 import type { TimelineItemView, TransitionActionView } from "@/types/future-ui";
@@ -359,74 +360,48 @@ export default function JobDetailPage() {
   const user = useAuthStore((state) => state.user);
   const currentTenant = useAuthStore((state) => state.currentTenant);
   const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
-  const [job, setJob] = useState<JobDetail | null>(null);
-  const [workflow, setWorkflow] = useState<JobHistoryResult | null>(null);
-  const [completionReview, setCompletionReview] = useState<JobCompletionReviewItem | null>(null);
-  const [evidence, setEvidence] = useState<JobEvidenceItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | ApiErrorView | null>(null);
+  const queryClient = useQueryClient();
+  const queryScope = useAuthenticatedQueryScope();
+  const jobQuery = useJobDetailQuery(jobId);
+  const workflowQuery = useJobHistoryQuery(jobId);
+  const evidenceQuery = useJobEvidenceQuery(jobId);
+  const completionReviewQuery = useJobCompletionReviewQuery(jobId);
+  const transitionMutation = useTransitionJobStatusMutation();
+  const uploadEvidenceMutation = useUploadJobEvidenceMutation();
+  const deleteEvidenceMutation = useDeleteJobEvidenceMutation();
+  const submitCompletionReviewMutation = useSubmitJobCompletionReviewMutation();
+  const approveCompletionReviewMutation = useApproveJobCompletionReviewMutation();
+  const returnCompletionReviewMutation = useReturnJobCompletionReviewMutation();
   const [workflowError, setWorkflowError] = useState<string | ApiErrorView | null>(null);
   const [workflowSuccess, setWorkflowSuccess] = useState<string | null>(null);
-  const [isTransitioning, setIsTransitioning] = useState(false);
   const [completionReviewError, setCompletionReviewError] = useState<string | ApiErrorView | null>(null);
   const [completionReviewSuccess, setCompletionReviewSuccess] = useState<string | null>(null);
-  const [isSubmittingCompletionReview, setIsSubmittingCompletionReview] = useState(false);
   const [evidenceError, setEvidenceError] = useState<string | ApiErrorView | null>(null);
-  const [isUploadingEvidence, setIsUploadingEvidence] = useState(false);
-  const [isEvidenceLoading, setIsEvidenceLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!jobId) {
-      setError("Job id is missing.");
-      setIsLoading(false);
-      setIsEvidenceLoading(false);
-      return;
-    }
-
-    void (async () => {
-      setIsLoading(true);
-      setIsEvidenceLoading(true);
-      setError(null);
-
-      try {
-        const [loadedJob, loadedHistory, loadedEvidence, loadedCompletionReview] = await Promise.all([
-          withAccessTokenRetry((accessToken) => getJobDetailRequest(accessToken, jobId)),
-          withAccessTokenRetry((accessToken) => getJobHistoryRequest(accessToken, jobId)),
-          withAccessTokenRetry((accessToken) => listJobEvidenceRequest(accessToken, jobId)),
-          withAccessTokenRetry((accessToken) =>
-            getLatestJobCompletionReviewRequest(accessToken, jobId),
-          ),
-        ]);
-
-        if (!cancelled) {
-          setJob(loadedJob);
-          setWorkflow(loadedHistory);
-          setEvidence(loadedEvidence);
-          setCompletionReview(loadedCompletionReview);
-          setWorkflowError(null);
-          setWorkflowSuccess(null);
-          setCompletionReviewError(null);
-          setCompletionReviewSuccess(null);
-          setEvidenceError(null);
-        }
-      } catch (loadError) {
-        if (!cancelled) {
-          setError(getApiErrorView(loadError, "Failed to load job."));
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-          setIsEvidenceLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [jobId, withAccessTokenRetry]);
+  const job = jobQuery.data ?? null;
+  const workflow = workflowQuery.data ?? null;
+  const completionReview = completionReviewQuery.data ?? null;
+  const evidence = evidenceQuery.data ?? [];
+  const error = !jobId
+    ? "Job id is missing."
+    : jobQuery.error
+      ? getApiErrorView(jobQuery.error, "Failed to load job.")
+      : null;
+  const workflowRequestError = workflowQuery.error
+    ? getApiErrorView(workflowQuery.error, "Failed to load job workflow.")
+    : null;
+  const completionReviewRequestError = completionReviewQuery.error
+    ? getApiErrorView(
+        completionReviewQuery.error,
+        "Failed to load completion review.",
+      )
+    : null;
+  const evidenceRequestError = evidenceQuery.error
+    ? getApiErrorView(evidenceQuery.error, "Failed to load job evidence.")
+    : null;
+  const isSubmittingCompletionReview =
+    submitCompletionReviewMutation.isPending ||
+    approveCompletionReviewMutation.isPending ||
+    returnCompletionReviewMutation.isPending;
 
   const canEdit = canManageJobs(currentTenant?.role);
   const canManageEvidence = job
@@ -445,42 +420,27 @@ export default function JobDetailPage() {
         )
       : [];
 
-  function applyCompletionReviewMutation(result: JobCompletionReviewMutationResult) {
-    setJob(result.job);
-    setCompletionReview(result.review);
-    setWorkflow((current) => ({
-      history: [...(current?.history ?? []), result.historyEntry],
-      allowedTransitions: result.allowedTransitions,
-    }));
-  }
-
   async function handleTransition(action: TransitionActionView, reason?: string) {
     if (!job) {
       return;
     }
 
-    setIsTransitioning(true);
     setWorkflowError(null);
     setWorkflowSuccess(null);
+    transitionMutation.reset();
 
     try {
-      const transitioned = await withAccessTokenRetry((accessToken) =>
-        transitionJobStatusRequest(accessToken, job.id, {
+      await transitionMutation.mutateAsync({
+        jobId: job.id,
+        input: {
           toStatus: action.toStatus,
           ...(reason ? { reason } : {}),
-        }),
-      );
+        },
+      });
 
-      setJob(transitioned.job);
-      setWorkflow((current) => ({
-        history: [...(current?.history ?? []), transitioned.historyEntry],
-        allowedTransitions: transitioned.allowedTransitions,
-      }));
       setWorkflowSuccess(`Job moved to ${formatStatusLabel(action.toStatus)}.`);
     } catch (transitionError) {
       setWorkflowError(getApiErrorView(transitionError, "Failed to update job workflow."));
-    } finally {
-      setIsTransitioning(false);
     }
   }
 
@@ -493,19 +453,14 @@ export default function JobDetailPage() {
       return;
     }
 
-    setIsUploadingEvidence(true);
     setEvidenceError(null);
+    uploadEvidenceMutation.reset();
 
     try {
-      const created = await withAccessTokenRetry((accessToken) =>
-        uploadJobEvidenceRequest(accessToken, job.id, input),
-      );
-      setEvidence((current) => [created, ...current]);
+      await uploadEvidenceMutation.mutateAsync({ jobId: job.id, input });
     } catch (uploadError) {
       setEvidenceError(getApiErrorView(uploadError, "Failed to upload evidence."));
       throw uploadError;
-    } finally {
-      setIsUploadingEvidence(false);
     }
   }
 
@@ -514,23 +469,21 @@ export default function JobDetailPage() {
       return;
     }
 
-    setIsSubmittingCompletionReview(true);
     setCompletionReviewError(null);
     setCompletionReviewSuccess(null);
+    submitCompletionReviewMutation.reset();
 
     try {
-      const result = await withAccessTokenRetry((accessToken) =>
-        submitJobCompletionReviewRequest(accessToken, job.id, { completionNote }),
-      );
-      applyCompletionReviewMutation(result);
+      await submitCompletionReviewMutation.mutateAsync({
+        jobId: job.id,
+        input: { completionNote },
+      });
       setCompletionReviewSuccess("Completion submitted for review.");
     } catch (submitError) {
       setCompletionReviewError(
         getApiErrorView(submitError, "Failed to submit completion for review."),
       );
       throw submitError;
-    } finally {
-      setIsSubmittingCompletionReview(false);
     }
   }
 
@@ -539,21 +492,19 @@ export default function JobDetailPage() {
       return;
     }
 
-    setIsSubmittingCompletionReview(true);
     setCompletionReviewError(null);
     setCompletionReviewSuccess(null);
+    approveCompletionReviewMutation.reset();
 
     try {
-      const result = await withAccessTokenRetry((accessToken) =>
-        approveJobCompletionReviewRequest(accessToken, job.id, review.id),
-      );
-      applyCompletionReviewMutation(result);
+      await approveCompletionReviewMutation.mutateAsync({
+        jobId: job.id,
+        reviewId: review.id,
+      });
       setCompletionReviewSuccess("Completion approved.");
     } catch (approveError) {
       setCompletionReviewError(getApiErrorView(approveError, "Failed to approve completion."));
       throw approveError;
-    } finally {
-      setIsSubmittingCompletionReview(false);
     }
   }
 
@@ -565,23 +516,22 @@ export default function JobDetailPage() {
       return;
     }
 
-    setIsSubmittingCompletionReview(true);
     setCompletionReviewError(null);
     setCompletionReviewSuccess(null);
+    returnCompletionReviewMutation.reset();
 
     try {
-      const result = await withAccessTokenRetry((accessToken) =>
-        returnJobCompletionReviewRequest(accessToken, job.id, review.id, { reviewNote }),
-      );
-      applyCompletionReviewMutation(result);
+      await returnCompletionReviewMutation.mutateAsync({
+        jobId: job.id,
+        reviewId: review.id,
+        input: { reviewNote },
+      });
       setCompletionReviewSuccess("Completion returned for rework.");
     } catch (returnError) {
       setCompletionReviewError(
         getApiErrorView(returnError, "Failed to return completion for rework."),
       );
       throw returnError;
-    } finally {
-      setIsSubmittingCompletionReview(false);
     }
   }
 
@@ -591,12 +541,10 @@ export default function JobDetailPage() {
     }
 
     setEvidenceError(null);
+    deleteEvidenceMutation.reset();
 
     try {
-      await withAccessTokenRetry((accessToken) =>
-        deleteJobEvidenceRequest(accessToken, job.id, evidenceId),
-      );
-      setEvidence((current) => current.filter((item) => item.id !== evidenceId));
+      await deleteEvidenceMutation.mutateAsync({ jobId: job.id, evidenceId });
     } catch (deleteError) {
       setEvidenceError(getApiErrorView(deleteError, "Failed to delete evidence."));
       throw deleteError;
@@ -624,7 +572,7 @@ export default function JobDetailPage() {
   return (
     <AppShell title="Job detail">
       <AuthGuard>
-        {isLoading ? <LoadingPanel label="Loading job..." /> : null}
+        {jobQuery.isLoading ? <LoadingPanel label="Loading job..." /> : null}
         {error ? <InlineErrorBanner message={error} /> : null}
 
         {job ? (
@@ -749,8 +697,8 @@ export default function JobDetailPage() {
                   canEditJob={canEdit}
                   canTransition={canTransition}
                   canShowManualControls={transitionActions.length > 0}
-                  isSubmitting={isTransitioning}
-                  error={workflowError}
+                  isSubmitting={transitionMutation.isPending}
+                  error={workflowError ?? workflowRequestError}
                   success={workflowSuccess}
                   readOnlyMessage={
                     !canTransition && workflow?.allowedTransitions?.length
@@ -766,7 +714,7 @@ export default function JobDetailPage() {
                   canSubmit={canTransition}
                   canReview={canEdit}
                   isSubmitting={isSubmittingCompletionReview}
-                  error={completionReviewError}
+                  error={completionReviewError ?? completionReviewRequestError}
                   success={completionReviewSuccess}
                   onSubmit={handleCompletionReviewSubmit}
                   onApprove={handleCompletionReviewApprove}
@@ -775,13 +723,21 @@ export default function JobDetailPage() {
               </div>
 
               <aside className="space-y-4">
-                <JobAssignmentCard job={job} onJobChange={setJob} />
+                <JobAssignmentCard
+                  job={job}
+                  onJobChange={(updatedJob) => {
+                    queryClient.setQueryData(
+                      queryKeys.jobs.detail(queryScope, updatedJob.id),
+                      updatedJob,
+                    );
+                  }}
+                />
                 <JobEvidencePanel
                   items={evidence}
                   canUpload={canManageEvidence}
-                  isLoading={isEvidenceLoading}
-                  isUploading={isUploadingEvidence}
-                  error={evidenceError}
+                  isLoading={evidenceQuery.isLoading}
+                  isUploading={uploadEvidenceMutation.isPending}
+                  error={evidenceError ?? evidenceRequestError}
                   onUpload={handleEvidenceUpload}
                   onDelete={handleEvidenceDelete}
                   onDownload={handleEvidenceDownload}

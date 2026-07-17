@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { AppShell } from "@/components/ui/app-shell";
 import { DataTableCard } from "@/components/ui/data-table-card";
@@ -16,16 +16,15 @@ import {
   badgeBaseClassName,
   subtleButtonClassName,
 } from "@/components/ui/styles";
-import { listCustomersRequest } from "@/features/customer/customer-api";
+import { useCustomersQuery } from "@/features/customer/customer-queries";
 import {
   DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
   PAGINATED_LIST_BOTTOM_GAP,
   PAGINATED_TABLE_HEADER_OFFSET,
   useAdaptivePageSize,
 } from "@/hooks/use-adaptive-page-size";
-import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
+import { getApiErrorView } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
-import type { CustomerListItem, PaginationMeta } from "@/types/customer";
 
 type ContactFilter = "all" | "has_contact" | "missing_contact";
 type CustomerStatusFilter = "active" | "archived" | "all";
@@ -65,8 +64,6 @@ function avatarColor(name: string) {
 
 export default function CustomersPage() {
   const currentTenant = useAuthStore((state) => state.currentTenant);
-  const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
-  const [customers, setCustomers] = useState<CustomerListItem[]>([]);
   const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState("");
   const [contactFilter, setContactFilter] = useState<ContactFilter>("all");
@@ -75,28 +72,8 @@ export default function CustomersPage() {
     "createdAt_desc" | "createdAt_asc" | "name_asc" | "name_desc"
   >("createdAt_desc");
   const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState<PaginationMeta>({
-    page: 1,
-    pageSize: DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
-    total: 0,
-    totalPages: 1,
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<ApiErrorView | null>(null);
 
   const allowManage = canManageCustomers(currentTenant?.role);
-  const visibleCustomers = useMemo(() => {
-    if (contactFilter === "has_contact") {
-      return customers.filter((customer) => customer.phone || customer.email);
-    }
-
-    if (contactFilter === "missing_contact") {
-      return customers.filter((customer) => !customer.phone && !customer.email);
-    }
-
-    return customers;
-  }, [contactFilter, customers]);
-
   const {
     containerRef: customerTableAreaRef,
     hasMeasured: hasMeasuredPageSize,
@@ -106,63 +83,52 @@ export default function CustomersPage() {
     bottomGap: PAGINATED_LIST_BOTTOM_GAP,
     itemHeight: CUSTOMER_ROW_HEIGHT_PX,
     topGap: PAGINATED_TABLE_HEADER_OFFSET,
-    dependencies: [error, isLoading, visibleCustomers.length],
+    dependencies: [contactFilter, query, sort, statusFilter],
   });
 
-  useEffect(() => {
-    if (!hasMeasuredPageSize) {
-      return;
+  const customerListQuery = useMemo(
+    () => ({
+      q: query,
+      page,
+      pageSize: adaptivePageSize,
+      status: statusFilter,
+      sort,
+    }),
+    [
+      adaptivePageSize,
+      page,
+      query,
+      sort,
+      statusFilter,
+    ],
+  );
+  const customersQuery = useCustomersQuery(customerListQuery, {
+    enabled: hasMeasuredPageSize,
+  });
+  const customers = customersQuery.data?.items;
+  const pagination = customersQuery.data?.pagination ?? {
+    page: 1,
+    pageSize: DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
+    total: 0,
+    totalPages: 1,
+  };
+  const isLoading = !hasMeasuredPageSize || customersQuery.isLoading;
+  const error = customersQuery.error
+    ? getApiErrorView(customersQuery.error, "Failed to load customers.")
+    : null;
+  const visibleCustomers = (() => {
+    const items = customers ?? [];
+
+    if (contactFilter === "has_contact") {
+      return items.filter((customer) => customer.phone || customer.email);
     }
 
-    let cancelled = false;
+    if (contactFilter === "missing_contact") {
+      return items.filter((customer) => !customer.phone && !customer.email);
+    }
 
-    void (async () => {
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const result = await withAccessTokenRetry((accessToken) =>
-          listCustomersRequest(accessToken, {
-            q: query,
-            page,
-            pageSize: adaptivePageSize,
-            status: statusFilter,
-            sort,
-          }),
-        );
-
-        if (!cancelled) {
-          setCustomers(result.items);
-          setPagination(result.pagination);
-          setPage((current) =>
-            current > result.pagination.totalPages
-              ? result.pagination.totalPages
-              : current,
-          );
-        }
-      } catch (loadError) {
-        if (!cancelled) {
-          setError(getApiErrorView(loadError, "Failed to load customers."));
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    adaptivePageSize,
-    hasMeasuredPageSize,
-    page,
-    query,
-    sort,
-    statusFilter,
-    withAccessTokenRetry,
-  ]);
+    return items;
+  })();
 
   return (
     <AppShell
@@ -286,21 +252,21 @@ export default function CustomersPage() {
             ) : visibleCustomers.length === 0 ? (
               <div className="p-4">
                 <EmptyStatePanel
-                  title={customers.length === 0 ? "No customers found" : "No customers match this filter"}
+                  title={!customers?.length ? "No customers found" : "No customers match this filter"}
                   description={
-                    customers.length === 0
+                    !customers?.length
                       ? statusFilter === "archived"
                         ? "No archived customers match the current search."
                         : "Adjust the current search or create the first customer profile for this tenant."
                       : "Try a different contact filter or adjust the current search."
                   }
                   actionLabel={
-                    customers.length === 0 && allowManage && statusFilter !== "archived"
+                    !customers?.length && allowManage && statusFilter !== "archived"
                       ? "Create customer"
                       : undefined
                   }
                   actionHref={
-                    customers.length === 0 && allowManage && statusFilter !== "archived"
+                    !customers?.length && allowManage && statusFilter !== "archived"
                       ? "/customers/new"
                       : undefined
                   }

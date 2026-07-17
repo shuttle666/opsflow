@@ -1,15 +1,14 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { CustomerForm } from "@/components/customer/customer-form";
 import { AppShell } from "@/components/ui/app-shell";
 import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
 import { FormSurface } from "@/components/ui/form-surface";
-import { createCustomerRequest } from "@/features/customer/customer-api";
+import { useCreateCustomerMutation } from "@/features/customer/customer-queries";
 import type { CustomerFormValues } from "@/features/customer/customer-schema";
-import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
+import { getApiErrorView } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 
 function canManageCustomers(role: string | undefined) {
@@ -19,8 +18,10 @@ function canManageCustomers(role: string | undefined) {
 export default function NewCustomerPage() {
   const router = useRouter();
   const currentTenant = useAuthStore((state) => state.currentTenant);
-  const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
-  const [submitError, setSubmitError] = useState<ApiErrorView | null>(null);
+  const createCustomer = useCreateCustomerMutation();
+  const submitError = createCustomer.error
+    ? getApiErrorView(createCustomer.error, "Failed to create customer.")
+    : null;
 
   return (
     <AppShell
@@ -38,15 +39,13 @@ export default function NewCustomerPage() {
               submittingLabel="Creating customer..."
               submitError={submitError}
               onSubmit={async (values: CustomerFormValues) => {
-                setSubmitError(null);
+                createCustomer.reset();
 
                 try {
-                  const created = await withAccessTokenRetry((accessToken) =>
-                    createCustomerRequest(accessToken, values),
-                  );
+                  const created = await createCustomer.mutateAsync(values);
                   router.push(`/customers/${created.id}`);
-                } catch (error) {
-                  setSubmitError(getApiErrorView(error, "Failed to create customer."));
+                } catch {
+                  // The mutation exposes request-aware feedback through submitError.
                 }
               }}
             />

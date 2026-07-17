@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
 import { FormActions, FormSection } from "@/components/ui/form-surface";
@@ -11,8 +11,14 @@ import {
   invitationCreateSchema,
   type InvitationCreateFormValues,
 } from "@/features/auth";
+import {
+  useCancelInvitationMutation,
+  useCreateInvitationMutation,
+  useResendInvitationMutation,
+  useTenantInvitationsQuery,
+} from "@/features/auth/auth-queries";
 import { useAuthStore } from "@/store/auth-store";
-import type { MembershipRole, TenantInvitationItem } from "@/types/auth";
+import type { MembershipRole } from "@/types/auth";
 import {
   inputClassName,
   primaryButtonClassName,
@@ -37,14 +43,8 @@ function formatDate(value: string) {
 
 export function InvitationCreateCard() {
   const currentTenant = useAuthStore((state) => state.currentTenant);
-  const createInvitation = useAuthStore((state) => state.createInvitation);
-  const listTenantInvitations = useAuthStore((state) => state.listTenantInvitations);
-  const resendInvitation = useAuthStore((state) => state.resendInvitation);
-  const cancelInvitation = useAuthStore((state) => state.cancelInvitation);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [invitations, setInvitations] = useState<TenantInvitationItem[]>([]);
-  const [loadingList, setLoadingList] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
 
   const {
@@ -60,33 +60,19 @@ export function InvitationCreateCard() {
     },
   });
 
-  const reloadInvitations = useCallback(async () => {
-    setLoadingList(true);
-
-    try {
-      const rows = await listTenantInvitations();
-      setInvitations(rows);
-    } catch (loadError) {
-      const message =
-        loadError instanceof Error
-          ? loadError.message
-          : "Failed to load tenant invitations.";
-      setError(message);
-    } finally {
-      setLoadingList(false);
-    }
-  }, [listTenantInvitations]);
-
   const currentTenantId = currentTenant?.tenantId;
   const currentRole = currentTenant?.role;
-
-  useEffect(() => {
-    if (!currentTenantId || !canCreateInvitation(currentRole)) {
-      return;
-    }
-
-    void reloadInvitations();
-  }, [currentTenantId, currentRole, reloadInvitations]);
+  const allowed = canCreateInvitation(currentRole);
+  const invitationsQuery = useTenantInvitationsQuery(
+    undefined,
+    Boolean(currentTenantId && allowed),
+  );
+  const createMutation = useCreateInvitationMutation();
+  const resendMutation = useResendInvitationMutation();
+  const cancelMutation = useCancelInvitationMutation();
+  const invitations = invitationsQuery.data ?? [];
+  const loadingList = invitationsQuery.isPending;
+  const visibleError = error ?? invitationsQuery.error?.message ?? null;
 
   if (!currentTenant) {
     return (
@@ -100,7 +86,6 @@ export function InvitationCreateCard() {
     );
   }
 
-  const allowed = canCreateInvitation(currentTenant.role);
   if (!allowed) {
     return (
       <SectionCard
@@ -128,7 +113,7 @@ export function InvitationCreateCard() {
           setSuccess(null);
 
           try {
-            const result = await createInvitation(values);
+            const result = await createMutation.mutateAsync(values);
             setSuccess(
               `Invitation created for ${result.email} (${result.role}), expires at ${formatDate(result.expiresAt)}.`,
             );
@@ -136,7 +121,6 @@ export function InvitationCreateCard() {
               email: "",
               role: values.role,
             });
-            await reloadInvitations();
           } catch (submitError) {
             const message =
               submitError instanceof Error
@@ -187,7 +171,9 @@ export function InvitationCreateCard() {
         </FormActions>
       </form>
 
-      {error ? <p className="mt-4 text-sm text-rose-600">{error}</p> : null}
+      {visibleError ? (
+        <p className="mt-4 text-sm text-rose-600">{visibleError}</p>
+      ) : null}
       {success ? <p className="mt-4 text-sm text-emerald-700">{success}</p> : null}
 
       <div className="mt-6 space-y-3">
@@ -197,7 +183,7 @@ export function InvitationCreateCard() {
           <p className="text-sm text-[var(--color-text-secondary)]">Loading invitations...</p>
         ) : null}
 
-        {!loadingList && invitations.length === 0 ? (
+        {!loadingList && !visibleError && invitations.length === 0 ? (
           <EmptyStatePanel
             compact
             title="No invitations yet"
@@ -229,12 +215,11 @@ export function InvitationCreateCard() {
                     setError(null);
                     setSuccess(null);
                     setActingId(invitation.id);
-                    void resendInvitation(invitation.id)
-                      .then(async (result) => {
+                    void resendMutation.mutateAsync(invitation.id)
+                      .then((result) => {
                         setSuccess(
                           `Invitation resent. New expiry: ${formatDate(result.expiresAt)}.`,
                         );
-                        await reloadInvitations();
                       })
                       .catch((actionError) => {
                         const message =
@@ -259,10 +244,9 @@ export function InvitationCreateCard() {
                     setError(null);
                     setSuccess(null);
                     setActingId(invitation.id);
-                    void cancelInvitation(invitation.id)
-                      .then(async () => {
+                    void cancelMutation.mutateAsync(invitation.id)
+                      .then(() => {
                         setSuccess("Invitation cancelled.");
-                        await reloadInvitations();
                       })
                       .catch((actionError) => {
                         const message =

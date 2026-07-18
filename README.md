@@ -118,7 +118,7 @@ The product also includes tenant invitations, customer archiving, schedule confl
 | Client server state | TanStack Query caches are scoped by tenant, user, and role; mutations reconcile entity caches and invalidate affected workflows |
 | Persisted AI workflow | Conversations, tool traces, proposals, review state, and confirmation evidence are stored in PostgreSQL |
 | Operational debugging | API responses carry `X-Request-Id`; error responses and client error surfaces preserve it; backend request and error logs are structured |
-| Delivery | CI validates client and server builds and runs PostgreSQL-backed migration and integration tests before the main branch deploys |
+| Delivery | CI validates client and server builds, PostgreSQL-backed integration tests, and deterministic Chromium workflows against a freshly migrated and seeded database |
 
 The public application is deployed to AWS with EC2, RDS, Docker Compose, Nginx, and HTTPS. The codebase stays a modular monolith so domain boundaries are explicit without introducing distributed-system complexity that the current product does not need.
 
@@ -130,6 +130,8 @@ The public application is deployed to AWS with EC2, RDS, Docker Compose, Nginx, 
 - [Proposal confirmation](server/src/modules/agent/agent.service.ts) — approved plans re-check key targets and execute through transactional domain services.
 - [Authorization-scoped Query keys](client/src/lib/query-keys.ts) — REST caches include tenant, user, and role context before domain and request parameters.
 - [Database-backed CI](.github/workflows/ci.yml) — migrations and integration tests run against a real PostgreSQL service.
+- [Role workflow E2E](client/e2e/role-workflow.spec.ts) — Owner dispatch, Staff evidence and completion submission, and Manager approval run as one browser scenario.
+- [Safe AI E2E](client/e2e/agent-proposal.spec.ts) — proposal-first writes, explicit approval, conversational confirmation safeguards, and idempotent replay are verified without a live LLM.
 - [OpenAPI contract](docs/engineering/openapi.yaml) — the implemented HTTP surface is documented as a machine-readable contract.
 
 ## Tech stack
@@ -180,6 +182,8 @@ pnpm --dir server build
 ```
 
 Server database integration tests are intentionally separated from the default local test command and run in CI against a disposable PostgreSQL service. See [the test notes](server/tests/README.md) for the local database-test flags.
+
+The Playwright suite runs the complete Owner → Staff → Manager operational loop and the guarded AI proposal flow in CI. It uses a deterministic, network-free Fake AI provider and dedicated application ports, so it never needs an Anthropic or OpenAI key. See [the E2E test notes](client/e2e/README.md) for safe local setup.
 
 ## Current scope
 

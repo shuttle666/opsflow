@@ -15,7 +15,11 @@ const noindexRoutes = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  output: "standalone",
+  output:
+    process.env.PLAYWRIGHT_START_SERVERS === "true"
+      ? undefined
+      : "standalone",
+  distDir: process.env.NEXT_DIST_DIR ?? ".next",
   async headers() {
     return noindexRoutes.map((source) => ({
       source,

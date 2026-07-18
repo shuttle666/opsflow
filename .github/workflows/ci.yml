@@ -152,3 +152,89 @@ jobs:
 
       - name: Run database integration tests
         run: pnpm test
+
+  playwright-e2e:
+    name: playwright-e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: opsflow_e2e
+          POSTGRES_USER: opsflow
+          POSTGRES_PASSWORD: opsflow
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U opsflow -d opsflow_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://opsflow:opsflow@127.0.0.1:5432/opsflow_e2e?schema=public
+      PLAYWRIGHT_DATABASE_URL: postgresql://opsflow:opsflow@127.0.0.1:5432/opsflow_e2e?schema=public
+      PLAYWRIGHT_START_SERVERS: "true"
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
+      PLAYWRIGHT_API_URL: http://127.0.0.1:4100/api
+      NEXT_PUBLIC_API_URL: http://127.0.0.1:4100/api
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: |
+            client/pnpm-lock.yaml
+            server/pnpm-lock.yaml
+
+      - name: Install server dependencies
+        run: pnpm --dir server install --frozen-lockfile
+
+      - name: Install client dependencies
+        run: pnpm --dir client install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --dir server prisma:generate
+
+      - name: Apply database migrations
+        run: pnpm --dir server prisma:migrate:deploy
+
+      - name: Seed disposable E2E database
+        run: pnpm --dir server prisma:seed
+        env:
+          ALLOW_NON_DEV_SEED: "1"
+
+      - name: Install Chromium
+        run: pnpm --dir client exec playwright install --with-deps chromium
+
+      - name: Build server
+        run: pnpm --dir server build
+
+      - name: Build client
+        run: pnpm --dir client build
+
+      - name: Run Playwright E2E tests
+        run: pnpm --dir client test:e2e
+
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            client/playwright-report/
+            client/test-results/
+          if-no-files-found: ignore
+          retention-days: 7

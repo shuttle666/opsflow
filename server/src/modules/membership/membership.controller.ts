@@ -23,6 +23,7 @@ export const listMembershipsHandler: RequestHandler = asyncHandler(async (req, r
     data: result.items,
     meta: {
       pagination: result.pagination,
+      summary: result.summary,
     },
   });
 });

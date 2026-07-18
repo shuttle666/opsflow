@@ -92,10 +92,12 @@ export default function CustomersPage() {
       page,
       pageSize: adaptivePageSize,
       status: statusFilter,
+      contact: contactFilter,
       sort,
     }),
     [
       adaptivePageSize,
+      contactFilter,
       page,
       query,
       sort,
@@ -105,30 +107,21 @@ export default function CustomersPage() {
   const customersQuery = useCustomersQuery(customerListQuery, {
     enabled: hasMeasuredPageSize,
   });
-  const customers = customersQuery.data?.items;
+  const customers = customersQuery.data?.items ?? [];
   const pagination = customersQuery.data?.pagination ?? {
     page: 1,
     pageSize: DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
     total: 0,
     totalPages: 1,
   };
-  const isLoading = !hasMeasuredPageSize || customersQuery.isLoading;
+  const isLoading =
+    !hasMeasuredPageSize ||
+    customersQuery.isLoading ||
+    customersQuery.isPlaceholderData;
   const error = customersQuery.error
     ? getApiErrorView(customersQuery.error, "Failed to load customers.")
     : null;
-  const visibleCustomers = (() => {
-    const items = customers ?? [];
-
-    if (contactFilter === "has_contact") {
-      return items.filter((customer) => customer.phone || customer.email);
-    }
-
-    if (contactFilter === "missing_contact") {
-      return items.filter((customer) => !customer.phone && !customer.email);
-    }
-
-    return items;
-  })();
+  const hasListFilter = Boolean(query || contactFilter !== "all");
 
   return (
     <AppShell
@@ -209,7 +202,9 @@ export default function CustomersPage() {
                   <option value="name_desc">Name Z-A</option>
                 </select>
                 <span className="text-xs font-medium text-[var(--color-text-muted)] sm:ml-auto">
-                  {visibleCustomers.length} customers
+                  {isLoading
+                    ? "Updating customers..."
+                    : `${pagination.total} customer${pagination.total === 1 ? "" : "s"}`}
                 </span>
               </div>
             </div>
@@ -218,13 +213,15 @@ export default function CustomersPage() {
           footer={
             <div className="flex flex-col gap-3 text-sm text-[var(--color-text-secondary)] sm:flex-row sm:items-center sm:justify-between">
               <p>
-                Page {pagination.page} of {pagination.totalPages} | Total {pagination.total}
+                {isLoading
+                  ? "Updating customer results..."
+                  : `Page ${pagination.page} of ${pagination.totalPages} | Total ${pagination.total}`}
               </p>
 
               <div className="flex gap-2">
                 <button
                   type="button"
-                  disabled={pagination.page <= 1}
+                  disabled={isLoading || pagination.page <= 1}
                   onClick={() => setPage((current) => Math.max(1, current - 1))}
                   className={subtleButtonClassName}
                 >
@@ -232,7 +229,7 @@ export default function CustomersPage() {
                 </button>
                 <button
                   type="button"
-                  disabled={pagination.page >= pagination.totalPages}
+                  disabled={isLoading || pagination.page >= pagination.totalPages}
                   onClick={() =>
                     setPage((current) => Math.min(pagination.totalPages, current + 1))
                   }
@@ -249,24 +246,30 @@ export default function CustomersPage() {
               <div className="p-4">
                 <LoadingPanel label="Loading customers..." />
               </div>
-            ) : visibleCustomers.length === 0 ? (
+            ) : customers.length === 0 ? (
               <div className="p-4">
                 <EmptyStatePanel
-                  title={!customers?.length ? "No customers found" : "No customers match this filter"}
+                  title={
+                    hasListFilter
+                      ? "No customers match this filter"
+                      : statusFilter === "archived"
+                        ? "No archived customers found"
+                        : "No customers found"
+                  }
                   description={
-                    !customers?.length
-                      ? statusFilter === "archived"
-                        ? "No archived customers match the current search."
-                        : "Adjust the current search or create the first customer profile for this tenant."
-                      : "Try a different contact filter or adjust the current search."
+                    hasListFilter
+                      ? "Try a different contact filter or adjust the current search."
+                      : statusFilter === "archived"
+                        ? "No archived customers are available in this workspace."
+                        : "Create the first customer profile for this tenant."
                   }
                   actionLabel={
-                    !customers?.length && allowManage && statusFilter !== "archived"
+                    !hasListFilter && allowManage && statusFilter !== "archived"
                       ? "Create customer"
                       : undefined
                   }
                   actionHref={
-                    !customers?.length && allowManage && statusFilter !== "archived"
+                    !hasListFilter && allowManage && statusFilter !== "archived"
                       ? "/customers/new"
                       : undefined
                   }
@@ -275,7 +278,7 @@ export default function CustomersPage() {
             ) : (
               <>
               <div className="divide-y divide-[var(--color-app-border)] md:hidden">
-                {visibleCustomers.map((customer) => (
+                {customers.map((customer) => (
                   <Link
                     key={customer.id}
                     href={`/customers/${customer.id}`}
@@ -340,7 +343,7 @@ export default function CustomersPage() {
                     ref={customerTableBodyRef}
                     className="divide-y divide-[var(--color-app-border)] text-[var(--color-text-secondary)]"
                   >
-                    {visibleCustomers.map((customer) => (
+                    {customers.map((customer) => (
                       <tr
                         key={customer.id}
                         className="group transition hover:bg-[var(--color-app-panel-muted)]"

@@ -18,6 +18,9 @@ export const customerListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(50).default(10),
   status: z.enum(["active", "archived", "all"]).default("active"),
+  contact: z
+    .enum(["all", "has_contact", "missing_contact"])
+    .optional(),
   sort: z
     .enum(["createdAt_desc", "createdAt_asc", "name_asc", "name_desc"])
     .default("createdAt_desc"),

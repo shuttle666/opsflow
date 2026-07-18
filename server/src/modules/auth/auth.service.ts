@@ -171,19 +171,141 @@ function pickTenantMembership(
   return selected;
 }
 
-async function expirePendingInvitations(where: Prisma.TenantInvitationWhereInput) {
-  await prisma.tenantInvitation.updateMany({
+async function removeOrphanedInvitedMembership(
+  tx: Prisma.TransactionClient,
+  input: {
+    tenantId: string;
+    userId: string;
+    now: Date;
+  },
+) {
+  const invitedUser = await tx.user.findUnique({
     where: {
-      ...where,
-      status: InvitationStatus.PENDING,
-      expiresAt: {
-        lte: new Date(),
-      },
+      id: input.userId,
     },
-    data: {
-      status: InvitationStatus.EXPIRED,
+    select: {
+      email: true,
     },
   });
+  const remainingInvitation = await tx.tenantInvitation.findFirst({
+    where: {
+      tenantId: input.tenantId,
+      status: InvitationStatus.PENDING,
+      expiresAt: {
+        gt: input.now,
+      },
+      OR: [
+        {
+          invitedUserId: input.userId,
+        },
+        ...(invitedUser
+          ? [
+              {
+                email: normalizeEmail(invitedUser.email),
+              },
+            ]
+          : []),
+      ],
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!remainingInvitation) {
+    await tx.membership.deleteMany({
+      where: {
+        tenantId: input.tenantId,
+        userId: input.userId,
+        status: MembershipStatus.INVITED,
+      },
+    });
+  }
+}
+
+async function findInvitationTargetUserId(
+  tx: Prisma.TransactionClient,
+  invitation: {
+    invitedUserId: string | null;
+    email: string;
+  },
+) {
+  if (invitation.invitedUserId) {
+    return invitation.invitedUserId;
+  }
+
+  const invitedUser = await tx.user.findUnique({
+    where: {
+      email: normalizeEmail(invitation.email),
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  return invitedUser?.id;
+}
+
+async function expirePendingInvitations(where: Prisma.TenantInvitationWhereInput) {
+  const now = new Date();
+  const expiringWhere = {
+    ...where,
+    status: InvitationStatus.PENDING,
+    expiresAt: {
+      lte: now,
+    },
+  } satisfies Prisma.TenantInvitationWhereInput;
+  const expiringInvitations = await prisma.tenantInvitation.findMany({
+    where: expiringWhere,
+    select: {
+      tenantId: true,
+      invitedUserId: true,
+      email: true,
+    },
+  });
+
+  if (expiringInvitations.length === 0) {
+    return;
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.tenantInvitation.updateMany({
+      where: expiringWhere,
+      data: {
+        status: InvitationStatus.EXPIRED,
+      },
+    });
+
+    const affectedMemberships = new Map<
+      string,
+      { tenantId: string; userId: string }
+    >();
+    for (const invitation of expiringInvitations) {
+      const invitedUserId = await findInvitationTargetUserId(tx, invitation);
+      if (!invitedUserId) {
+        continue;
+      }
+
+      affectedMemberships.set(
+        `${invitation.tenantId}:${invitedUserId}`,
+        {
+          tenantId: invitation.tenantId,
+          userId: invitedUserId,
+        },
+      );
+    }
+
+    for (const affected of affectedMemberships.values()) {
+      await removeOrphanedInvitedMembership(tx, {
+        ...affected,
+        now,
+      });
+    }
+  });
+}
+
+export async function expirePendingTenantInvitations(tenantId: string) {
+  await expirePendingInvitations({ tenantId });
 }
 
 async function getActiveUserOrThrow(userId: string) {
@@ -229,12 +351,7 @@ async function ensureInvitationAcceptable(input: {
   }
 
   if (invitation.expiresAt <= new Date()) {
-    await prisma.tenantInvitation.update({
-      where: { id: invitation.id },
-      data: {
-        status: InvitationStatus.EXPIRED,
-      },
-    });
+    await expirePendingInvitations({ id: invitation.id });
     throw new AuthError("INVITATION_EXPIRED", "Invitation has expired.", 409);
   }
 
@@ -262,6 +379,31 @@ async function acceptInvitationTransaction(input: {
   metadata?: RequestMetadata;
 }) {
   await prisma.$transaction(async (tx) => {
+    const acceptedAt = new Date();
+    const claimedInvitation = await tx.tenantInvitation.updateMany({
+      where: {
+        id: input.invitationId,
+        tenantId: input.tenantId,
+        status: InvitationStatus.PENDING,
+        expiresAt: {
+          gt: acceptedAt,
+        },
+      },
+      data: {
+        status: InvitationStatus.ACCEPTED,
+        acceptedAt,
+        invitedUserId: input.userId,
+      },
+    });
+
+    if (claimedInvitation.count !== 1) {
+      throw new AuthError(
+        "INVITATION_ALREADY_USED",
+        "Invitation is no longer pending or has expired.",
+        409,
+      );
+    }
+
     const membership = await tx.membership.findUnique({
       where: {
         userId_tenantId: {
@@ -292,15 +434,6 @@ async function acceptInvitationTransaction(input: {
         },
       });
     }
-
-    await tx.tenantInvitation.update({
-      where: { id: input.invitationId },
-      data: {
-        status: InvitationStatus.ACCEPTED,
-        acceptedAt: new Date(),
-        invitedUserId: input.userId,
-      },
-    });
 
     await tx.auditLog.create({
       data: {
@@ -1119,13 +1252,28 @@ export async function resendTenantInvitation(
   const refreshedExpiry = getInvitationExpiryDate();
 
   await prisma.$transaction(async (tx) => {
-    await tx.tenantInvitation.update({
-      where: { id: invitation.id },
+    const resentInvitation = await tx.tenantInvitation.updateMany({
+      where: {
+        id: invitation.id,
+        tenantId,
+        status: InvitationStatus.PENDING,
+        expiresAt: {
+          gt: new Date(),
+        },
+      },
       data: {
         tokenHash: hashRefreshToken(generateRefreshToken()),
         expiresAt: refreshedExpiry,
       },
     });
+
+    if (resentInvitation.count !== 1) {
+      throw new AuthError(
+        "INVITATION_ALREADY_USED",
+        "Invitation is no longer pending or has expired.",
+        409,
+      );
+    }
 
     await tx.auditLog.create({
       data: {
@@ -1173,6 +1321,8 @@ export async function cancelTenantInvitation(
     },
     select: {
       id: true,
+      invitedUserId: true,
+      email: true,
       status: true,
       expiresAt: true,
     },
@@ -1190,14 +1340,40 @@ export async function cancelTenantInvitation(
     );
   }
 
+  const cancelledAt = new Date();
+
   await prisma.$transaction(async (tx) => {
-    await tx.tenantInvitation.update({
-      where: { id: invitation.id },
+    const cancelledInvitation = await tx.tenantInvitation.updateMany({
+      where: {
+        id: invitation.id,
+        tenantId,
+        status: InvitationStatus.PENDING,
+        expiresAt: {
+          gt: cancelledAt,
+        },
+      },
       data: {
         status: InvitationStatus.CANCELLED,
-        cancelledAt: new Date(),
+        cancelledAt,
       },
     });
+
+    if (cancelledInvitation.count !== 1) {
+      throw new AuthError(
+        "INVITATION_ALREADY_USED",
+        "Invitation is no longer pending or has expired.",
+        409,
+      );
+    }
+
+    const invitedUserId = await findInvitationTargetUserId(tx, invitation);
+    if (invitedUserId) {
+      await removeOrphanedInvitedMembership(tx, {
+        tenantId,
+        userId: invitedUserId,
+        now: cancelledAt,
+      });
+    }
 
     await tx.auditLog.create({
       data: {

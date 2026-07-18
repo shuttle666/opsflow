@@ -657,6 +657,22 @@ describeIfDb("auth service integration", () => {
       code: "AUTH_INVITATION_EXPIRED",
     });
 
+    const [expiredMembership, expiredInvitationAfter] = await Promise.all([
+      prisma.membership.findUnique({
+        where: {
+          userId_tenantId: {
+            userId: invitee.id,
+            tenantId: tenantMain.id,
+          },
+        },
+      }),
+      prisma.tenantInvitation.findUnique({
+        where: { id: expiredInvitation.id },
+      }),
+    ]);
+    expect(expiredMembership).toBeNull();
+    expect(expiredInvitationAfter?.status).toBe(InvitationStatus.EXPIRED);
+
     const cancelledInvitation = await createTenantInvitation(
       {
         userId: ownerAuth.userId,
@@ -845,6 +861,21 @@ describeIfDb("auth service integration", () => {
     );
     expect(resent.status).toBe(InvitationStatus.PENDING);
 
+    const duplicateInvitation = await createTenantInvitation(
+      {
+        userId: ownerAuth.userId,
+        sessionId: ownerAuth.sessionId,
+        tenantId: ownerAuth.tenantId,
+        role: ownerAuth.role,
+      },
+      tenantMain.id,
+      { email: invitee.email, role: MembershipRole.STAFF },
+    );
+    await prisma.tenantInvitation.update({
+      where: { id: duplicateInvitation.id },
+      data: { invitedUserId: null },
+    });
+
     const cancelled = await cancelTenantInvitation(
       {
         userId: ownerAuth.userId,
@@ -856,6 +887,42 @@ describeIfDb("auth service integration", () => {
       invitation.id,
     );
     expect(cancelled.status).toBe(InvitationStatus.CANCELLED);
+
+    const membershipWhileAnotherInvitationIsPending =
+      await prisma.membership.findUnique({
+        where: {
+          userId_tenantId: {
+            userId: invitee.id,
+            tenantId: tenantMain.id,
+          },
+        },
+      });
+    expect(membershipWhileAnotherInvitationIsPending?.status).toBe(
+      MembershipStatus.INVITED,
+    );
+
+    const finalCancellation = await cancelTenantInvitation(
+      {
+        userId: ownerAuth.userId,
+        sessionId: ownerAuth.sessionId,
+        tenantId: ownerAuth.tenantId,
+        role: ownerAuth.role,
+      },
+      tenantMain.id,
+      duplicateInvitation.id,
+    );
+    expect(finalCancellation.status).toBe(InvitationStatus.CANCELLED);
+
+    const membershipAfterFinalCancellation =
+      await prisma.membership.findUnique({
+        where: {
+          userId_tenantId: {
+            userId: invitee.id,
+            tenantId: tenantMain.id,
+          },
+        },
+      });
+    expect(membershipAfterFinalCancellation).toBeNull();
 
     await expect(
       resendTenantInvitation(

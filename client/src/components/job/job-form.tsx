@@ -1,22 +1,24 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRef } from "react";
-import { useForm } from "react-hook-form";
+import { useRef, useState } from "react";
+import { Controller, useForm, useWatch } from "react-hook-form";
+import {
+  CustomerSearchSelect,
+  type CustomerSelectOption,
+} from "@/components/customer/customer-search-select";
 import { FormActions, FormSection } from "@/components/ui/form-surface";
 import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
 import {
   inputClassName,
   primaryButtonClassName,
-  selectClassName,
   textAreaClassName,
 } from "@/components/ui/styles";
 import { jobFormSchema, type JobFormValues } from "@/features/job/job-schema";
 import type { ApiErrorView } from "@/lib/api-client";
-import type { CustomerListItem } from "@/types/customer";
 
 type JobFormProps = {
-  customers: CustomerListItem[];
+  selectedCustomer?: CustomerSelectOption | null;
   defaultValues?: JobFormValues;
   submitLabel: string;
   submittingLabel: string;
@@ -40,7 +42,7 @@ function addOneHour(dateTimeLocal: string): string {
 }
 
 export function JobForm({
-  customers,
+  selectedCustomer,
   defaultValues,
   submitLabel,
   submittingLabel,
@@ -49,6 +51,7 @@ export function JobForm({
 }: JobFormProps) {
   const {
     register,
+    control,
     handleSubmit,
     getValues,
     setValue,
@@ -64,6 +67,9 @@ export function JobForm({
       scheduledEndAt: "",
     },
   });
+  const [chosenCustomerOption, setChosenCustomerOption] =
+    useState<CustomerSelectOption | null>(null);
+  const selectedCustomerId = useWatch({ control, name: "customerId" });
   const autoEndTimeRef = useRef<string | null>(
     defaultValues?.scheduledStartAt && defaultValues.scheduledEndAt === addOneHour(defaultValues.scheduledStartAt)
       ? defaultValues.scheduledEndAt
@@ -79,20 +85,30 @@ export function JobForm({
         description="Define the customer, issue summary, and preferred schedule so assignment and workflow phases can build on a clean record."
       >
         <div className="grid gap-5 md:grid-cols-2">
-          <label className="block space-y-2 md:col-span-2">
-            <span className="text-sm font-medium text-[var(--color-text-secondary)]">Customer</span>
-            <select {...register("customerId")} className={selectClassName}>
-              <option value="">Select customer</option>
-              {customers.map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.name}
-                </option>
-              ))}
-            </select>
+          <div className="block space-y-2 md:col-span-2">
+            <Controller
+              name="customerId"
+              control={control}
+              render={({ field }) => (
+                <CustomerSearchSelect
+                  value={field.value}
+                  selectedCustomer={chosenCustomerOption ?? selectedCustomer}
+                  showCreateCustomerAction
+                  onChange={(customerId, customer) => {
+                    field.onChange(customerId);
+                    setChosenCustomerOption(
+                      customer
+                        ? { id: customer.id, name: customer.name }
+                        : null,
+                    );
+                  }}
+                />
+              )}
+            />
             {errors.customerId ? (
               <p className="text-sm text-rose-600">{errors.customerId.message}</p>
             ) : null}
-          </label>
+          </div>
 
           <label className="block space-y-2 md:col-span-2">
             <span className="text-sm font-medium text-[var(--color-text-secondary)]">Job title</span>
@@ -197,7 +213,7 @@ export function JobForm({
       <FormActions>
         <button
           type="submit"
-          disabled={isSubmitting || customers.length === 0}
+          disabled={isSubmitting || !selectedCustomerId}
           className={primaryButtonClassName}
         >
           {isSubmitting ? submittingLabel : submitLabel}

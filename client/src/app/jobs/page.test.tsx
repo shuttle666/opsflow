@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@/test/render";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import JobsPage from "@/app/jobs/page";
@@ -174,6 +175,65 @@ describe("jobs page", () => {
     expect(await screen.findByText("Failed to load jobs.")).toBeInTheDocument();
     expect(screen.getByText(/Request ID:/i)).toBeInTheDocument();
     expect(screen.getByText("request-jobs")).toBeInTheDocument();
+  });
+
+  it("finds and applies a customer beyond the first page, including archived customers", async () => {
+    const archivedCustomer = {
+      id: "customer-51",
+      name: "Archived Customer 51",
+      phone: null,
+      email: "archived51@example.com",
+      notes: null,
+      archivedAt: "2026-03-21T00:00:00.000Z",
+      createdAt: "2026-03-20T00:00:00.000Z",
+      updatedAt: "2026-03-21T00:00:00.000Z",
+    };
+    vi.mocked(listCustomersRequest).mockImplementation(async (_token, input) =>
+      input.q === "Archived Customer 51"
+        ? {
+            items: [archivedCustomer],
+            pagination: { page: 1, pageSize: 10, total: 1, totalPages: 1 },
+          }
+        : {
+            items: [],
+            pagination: { page: 1, pageSize: 10, total: 51, totalPages: 6 },
+          },
+    );
+    vi.mocked(listJobsRequest).mockResolvedValue({
+      items: [],
+      pagination: { page: 1, pageSize: 10, total: 0, totalPages: 1 },
+    });
+
+    const user = userEvent.setup();
+    render(<JobsPage />);
+
+    await user.type(
+      await screen.findByLabelText("Customer search"),
+      "Archived Customer 51",
+    );
+    await user.click(screen.getByRole("button", { name: "Search Customer" }));
+
+    await waitFor(() => {
+      expect(listCustomersRequest).toHaveBeenCalledWith(
+        "access-token",
+        expect.objectContaining({
+          q: "Archived Customer 51",
+          pageSize: 10,
+          status: "all",
+        }),
+      );
+    });
+    await user.selectOptions(
+      await screen.findByLabelText("Customer"),
+      "customer-51",
+    );
+
+    await waitFor(() => {
+      expect(listJobsRequest).toHaveBeenLastCalledWith(
+        "access-token",
+        expect.objectContaining({ customerId: "customer-51" }),
+      );
+    });
   });
 
   it("applies filters and hides create button for staff", async () => {

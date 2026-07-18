@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import { queryKeys, type QueryScope } from "@/lib/query-keys";
 import { QueryProvider } from "@/providers/query-provider";
 import { useAuthStore } from "@/store/auth-store";
@@ -26,6 +26,12 @@ function AuthQueryCacheBoundary({ children }: AppProvidersProps) {
   const tenantId = useAuthStore((state) => state.currentTenant?.tenantId);
   const role = useAuthStore((state) => state.currentTenant?.role);
   const previousScopeRef = useRef<QueryScope | null>(null);
+  const renderScopeKey = JSON.stringify([
+    status,
+    userId ?? null,
+    tenantId ?? null,
+    role ?? null,
+  ]);
 
   useEffect(() => {
     const nextScope: QueryScope | null =
@@ -44,7 +50,7 @@ function AuthQueryCacheBoundary({ children }: AppProvidersProps) {
     previousScopeRef.current = nextScope;
   }, [queryClient, role, status, tenantId, userId]);
 
-  return children;
+  return <Fragment key={renderScopeKey}>{children}</Fragment>;
 }
 
 export function AppProviders({ children }: AppProvidersProps) {

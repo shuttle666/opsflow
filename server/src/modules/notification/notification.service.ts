@@ -406,9 +406,7 @@ export async function listNotifications(
     prisma.notification.count({ where }),
     prisma.notification.findMany({
       where,
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip,
       take: query.pageSize,
       select: notificationSelect,

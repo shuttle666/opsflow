@@ -121,6 +121,7 @@ describeIfDb("customer api integration", () => {
 
     expect(detail.status).toBe(200);
     expect(detail.body.data.createdBy.email).toBe("owner@customer-api.test");
+    expect(detail.body.data.jobStats).toEqual({ total: 1, open: 1 });
     expect(detail.body.data.jobs).toHaveLength(1);
 
     const updated = await request(app)
@@ -135,6 +136,62 @@ describeIfDb("customer api integration", () => {
     expect(updated.status).toBe(200);
     expect(updated.body.data.name).toBe("Noah Thompson Updated");
     expect(updated.body.data.phone).toBeNull();
+  });
+
+  it("filters customer lists by contact availability", async () => {
+    const { tenant, user, accessToken } = await seedTenantUser({
+      email: "owner@customer-contact-api.test",
+      displayName: "Owner Contact API",
+      role: MembershipRole.OWNER,
+      tenantName: "Customer Contact API Tenant",
+      tenantSlug: "customer-contact-api-tenant",
+    });
+
+    await prisma.customer.createMany({
+      data: [
+        {
+          tenantId: tenant.id,
+          createdById: user.id,
+          name: "Email Contact",
+          email: "email-contact@example.com",
+        },
+        {
+          tenantId: tenant.id,
+          createdById: user.id,
+          name: "Phone Contact",
+          phone: "0412 000 010",
+        },
+        {
+          tenantId: tenant.id,
+          createdById: user.id,
+          name: "Missing Contact",
+        },
+      ],
+    });
+
+    const withContact = await request(app)
+      .get("/api/customers?contact=has_contact&page=1&pageSize=1&sort=name_asc")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(withContact.status).toBe(200);
+    expect(withContact.body.data).toHaveLength(1);
+    expect(withContact.body.meta.pagination).toMatchObject({
+      total: 2,
+      totalPages: 2,
+    });
+
+    const missingContact = await request(app)
+      .get("/api/customers?contact=missing_contact&page=1&pageSize=10&sort=name_asc")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(missingContact.status).toBe(200);
+    expect(missingContact.body.data.map((item: { name: string }) => item.name)).toEqual([
+      "Missing Contact",
+    ]);
+    expect(missingContact.body.meta.pagination.total).toBe(1);
+
+    const invalidContact = await request(app)
+      .get("/api/customers?contact=unknown")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(invalidContact.status).toBe(400);
   });
 
   it("forbids staff from creating or editing customers", async () => {

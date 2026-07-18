@@ -35,6 +35,10 @@ type CustomerDetail = CustomerListItem & {
     displayName: string;
     email: string;
   };
+  jobStats: {
+    total: number;
+    open: number;
+  };
   jobs: CustomerJobSummary[];
 };
 
@@ -70,28 +74,37 @@ function buildCustomerSearchWhere(auth: AuthContext, query: CustomerListQueryInp
       : query.status === "all"
         ? {}
         : { archivedAt: null }),
+    ...(query.contact === "has_contact"
+      ? {
+          OR: [{ phone: { not: null } }, { email: { not: null } }],
+        }
+      : query.contact === "missing_contact"
+        ? { phone: null, email: null }
+        : {}),
     ...(normalizedQuery
       ? {
-          OR: [
-            {
-              name: {
-                contains: normalizedQuery,
-                mode: "insensitive" as const,
+          AND: {
+            OR: [
+              {
+                name: {
+                  contains: normalizedQuery,
+                  mode: "insensitive" as const,
+                },
               },
-            },
-            {
-              phone: {
-                contains: normalizedQuery,
-                mode: "insensitive" as const,
+              {
+                phone: {
+                  contains: normalizedQuery,
+                  mode: "insensitive" as const,
+                },
               },
-            },
-            {
-              email: {
-                contains: normalizedQuery,
-                mode: "insensitive" as const,
+              {
+                email: {
+                  contains: normalizedQuery,
+                  mode: "insensitive" as const,
+                },
               },
-            },
-          ],
+            ],
+          },
         }
       : {}),
   } satisfies Prisma.CustomerWhereInput;
@@ -100,14 +113,26 @@ function buildCustomerSearchWhere(auth: AuthContext, query: CustomerListQueryInp
 function buildCustomerOrderBy(sort: CustomerListQueryInput["sort"]) {
   switch (sort) {
     case "createdAt_asc":
-      return { createdAt: "asc" } satisfies Prisma.CustomerOrderByWithRelationInput;
+      return [
+        { createdAt: "asc" },
+        { id: "asc" },
+      ] satisfies Prisma.CustomerOrderByWithRelationInput[];
     case "name_asc":
-      return { name: "asc" } satisfies Prisma.CustomerOrderByWithRelationInput;
+      return [
+        { name: "asc" },
+        { id: "asc" },
+      ] satisfies Prisma.CustomerOrderByWithRelationInput[];
     case "name_desc":
-      return { name: "desc" } satisfies Prisma.CustomerOrderByWithRelationInput;
+      return [
+        { name: "desc" },
+        { id: "asc" },
+      ] satisfies Prisma.CustomerOrderByWithRelationInput[];
     case "createdAt_desc":
     default:
-      return { createdAt: "desc" } satisfies Prisma.CustomerOrderByWithRelationInput;
+      return [
+        { createdAt: "desc" },
+        { id: "asc" },
+      ] satisfies Prisma.CustomerOrderByWithRelationInput[];
   }
 }
 
@@ -205,48 +230,64 @@ export async function getCustomerDetail(
   auth: AuthContext,
   customerId: string,
 ): Promise<CustomerDetail> {
-  const customer = await prisma.customer.findFirst({
-    where: {
-      id: customerId,
-      tenantId: auth.tenantId,
-    },
-    select: {
-      id: true,
-      name: true,
-      phone: true,
-      email: true,
-      notes: true,
-      archivedAt: true,
-      createdAt: true,
-      updatedAt: true,
-      createdBy: {
-        select: {
-          id: true,
-          displayName: true,
-          email: true,
-        },
+  const [customer, openJobCount] = await prisma.$transaction([
+    prisma.customer.findFirst({
+      where: {
+        id: customerId,
+        tenantId: auth.tenantId,
       },
-      jobs: {
-        take: 5,
-        orderBy: {
-          createdAt: "desc",
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        notes: true,
+        archivedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        createdBy: {
+          select: {
+            id: true,
+            displayName: true,
+            email: true,
+          },
         },
-        select: {
-          id: true,
-          title: true,
-          serviceAddress: true,
-          status: true,
-          scheduledStartAt: true,
-          scheduledEndAt: true,
-          assignedTo: {
-            select: {
-              displayName: true,
+        _count: {
+          select: {
+            jobs: true,
+          },
+        },
+        jobs: {
+          take: 5,
+          orderBy: {
+            createdAt: "desc",
+          },
+          select: {
+            id: true,
+            title: true,
+            serviceAddress: true,
+            status: true,
+            scheduledStartAt: true,
+            scheduledEndAt: true,
+            assignedTo: {
+              select: {
+                displayName: true,
+              },
             },
           },
         },
       },
-    },
-  });
+    }),
+    prisma.job.count({
+      where: {
+        tenantId: auth.tenantId,
+        customerId,
+        status: {
+          in: openJobStatuses,
+        },
+      },
+    }),
+  ]);
 
   if (!customer) {
     throw new ApiError(404, "Customer not found.", "CUSTOMER_NOT_FOUND");
@@ -262,6 +303,10 @@ export async function getCustomerDetail(
     createdAt: customer.createdAt,
     updatedAt: customer.updatedAt,
     createdBy: customer.createdBy,
+    jobStats: {
+      total: customer._count.jobs,
+      open: openJobCount,
+    },
     jobs: customer.jobs.map((job) => ({
       id: job.id,
       title: job.title,

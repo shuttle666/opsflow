@@ -164,6 +164,7 @@ describe("schedule page", () => {
         },
       ],
       pagination: { page: 1, pageSize: 50, total: 1, totalPages: 1 },
+      summary: { total: 1, active: 1, invited: 0, disabled: 0 },
     });
     useAuthStore.setState({
       status: "authenticated",
@@ -246,6 +247,34 @@ describe("schedule page", () => {
     });
     const nextInput = vi.mocked(getScheduleRangeRequest).mock.calls[2]?.[1];
     expect(new Date(nextInput!.rangeStart).getTime()).toBe(new Date(firstInput!.rangeStart).getTime());
+  });
+
+  it("does not display the previous period under a new date range", async () => {
+    let resolveNextPeriod:
+      | ((result: Awaited<ReturnType<typeof getScheduleRangeRequest>>) => void)
+      | undefined;
+    vi.mocked(getScheduleRangeRequest)
+      .mockResolvedValueOnce(createScheduleResult())
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveNextPeriod = resolve;
+          }),
+      );
+
+    const user = userEvent.setup();
+    render(<SchedulePage />);
+
+    expect((await screen.findAllByText("Assigned visit")).length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("button", { name: "Next week" }));
+
+    expect(await screen.findByText("Loading schedule...")).toBeInTheDocument();
+    expect(screen.queryByText("Assigned visit")).not.toBeInTheDocument();
+
+    resolveNextPeriod?.(createEmptyScheduleResult());
+    await waitFor(() => {
+      expect(screen.queryByText("Loading schedule...")).not.toBeInTheDocument();
+    });
   });
 
   it("restores a daily timeline view with day navigation", async () => {
@@ -337,7 +366,7 @@ describe("schedule page", () => {
     expect(screen.getByText("Plan with AI")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Assignee filter" }));
-    await user.click(screen.getByRole("button", { name: "Sam Staff" }));
+    await user.selectOptions(await screen.findByLabelText("Assignee"), "user-1");
 
     await waitFor(() => {
       expect(getScheduleRangeRequest).toHaveBeenLastCalledWith(

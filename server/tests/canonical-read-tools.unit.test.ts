@@ -88,6 +88,7 @@ describe("canonical read tools", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
       createdBy: { id: "user-1", displayName: "Manager", email: "m@example.com" },
+      jobStats: { total: 0, open: 0 },
       jobs: [],
     };
     serviceMocks.getJobDetail.mockResolvedValueOnce(job);

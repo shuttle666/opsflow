@@ -3,7 +3,10 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import NewJobPage from "@/app/jobs/new/page";
-import { listCustomersRequest } from "@/features/customer/customer-api";
+import {
+  getCustomerDetailRequest,
+  listCustomersRequest,
+} from "@/features/customer/customer-api";
 import { createJobRequest } from "@/features/job/job-api";
 import { useAuthStore } from "@/store/auth-store";
 
@@ -79,6 +82,26 @@ describe("new job page", () => {
   });
 
   it("loads customers and submits a new job", async () => {
+    vi.mocked(getCustomerDetailRequest).mockResolvedValue({
+      id: "customer-1",
+      name: "Noah Thompson",
+      phone: null,
+      email: null,
+      notes: null,
+      archivedAt: null,
+      createdAt: "2026-03-20T00:00:00.000Z",
+      updatedAt: "2026-03-20T00:00:00.000Z",
+      createdBy: {
+        id: "user-1",
+        displayName: "Owner",
+        email: "owner@acme.example",
+      },
+      jobStats: {
+        total: 0,
+        open: 0,
+      },
+      jobs: [],
+    });
     vi.mocked(listCustomersRequest).mockResolvedValue({
       items: [
         {
@@ -92,7 +115,7 @@ describe("new job page", () => {
           updatedAt: "2026-03-20T00:00:00.000Z",
         },
       ],
-      pagination: { page: 1, pageSize: 50, total: 1, totalPages: 1 },
+      pagination: { page: 1, pageSize: 10, total: 1, totalPages: 1 },
     });
     vi.mocked(createJobRequest).mockResolvedValue({
       id: "job-1",

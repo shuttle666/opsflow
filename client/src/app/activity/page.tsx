@@ -60,7 +60,10 @@ export default function ActivityPage() {
   );
   const items = mapItems(activityQuery.data?.items ?? []);
   const pagination = activityQuery.data?.pagination ?? emptyPagination;
-  const isLoading = !hasMeasuredPageSize || activityQuery.isLoading;
+  const isLoading =
+    !hasMeasuredPageSize ||
+    activityQuery.isLoading ||
+    activityQuery.isPlaceholderData;
   const error = activityQuery.error
     ? getApiErrorView(activityQuery.error, "Failed to load activity log.")
     : null;
@@ -100,13 +103,15 @@ export default function ActivityPage() {
 
             <div className="flex flex-col gap-3 text-sm text-[var(--color-text-secondary)] sm:flex-row sm:items-center sm:justify-between">
               <p>
-                Page {pagination.page} of {pagination.totalPages} | Total {pagination.total}
+                {isLoading
+                  ? "Updating activity..."
+                  : `Page ${pagination.page} of ${pagination.totalPages} | Total ${pagination.total}`}
               </p>
 
               <div className="flex gap-2">
                 <button
                   type="button"
-                  disabled={pagination.page <= 1}
+                  disabled={isLoading || pagination.page <= 1}
                   onClick={() => setPage((current) => Math.max(1, current - 1))}
                   className={subtleButtonClassName}
                 >
@@ -114,7 +119,7 @@ export default function ActivityPage() {
                 </button>
                 <button
                   type="button"
-                  disabled={pagination.page >= pagination.totalPages}
+                  disabled={isLoading || pagination.page >= pagination.totalPages}
                   onClick={() =>
                     setPage((current) => Math.min(pagination.totalPages, current + 1))
                   }

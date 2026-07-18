@@ -26,6 +26,10 @@ const baseCustomer: CustomerDetail = {
     displayName: "Owner",
     email: "owner@acme.example",
   },
+  jobStats: {
+    total: 12,
+    open: 4,
+  },
   jobs: [
     {
       id: "job-1",
@@ -135,8 +139,8 @@ describe("customer detail page", () => {
     render(<CustomerDetailPage />);
 
     expect(await screen.findAllByText("Noah Thompson")).toHaveLength(1);
-    expect(screen.getByText("Total jobs")).toBeInTheDocument();
-    expect(screen.getByText("Open jobs")).toBeInTheDocument();
+    expect(screen.getByText("Total jobs").parentElement).toHaveTextContent("12");
+    expect(screen.getByText("Open jobs").parentElement).toHaveTextContent("4");
     expect(screen.getByText("Contact information")).toBeInTheDocument();
     expect(screen.getByText("AC Repair")).toBeInTheDocument();
     expect(screen.getByText("Furnace Tune-Up")).toBeInTheDocument();

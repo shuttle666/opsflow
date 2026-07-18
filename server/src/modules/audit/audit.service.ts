@@ -304,9 +304,7 @@ export async function listActivityFeed(
     prisma.auditLog.count({ where }),
     prisma.auditLog.findMany({
       where,
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip,
       take: query.pageSize,
       select: {

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { AuthGuard } from "@/components/auth/auth-guard";
@@ -10,29 +9,16 @@ import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
 import { FormSurface } from "@/components/ui/form-surface";
 import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
 import { LoadingPanel } from "@/components/ui/loading-panel";
-import { secondaryButtonClassName } from "@/components/ui/styles";
-import { getCustomerDetailRequest, listCustomersRequest } from "@/features/customer/customer-api";
+import { useCustomerDetailQuery } from "@/features/customer/customer-queries";
 import { toApiDateTime } from "@/features/job";
 import { useCreateJobMutation } from "@/features/job/job-queries";
 import type { JobFormValues } from "@/features/job/job-schema";
-import {
-  useAuthenticatedQuery,
-  useAuthenticatedQueryScope,
-} from "@/hooks/use-authenticated-query";
 import { getApiErrorView } from "@/lib/api-client";
-import { queryKeys } from "@/lib/query-keys";
 import { useAuthStore } from "@/store/auth-store";
-import type { CustomerListItem } from "@/types/customer";
 
 function canManageJobs(role: string | undefined) {
   return role === "OWNER" || role === "MANAGER";
 }
-
-const customerListQuery = {
-  page: 1,
-  pageSize: 50,
-  sort: "name_asc" as const,
-};
 
 function NewJobPageContent() {
   const router = useRouter();
@@ -42,58 +28,18 @@ function NewJobPageContent() {
       ? searchParams.get("customerId")!.trim()
       : "";
   const currentTenant = useAuthStore((state) => state.currentTenant);
-  const queryScope = useAuthenticatedQueryScope();
   const allowManage = canManageJobs(currentTenant?.role);
-  const customersQuery = useAuthenticatedQuery({
-    queryKey: queryKeys.customers.list(queryScope, customerListQuery),
-    queryFn: (accessToken) =>
-      listCustomersRequest(accessToken, customerListQuery),
-    enabled: allowManage && Boolean(queryScope.tenantId),
+  const selectedCustomerQuery = useCustomerDetailQuery(selectedCustomerId, {
+    enabled: allowManage && Boolean(selectedCustomerId),
   });
-  const listedCustomers = customersQuery.data?.items ?? [];
-  const selectedCustomerIsListed = listedCustomers.some(
-    (customer) => customer.id === selectedCustomerId,
-  );
-  const needsSelectedCustomer = Boolean(
-    selectedCustomerId &&
-      customersQuery.isSuccess &&
-      !selectedCustomerIsListed,
-  );
-  const selectedCustomerQuery = useAuthenticatedQuery({
-    queryKey: queryKeys.customers.detail(queryScope, selectedCustomerId),
-    queryFn: (accessToken) =>
-      getCustomerDetailRequest(accessToken, selectedCustomerId),
-    enabled:
-      allowManage &&
-      Boolean(queryScope.tenantId) &&
-      needsSelectedCustomer,
-  });
-  const selectedCustomerError = needsSelectedCustomer
+  const selectedCustomerError = selectedCustomerId
     ? selectedCustomerQuery.data?.archivedAt
       ? new Error("Archived customers cannot be used for new jobs.")
       : selectedCustomerQuery.error
     : null;
-  const queryError = customersQuery.error ?? selectedCustomerError;
-  const loadError = queryError
-    ? getApiErrorView(queryError, "Failed to load customers.")
+  const loadError = selectedCustomerError
+    ? getApiErrorView(selectedCustomerError, "Failed to load selected customer.")
     : null;
-  const customers: CustomerListItem[] = loadError
-    ? []
-    : needsSelectedCustomer && selectedCustomerQuery.data
-      ? [
-          ...listedCustomers,
-          {
-            id: selectedCustomerQuery.data.id,
-            name: selectedCustomerQuery.data.name,
-            phone: selectedCustomerQuery.data.phone ?? null,
-            email: selectedCustomerQuery.data.email ?? null,
-            notes: selectedCustomerQuery.data.notes ?? null,
-            archivedAt: selectedCustomerQuery.data.archivedAt,
-            createdAt: selectedCustomerQuery.data.createdAt,
-            updatedAt: selectedCustomerQuery.data.updatedAt,
-          },
-        ]
-      : listedCustomers;
   const defaultValues: JobFormValues = {
     customerId: selectedCustomerId,
     title: "",
@@ -107,9 +53,7 @@ function NewJobPageContent() {
     ? getApiErrorView(createJobMutation.error, "Failed to create job.")
     : null;
   const isLoading =
-    allowManage &&
-    (customersQuery.isLoading ||
-      (needsSelectedCustomer && selectedCustomerQuery.isLoading));
+    allowManage && Boolean(selectedCustomerId) && selectedCustomerQuery.isLoading;
 
   return (
     <AppShell
@@ -130,10 +74,16 @@ function NewJobPageContent() {
             {isLoading ? <LoadingPanel label="Loading customers..." /> : null}
             {loadError ? <InlineErrorBanner message={loadError} /> : null}
 
-            {!isLoading ? (
-              customers.length > 0 ? (
+            {!isLoading && !loadError ? (
                 <JobForm
-                  customers={customers}
+                  selectedCustomer={
+                    selectedCustomerQuery.data
+                      ? {
+                          id: selectedCustomerQuery.data.id,
+                          name: selectedCustomerQuery.data.name,
+                        }
+                      : null
+                  }
                   defaultValues={defaultValues}
                   submitLabel="Create job"
                   submittingLabel="Creating job..."
@@ -154,14 +104,6 @@ function NewJobPageContent() {
                     }
                   }}
                 />
-              ) : (
-                <div className="space-y-4 text-sm text-[var(--color-text-secondary)]">
-                  <p>No customers are available yet. Create a customer before opening a job.</p>
-                  <Link href="/customers/new" className={secondaryButtonClassName}>
-                    Create customer first
-                  </Link>
-                </div>
-              )
             ) : null}
           </FormSurface>
         )}

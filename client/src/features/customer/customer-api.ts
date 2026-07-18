@@ -37,6 +37,9 @@ function buildCustomerQuery(query: CustomerListQuery) {
   if (query.status) {
     params.set("status", query.status);
   }
+  if (query.contact) {
+    params.set("contact", query.contact);
+  }
   if (query.sort) {
     params.set("sort", query.sort);
   }

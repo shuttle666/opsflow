@@ -18,6 +18,13 @@ export type MembershipListItem = {
   createdAt: string;
 };
 
+export type MembershipSummary = {
+  total: number;
+  active: number;
+  invited: number;
+  disabled: number;
+};
+
 export type UpdateMembershipRequest = {
   role?: MembershipRole;
   status?: Extract<MembershipStatus, "ACTIVE" | "DISABLED">;

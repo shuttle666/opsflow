@@ -42,9 +42,14 @@ export function useCreateInvitationMutation() {
   return useMutation({
     mutationFn: (input: InvitationCreateInput) => createInvitation(input),
     onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.invitations.tenantLists(scope),
-      }),
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.invitations.tenantLists(scope),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.memberships.all(scope),
+        }),
+      ]),
   });
 }
 
@@ -55,10 +60,15 @@ export function useResendInvitationMutation() {
 
   return useMutation({
     mutationFn: (invitationId: string) => resendInvitation(invitationId),
-    onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.invitations.tenantLists(scope),
-      }),
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.invitations.tenantLists(scope),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.memberships.all(scope),
+        }),
+      ]),
   });
 }
 
@@ -69,10 +79,15 @@ export function useCancelInvitationMutation() {
 
   return useMutation({
     mutationFn: (invitationId: string) => cancelInvitation(invitationId),
-    onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.invitations.tenantLists(scope),
-      }),
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.invitations.tenantLists(scope),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.memberships.all(scope),
+        }),
+      ]),
   });
 }
 

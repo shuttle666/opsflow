@@ -3,8 +3,15 @@ import type { PaginationMeta } from "@/types/customer";
 import type {
   MembershipListItem,
   MembershipListQuery,
+  MembershipSummary,
   UpdateMembershipRequest,
 } from "@/types/membership";
+
+type MembershipListResponse = {
+  items: MembershipListItem[];
+  pagination: PaginationMeta;
+  summary: MembershipSummary;
+};
 
 function requireData<T>(response: ApiSuccessResponse<T>, fallbackMessage: string) {
   if (response.data === undefined) {
@@ -46,23 +53,35 @@ function buildMembershipQuery(query: MembershipListQuery) {
 export async function listMembershipsRequest(
   accessToken: string,
   query: MembershipListQuery,
-) {
+): Promise<MembershipListResponse> {
   const response = await apiClient.get<ApiSuccessResponse<MembershipListItem[]>>(
     `/memberships${buildMembershipQuery(query)}`,
     {
       headers: authHeader(accessToken),
     },
   );
+  const items = requireData(
+    response,
+    "Membership list response is missing payload.",
+  );
+  const meta = response.meta as
+    | { pagination?: PaginationMeta; summary?: MembershipSummary }
+    | undefined;
+  const summary = meta?.summary;
+
+  if (!summary) {
+    throw new Error("Membership list response is missing summary.");
+  }
 
   return {
-    items: requireData(response, "Membership list response is missing payload."),
-    pagination: ((response.meta as { pagination?: PaginationMeta } | undefined)
-      ?.pagination ?? {
+    items,
+    pagination: (meta?.pagination ?? {
       page: query.page ?? 1,
       pageSize: query.pageSize ?? 10,
       total: 0,
       totalPages: 1,
     }) satisfies PaginationMeta,
+    summary,
   };
 }
 

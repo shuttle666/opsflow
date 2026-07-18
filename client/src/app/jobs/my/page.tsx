@@ -74,7 +74,10 @@ export default function MyJobsPage() {
     total: 0,
     totalPages: 1,
   };
-  const isLoading = !hasMeasuredPageSize || jobsQuery.isLoading;
+  const isLoading =
+    !hasMeasuredPageSize ||
+    jobsQuery.isLoading ||
+    jobsQuery.isPlaceholderData;
   const error = jobsQuery.error
     ? getApiErrorView(jobsQuery.error, "Failed to load assigned jobs.")
     : null;
@@ -159,13 +162,15 @@ export default function MyJobsPage() {
           footer={
             <div className="flex flex-col gap-3 text-sm text-[var(--color-text-secondary)] sm:flex-row sm:items-center sm:justify-between">
               <p>
-                Page {pagination.page} of {pagination.totalPages} | Total {pagination.total}
+                {isLoading
+                  ? "Updating assigned jobs..."
+                  : `Page ${pagination.page} of ${pagination.totalPages} | Total ${pagination.total}`}
               </p>
 
               <div className="flex gap-2">
                 <button
                   type="button"
-                  disabled={pagination.page <= 1}
+                  disabled={isLoading || pagination.page <= 1}
                   onClick={() => setPage((current) => Math.max(1, current - 1))}
                   className={subtleButtonClassName}
                 >
@@ -173,7 +178,7 @@ export default function MyJobsPage() {
                 </button>
                 <button
                   type="button"
-                  disabled={pagination.page >= pagination.totalPages}
+                  disabled={isLoading || pagination.page >= pagination.totalPages}
                   onClick={() =>
                     setPage((current) => Math.min(pagination.totalPages, current + 1))
                   }

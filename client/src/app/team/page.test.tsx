@@ -100,6 +100,7 @@ describe("team page", () => {
         },
       ],
       pagination: { page: 1, pageSize: 10, total: 1, totalPages: 1 },
+      summary: { total: 6, active: 3, invited: 2, disabled: 1 },
     });
     vi.mocked(updateMembershipRequest).mockResolvedValue({
       id: "membership-1",
@@ -115,6 +116,10 @@ describe("team page", () => {
     render(<TeamPage />);
 
     expect(await screen.findByText("Sam Staff")).toBeInTheDocument();
+    expect(screen.getByText("Total").parentElement).toHaveTextContent("6");
+    expect(screen.getAllByText("Active")[0]?.parentElement).toHaveTextContent("3");
+    expect(screen.getByText("Invited members").parentElement).toHaveTextContent("2");
+    expect(screen.getByText("Disabled").parentElement).toHaveTextContent("1");
     expect(screen.getByRole("button", { name: "Invite Member" })).toBeInTheDocument();
     expect(screen.queryByText("Add New Member")).not.toBeInTheDocument();
     expect(screen.queryByText("Role guidance")).not.toBeInTheDocument();
@@ -135,6 +140,16 @@ describe("team page", () => {
     });
   });
 
+  it("shows unknown tenant summary values while memberships are loading", () => {
+    vi.mocked(listMembershipsRequest).mockImplementation(
+      () => new Promise(() => undefined),
+    );
+
+    render(<TeamPage />);
+
+    expect(screen.getAllByText("—")).toHaveLength(4);
+  });
+
   it("requests more members based on visible grid rows and columns", async () => {
     mockAdaptivePageSizeViewport({
       top: 300,
@@ -144,6 +159,7 @@ describe("team page", () => {
     vi.mocked(listMembershipsRequest).mockResolvedValue({
       items: [],
       pagination: { page: 1, pageSize: 12, total: 0, totalPages: 1 },
+      summary: { total: 0, active: 0, invited: 0, disabled: 0 },
     });
 
     render(<TeamPage />);
@@ -161,6 +177,7 @@ describe("team page", () => {
     vi.mocked(listMembershipsRequest).mockResolvedValue({
       items: [],
       pagination: { page: 1, pageSize: 2, total: 0, totalPages: 1 },
+      summary: { total: 0, active: 0, invited: 0, disabled: 0 },
     });
 
     render(<TeamPage />);

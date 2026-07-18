@@ -64,7 +64,7 @@ export function InvitationCreateCard() {
   const currentRole = currentTenant?.role;
   const allowed = canCreateInvitation(currentRole);
   const invitationsQuery = useTenantInvitationsQuery(
-    undefined,
+    "PENDING",
     Boolean(currentTenantId && allowed),
   );
   const createMutation = useCreateInvitationMutation();

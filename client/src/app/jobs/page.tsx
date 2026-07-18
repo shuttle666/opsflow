@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { AuthGuard } from "@/components/auth/auth-guard";
+import { CustomerSearchSelect } from "@/components/customer/customer-search-select";
 import { AppShell } from "@/components/ui/app-shell";
 import { DataTableCard } from "@/components/ui/data-table-card";
 import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
@@ -17,7 +18,6 @@ import {
   selectClassName,
   subtleButtonClassName,
 } from "@/components/ui/styles";
-import { listCustomersRequest } from "@/features/customer/customer-api";
 import { formatDateTime, formatScheduleRange } from "@/features/job";
 import { useJobsQuery } from "@/features/job/job-queries";
 import {
@@ -26,12 +26,7 @@ import {
   PAGINATED_TABLE_HEADER_OFFSET,
   useAdaptivePageSize,
 } from "@/hooks/use-adaptive-page-size";
-import {
-  useAuthenticatedQuery,
-  useAuthenticatedQueryScope,
-} from "@/hooks/use-authenticated-query";
 import { getApiErrorView } from "@/lib/api-client";
-import { queryKeys } from "@/lib/query-keys";
 import { useAuthStore } from "@/store/auth-store";
 import type { JobStatus } from "@/types/job";
 
@@ -52,7 +47,6 @@ function canManageJobs(role: string | undefined) {
 
 export default function JobsPage() {
   const currentTenant = useAuthStore((state) => state.currentTenant);
-  const queryScope = useAuthenticatedQueryScope();
   const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<JobStatus | "">("");
@@ -73,17 +67,6 @@ export default function JobsPage() {
     topGap: PAGINATED_TABLE_HEADER_OFFSET,
     dependencies: [customerFilter, page, query, sort, statusFilter],
   });
-  const customerListQuery = {
-    page: 1,
-    pageSize: 50,
-    sort: "name_asc" as const,
-  };
-  const customersQuery = useAuthenticatedQuery({
-    queryKey: queryKeys.customers.list(queryScope, customerListQuery),
-    queryFn: (accessToken) =>
-      listCustomersRequest(accessToken, customerListQuery),
-    enabled: allowManage && Boolean(queryScope.tenantId),
-  });
   const jobsQuery = useJobsQuery(
     {
       q: query,
@@ -96,14 +79,17 @@ export default function JobsPage() {
     { enabled: allowManage && hasMeasuredPageSize },
   );
   const jobs = jobsQuery.data?.items ?? [];
-  const customers = customersQuery.data?.items ?? [];
   const pagination = jobsQuery.data?.pagination ?? {
     page,
     pageSize: adaptivePageSize || DEFAULT_ADAPTIVE_PAGE_SIZE_MIN,
     total: 0,
     totalPages: 1,
   };
-  const isLoading = allowManage && (!hasMeasuredPageSize || jobsQuery.isLoading);
+  const isLoading =
+    allowManage &&
+    (!hasMeasuredPageSize ||
+      jobsQuery.isLoading ||
+      jobsQuery.isPlaceholderData);
   const error = jobsQuery.error
     ? getApiErrorView(jobsQuery.error, "Failed to load jobs.")
     : null;
@@ -176,24 +162,17 @@ export default function JobsPage() {
                     </select>
                   </label>
 
-                  <label className="space-y-2">
-                    <span className="text-xs font-semibold uppercase text-[var(--color-text-muted)]">Customer</span>
-                    <select
+                  <div className="space-y-2">
+                    <CustomerSearchSelect
                       value={customerFilter}
-                      onChange={(event) => {
+                      emptyLabel="All customers"
+                      status="all"
+                      onChange={(customerId) => {
                         setPage(1);
-                        setCustomerFilter(event.target.value);
+                        setCustomerFilter(customerId);
                       }}
-                      className={selectClassName}
-                    >
-                      <option value="">All customers</option>
-                      {customers.map((customer) => (
-                        <option key={customer.id} value={customer.id}>
-                          {customer.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                    />
+                  </div>
 
                   <label className="space-y-2">
                     <span className="text-xs font-semibold uppercase text-[var(--color-text-muted)]">Sort</span>
@@ -230,13 +209,15 @@ export default function JobsPage() {
             footer={
               <div className="flex flex-col gap-3 text-sm text-[var(--color-text-secondary)] sm:flex-row sm:items-center sm:justify-between">
                 <p>
-                  Page {pagination.page} of {pagination.totalPages} | Total {pagination.total}
+                  {isLoading
+                    ? "Updating job results..."
+                    : `Page ${pagination.page} of ${pagination.totalPages} | Total ${pagination.total}`}
                 </p>
 
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    disabled={pagination.page <= 1}
+                    disabled={isLoading || pagination.page <= 1}
                     onClick={() => setPage((current) => Math.max(1, current - 1))}
                     className={subtleButtonClassName}
                   >
@@ -244,7 +225,7 @@ export default function JobsPage() {
                   </button>
                   <button
                     type="button"
-                    disabled={pagination.page >= pagination.totalPages}
+                    disabled={isLoading || pagination.page >= pagination.totalPages}
                     onClick={() =>
                       setPage((current) => Math.min(pagination.totalPages, current + 1))
                     }

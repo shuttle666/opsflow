@@ -252,14 +252,26 @@ function buildJobDetailWhere(auth: AuthContext, jobId: string): Prisma.JobWhereI
 function buildJobOrderBy(sort: JobListQueryInput["sort"]) {
   switch (sort) {
     case "createdAt_asc":
-      return { createdAt: "asc" } satisfies Prisma.JobOrderByWithRelationInput;
+      return [
+        { createdAt: "asc" },
+        { id: "asc" },
+      ] satisfies Prisma.JobOrderByWithRelationInput[];
     case "scheduledStartAt_asc":
-      return { scheduledStartAt: "asc" } satisfies Prisma.JobOrderByWithRelationInput;
+      return [
+        { scheduledStartAt: "asc" },
+        { id: "asc" },
+      ] satisfies Prisma.JobOrderByWithRelationInput[];
     case "scheduledStartAt_desc":
-      return { scheduledStartAt: "desc" } satisfies Prisma.JobOrderByWithRelationInput;
+      return [
+        { scheduledStartAt: "desc" },
+        { id: "asc" },
+      ] satisfies Prisma.JobOrderByWithRelationInput[];
     case "createdAt_desc":
     default:
-      return { createdAt: "desc" } satisfies Prisma.JobOrderByWithRelationInput;
+      return [
+        { createdAt: "desc" },
+        { id: "asc" },
+      ] satisfies Prisma.JobOrderByWithRelationInput[];
   }
 }
 

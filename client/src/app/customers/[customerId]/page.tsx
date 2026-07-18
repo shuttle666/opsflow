@@ -57,10 +57,6 @@ function formatStatusLabel(status: JobStatus) {
   }
 }
 
-function isOpenJob(job: CustomerJobSummary) {
-  return job.status !== "COMPLETED" && job.status !== "CANCELLED";
-}
-
 function DetailCard({
   eyebrow,
   title,
@@ -348,13 +344,13 @@ export default function CustomerDetailPage() {
             <section className="grid gap-4 md:grid-cols-3">
               <OverviewMetric
                 label="Total jobs"
-                value={customer.jobs.length}
+                value={customer.jobStats.total}
                 meta="Linked work orders"
                 tone="brand"
               />
               <OverviewMetric
                 label="Open jobs"
-                value={customer.jobs.filter(isOpenJob).length}
+                value={customer.jobStats.open}
                 meta="Not completed or cancelled"
                 tone="success"
               />

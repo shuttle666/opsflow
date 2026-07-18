@@ -1,5 +1,5 @@
-import { act, render, waitFor } from "@/test/render";
-import type { ReactNode } from "react";
+import { act, fireEvent, render, screen, waitFor } from "@/test/render";
+import { useState, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { queryKeys, type QueryScope } from "@/lib/query-keys";
 import { AppProviders } from "@/providers/app-providers";
@@ -24,6 +24,18 @@ function mockMatchMedia(matches: boolean) {
       dispatchEvent: vi.fn(),
     })),
   });
+}
+
+function ScopedLocalState() {
+  const [value, setValue] = useState("");
+
+  return (
+    <input
+      aria-label="Scoped draft"
+      value={value}
+      onChange={(event) => setValue(event.target.value)}
+    />
+  );
 }
 
 describe("AppProviders theme attributes", () => {
@@ -164,5 +176,48 @@ describe("AppProviders theme attributes", () => {
       expect(queryClient.getQueryData(queryKeys.dashboard.all(roleScope))).toBeUndefined();
       expect(queryClient.getQueryData(queryKeys.dashboard.all(userScope))).toBe("user");
     });
+  });
+
+  it("remounts local UI state when the authenticated workspace changes", () => {
+    useAuthStore.setState({
+      status: "authenticated",
+      user: {
+        id: "user-1",
+        email: "owner@example.com",
+        displayName: "Owner",
+      },
+      currentTenant: {
+        tenantId: "tenant-1",
+        tenantName: "Tenant One",
+        tenantSlug: "tenant-one",
+        role: "OWNER",
+      },
+    });
+
+    render(
+      <AppProviders>
+        <ScopedLocalState />
+      </AppProviders>,
+    );
+
+    fireEvent.change(screen.getByLabelText("Scoped draft"), {
+      target: { value: "tenant-one customer" },
+    });
+    expect(screen.getByLabelText("Scoped draft")).toHaveValue(
+      "tenant-one customer",
+    );
+
+    act(() => {
+      useAuthStore.setState({
+        currentTenant: {
+          tenantId: "tenant-2",
+          tenantName: "Tenant Two",
+          tenantSlug: "tenant-two",
+          role: "OWNER",
+        },
+      });
+    });
+
+    expect(screen.getByLabelText("Scoped draft")).toHaveValue("");
   });
 });

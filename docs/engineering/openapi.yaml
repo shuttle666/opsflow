@@ -250,6 +250,13 @@ paths:
             type: string
             enum: [active, archived, all]
             default: active
+        - name: contact
+          in: query
+          description: Filter customers by whether a phone number or email is present.
+          schema:
+            type: string
+            enum: [all, has_contact, missing_contact]
+            default: all
       responses:
         "200":
           $ref: "#/components/responses/PaginatedListSuccess"
@@ -274,7 +281,17 @@ paths:
       operationId: getCustomerDetail
       responses:
         "200":
-          $ref: "#/components/responses/Success"
+          description: Customer detail with accurate job totals and up to five recent jobs.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiSuccessResponse"
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CustomerDetail"
         "404":
           $ref: "#/components/responses/NotFound"
     patch:
@@ -745,7 +762,7 @@ paths:
         - $ref: "#/components/parameters/PageSize"
       responses:
         "200":
-          $ref: "#/components/responses/PaginatedListSuccess"
+          $ref: "#/components/responses/MembershipListSuccess"
         "403":
           $ref: "#/components/responses/Forbidden"
 
@@ -1171,6 +1188,29 @@ components:
                     properties:
                       pagination:
                         $ref: "#/components/schemas/PaginationMeta"
+    MembershipListSuccess:
+      description: >-
+        Successful membership list with filtered pagination and tenant-wide status totals.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/ApiSuccessResponse"
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  meta:
+                    type: object
+                    required: [pagination, summary]
+                    properties:
+                      pagination:
+                        $ref: "#/components/schemas/PaginationMeta"
+                      summary:
+                        $ref: "#/components/schemas/MembershipSummary"
     BadRequest:
       description: Validation failed or request payload is invalid.
       content:
@@ -1221,6 +1261,25 @@ components:
     MembershipStatus:
       type: string
       enum: [ACTIVE, INVITED, DISABLED]
+    MembershipSummary:
+      type: object
+      description: >-
+        Tenant-wide membership totals. List search, role, status, and pagination filters
+        do not affect these values.
+      required: [total, active, invited, disabled]
+      properties:
+        total:
+          type: integer
+          minimum: 0
+        active:
+          type: integer
+          minimum: 0
+        invited:
+          type: integer
+          minimum: 0
+        disabled:
+          type: integer
+          minimum: 0
     InvitationStatus:
       type: string
       enum: [PENDING, ACCEPTED, CANCELLED, EXPIRED]
@@ -1455,6 +1514,102 @@ components:
         notes:
           type: string
           maxLength: 2000
+    CustomerDetail:
+      type: object
+      required:
+        - id
+        - name
+        - phone
+        - email
+        - notes
+        - archivedAt
+        - createdAt
+        - updatedAt
+        - createdBy
+        - jobStats
+        - jobs
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        phone:
+          type: [string, "null"]
+        email:
+          type: [string, "null"]
+          format: email
+        notes:
+          type: [string, "null"]
+        archivedAt:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        createdBy:
+          $ref: "#/components/schemas/CustomerCreatedBy"
+        jobStats:
+          $ref: "#/components/schemas/CustomerJobStats"
+        jobs:
+          type: array
+          maxItems: 5
+          description: The five most recently created jobs for this customer.
+          items:
+            $ref: "#/components/schemas/CustomerJobSummary"
+    CustomerCreatedBy:
+      type: object
+      required: [id, displayName, email]
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        email:
+          type: string
+          format: email
+    CustomerJobStats:
+      type: object
+      required: [total, open]
+      properties:
+        total:
+          type: integer
+          minimum: 0
+        open:
+          type: integer
+          minimum: 0
+          description: Jobs not in COMPLETED or CANCELLED status.
+    CustomerJobSummary:
+      type: object
+      required:
+        - id
+        - title
+        - serviceAddress
+        - status
+        - scheduledStartAt
+        - scheduledEndAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        serviceAddress:
+          type: string
+        status:
+          $ref: "#/components/schemas/JobStatus"
+        scheduledStartAt:
+          type: [string, "null"]
+          format: date-time
+        scheduledEndAt:
+          type: [string, "null"]
+          format: date-time
+        assignedToName:
+          type: string
     JobInput:
       type: object
       required: [customerId, title, serviceAddress]

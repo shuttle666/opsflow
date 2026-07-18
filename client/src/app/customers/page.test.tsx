@@ -110,35 +110,42 @@ describe("customers page", () => {
   });
 
   it("loads and renders customers table", async () => {
-    vi.mocked(listCustomersRequest).mockResolvedValue({
-      items: [
-        {
-          id: "customer-1",
-          name: "Noah Thompson",
-          phone: "0412 000 001",
-          email: "noah@example.com",
-          notes: null,
-          archivedAt: null,
-          createdAt: "2026-03-20T00:00:00.000Z",
-          updatedAt: "2026-03-20T00:00:00.000Z",
+    vi.mocked(listCustomersRequest).mockImplementation(async (_accessToken, query) => {
+      const allCustomers = [
+          {
+            id: "customer-1",
+            name: "Noah Thompson",
+            phone: "0412 000 001",
+            email: "noah@example.com",
+            notes: null,
+            archivedAt: null,
+            createdAt: "2026-03-20T00:00:00.000Z",
+            updatedAt: "2026-03-20T00:00:00.000Z",
+          },
+          {
+            id: "customer-2",
+            name: "Riley Missing",
+            phone: null,
+            email: null,
+            notes: null,
+            archivedAt: null,
+            createdAt: "2026-03-21T00:00:00.000Z",
+            updatedAt: "2026-03-21T00:00:00.000Z",
+          },
+        ];
+      const items = query.contact === "missing_contact"
+        ? allCustomers.filter((customer) => !customer.phone && !customer.email)
+        : allCustomers;
+
+      return {
+        items,
+        pagination: {
+          page: 1,
+          pageSize: 10,
+          total: items.length,
+          totalPages: 1,
         },
-        {
-          id: "customer-2",
-          name: "Riley Missing",
-          phone: null,
-          email: null,
-          notes: null,
-          archivedAt: null,
-          createdAt: "2026-03-21T00:00:00.000Z",
-          updatedAt: "2026-03-21T00:00:00.000Z",
-        },
-      ],
-      pagination: {
-        page: 1,
-        pageSize: 10,
-        total: 2,
-        totalPages: 1,
-      },
+      };
     });
 
     const user = userEvent.setup();
@@ -152,8 +159,86 @@ describe("customers page", () => {
 
     await user.selectOptions(screen.getByLabelText("Contact filter"), "missing_contact");
 
+    await waitFor(() => {
+      expect(vi.mocked(listCustomersRequest)).toHaveBeenLastCalledWith(
+        "access-token",
+        expect.objectContaining({ contact: "missing_contact", page: 1 }),
+      );
+    });
     expect(screen.queryByText("Noah Thompson")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Riley Missing")).not.toHaveLength(0);
+    expect(await screen.findAllByText("Riley Missing")).not.toHaveLength(0);
+    expect(screen.getByText("1 customer")).toBeInTheDocument();
+  });
+
+  it("does not show the previous page as the result of a new filter", async () => {
+    const initialResult: Awaited<ReturnType<typeof listCustomersRequest>> = {
+      items: [
+        {
+          id: "customer-1",
+          name: "Has Contact",
+          phone: "0412 000 001",
+          email: null,
+          notes: null,
+          archivedAt: null,
+          createdAt: "2026-03-20T00:00:00.000Z",
+          updatedAt: "2026-03-20T00:00:00.000Z",
+        },
+      ],
+      pagination: {
+        page: 1,
+        pageSize: 10,
+        total: 1,
+        totalPages: 1,
+      },
+    };
+    const filteredResult: Awaited<ReturnType<typeof listCustomersRequest>> = {
+      items: [
+        {
+          id: "customer-2",
+          name: "Missing Contact",
+          phone: null,
+          email: null,
+          notes: null,
+          archivedAt: null,
+          createdAt: "2026-03-21T00:00:00.000Z",
+          updatedAt: "2026-03-21T00:00:00.000Z",
+        },
+      ],
+      pagination: {
+        page: 1,
+        pageSize: 10,
+        total: 1,
+        totalPages: 1,
+      },
+    };
+    let resolveFiltered:
+      | ((result: Awaited<ReturnType<typeof listCustomersRequest>>) => void)
+      | undefined;
+
+    vi.mocked(listCustomersRequest)
+      .mockResolvedValueOnce(initialResult)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFiltered = resolve;
+          }),
+      );
+
+    const user = userEvent.setup();
+    render(<CustomersPage />);
+
+    expect(await screen.findAllByText("Has Contact")).not.toHaveLength(0);
+    await user.selectOptions(
+      screen.getByLabelText("Contact filter"),
+      "missing_contact",
+    );
+
+    expect(await screen.findByText("Loading customers...")).toBeInTheDocument();
+    expect(screen.queryByText("Has Contact")).not.toBeInTheDocument();
+    expect(screen.getByText("Updating customers...")).toBeInTheDocument();
+
+    resolveFiltered?.(filteredResult);
+    expect(await screen.findAllByText("Missing Contact")).not.toHaveLength(0);
   });
 
   it("applies search and hides create button for staff", async () => {

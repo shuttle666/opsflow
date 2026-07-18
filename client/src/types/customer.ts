@@ -5,6 +5,7 @@ export type CustomerListQuery = {
   page?: number;
   pageSize?: number;
   status?: "active" | "archived" | "all";
+  contact?: "all" | "has_contact" | "missing_contact";
   sort?: "createdAt_desc" | "createdAt_asc" | "name_asc" | "name_desc";
 };
 
@@ -34,6 +35,10 @@ export type CustomerDetail = CustomerListItem & {
     id: string;
     displayName: string;
     email: string;
+  };
+  jobStats: {
+    total: number;
+    open: number;
   };
   jobs: CustomerJobSummary[];
 };

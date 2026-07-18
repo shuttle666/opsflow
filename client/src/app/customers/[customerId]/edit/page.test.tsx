@@ -77,6 +77,10 @@ describe("edit customer page", () => {
         displayName: "Owner",
         email: "owner@acme.example",
       },
+      jobStats: {
+        total: 0,
+        open: 0,
+      },
       jobs: [],
     });
     vi.mocked(updateCustomerRequest).mockResolvedValue({

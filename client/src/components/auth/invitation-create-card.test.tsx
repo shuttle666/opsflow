@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@/test/render";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { InvitationCreateCard } from "@/components/auth/invitation-create-card";
+import { queryKeys } from "@/lib/query-keys";
 import { useAuthStore } from "@/store/auth-store";
 
 describe("InvitationCreateCard", () => {
@@ -77,7 +78,16 @@ describe("InvitationCreateCard", () => {
     });
 
     const user = userEvent.setup();
-    render(<InvitationCreateCard />);
+    const { queryClient } = render(<InvitationCreateCard />);
+    const membershipQueryKey = queryKeys.memberships.list(
+      {
+        tenantId: "tenant-1",
+        userId: "user-1",
+        role: "MANAGER",
+      },
+      { page: 1 },
+    );
+    queryClient.setQueryData(membershipQueryKey, { items: [] });
 
     await user.type(
       screen.getByPlaceholderText("new.member@example.com"),
@@ -97,7 +107,12 @@ describe("InvitationCreateCard", () => {
       screen.getByText(/Invitation created for new.member@example.com/i),
     ).toBeInTheDocument();
     expect(screen.queryByText(/Token:/)).not.toBeInTheDocument();
-    expect(listTenantInvitations).toHaveBeenCalled();
+    expect(listTenantInvitations).toHaveBeenCalledWith("PENDING");
+    await waitFor(() => {
+      expect(queryClient.getQueryState(membershipQueryKey)?.isInvalidated).toBe(
+        true,
+      );
+    });
   });
 
   it("renders invitation list and handles resend/cancel actions", async () => {
@@ -134,20 +149,42 @@ describe("InvitationCreateCard", () => {
     });
 
     const user = userEvent.setup();
-    render(<InvitationCreateCard />);
+    const { queryClient } = render(<InvitationCreateCard />);
+    const membershipQueryKey = queryKeys.memberships.list(
+      {
+        tenantId: "tenant-1",
+        userId: "user-1",
+        role: "OWNER",
+      },
+      { page: 1 },
+    );
+    queryClient.setQueryData(membershipQueryKey, { items: [] });
 
     expect(
       await screen.findByText("new.member@example.com"),
     ).toBeInTheDocument();
+    expect(listTenantInvitations).toHaveBeenCalledWith("PENDING");
 
     await user.click(screen.getByRole("button", { name: "Resend" }));
     await waitFor(() => {
       expect(resendInvitation).toHaveBeenCalledWith("invitation-1");
     });
+    await waitFor(() => {
+      expect(queryClient.getQueryState(membershipQueryKey)?.isInvalidated).toBe(
+        true,
+      );
+    });
+
+    queryClient.setQueryData(membershipQueryKey, { items: [] });
 
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     await waitFor(() => {
       expect(cancelInvitation).toHaveBeenCalledWith("invitation-1");
+    });
+    await waitFor(() => {
+      expect(queryClient.getQueryState(membershipQueryKey)?.isInvalidated).toBe(
+        true,
+      );
     });
   });
 });

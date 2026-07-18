@@ -1,4 +1,9 @@
-import { AuditAction, MembershipRole, MembershipStatus } from "@prisma/client";
+import {
+  AuditAction,
+  InvitationStatus,
+  MembershipRole,
+  MembershipStatus,
+} from "@prisma/client";
 import request from "supertest";
 import { createApp } from "../src/app";
 import { prisma } from "../src/lib/prisma";
@@ -182,6 +187,158 @@ describeIfDb("membership api integration", () => {
       },
     });
     expect(disableAudit).toHaveLength(1);
+  });
+
+  it("returns tenant-wide status summary independent of list filters and pagination", async () => {
+    const owner = await seedTenantUser({
+      email: "owner@membership-summary.test",
+      displayName: "Summary Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Membership Summary Tenant",
+      tenantSlug: "membership-summary-tenant",
+    });
+    await seedTenantUser({
+      email: "owner@other-membership-summary.test",
+      displayName: "Other Summary Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Other Membership Summary Tenant",
+      tenantSlug: "other-membership-summary-tenant",
+    });
+
+    const passwordHash = await hashPassword("password123");
+    const [activeUser, invitedUser, disabledUser] = await Promise.all([
+      prisma.user.create({
+        data: {
+          email: "active@membership-summary.test",
+          passwordHash,
+          displayName: "Summary Active",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "invited@membership-summary.test",
+          passwordHash,
+          displayName: "Summary Invited",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "disabled@membership-summary.test",
+          passwordHash,
+          displayName: "Summary Disabled",
+        },
+      }),
+    ]);
+
+    await prisma.membership.createMany({
+      data: [
+        {
+          userId: activeUser.id,
+          tenantId: owner.tenant.id,
+          role: MembershipRole.STAFF,
+          status: MembershipStatus.ACTIVE,
+        },
+        {
+          userId: invitedUser.id,
+          tenantId: owner.tenant.id,
+          role: MembershipRole.MANAGER,
+          status: MembershipStatus.INVITED,
+        },
+        {
+          userId: disabledUser.id,
+          tenantId: owner.tenant.id,
+          role: MembershipRole.STAFF,
+          status: MembershipStatus.DISABLED,
+        },
+      ],
+    });
+
+    const response = await request(app)
+      .get("/api/memberships?status=ACTIVE&role=STAFF&q=Summary&page=1&pageSize=1")
+      .set("Authorization", `Bearer ${owner.accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toHaveLength(1);
+    expect(response.body.data[0]?.email).toBe("active@membership-summary.test");
+    expect(response.body.meta.pagination).toEqual({
+      page: 1,
+      pageSize: 1,
+      total: 1,
+      totalPages: 1,
+    });
+    expect(response.body.meta.summary).toEqual({
+      total: 4,
+      active: 2,
+      invited: 1,
+      disabled: 1,
+    });
+  });
+
+  it("expires stale invitations before returning membership rows and summary", async () => {
+    const owner = await seedTenantUser({
+      email: "owner@membership-expiry.test",
+      displayName: "Expiry Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Membership Expiry Tenant",
+      tenantSlug: "membership-expiry-tenant",
+    });
+    const passwordHash = await hashPassword("password123");
+    const invitedUser = await prisma.user.create({
+      data: {
+        email: "invited@membership-expiry.test",
+        passwordHash,
+        displayName: "Expired Invitee",
+      },
+    });
+    await prisma.membership.create({
+      data: {
+        userId: invitedUser.id,
+        tenantId: owner.tenant.id,
+        role: MembershipRole.STAFF,
+        status: MembershipStatus.INVITED,
+      },
+    });
+    const invitation = await prisma.tenantInvitation.create({
+      data: {
+        tenantId: owner.tenant.id,
+        invitedById: owner.user.id,
+        invitedUserId: invitedUser.id,
+        email: invitedUser.email,
+        role: MembershipRole.STAFF,
+        tokenHash: "expired-membership-summary-token",
+        status: InvitationStatus.PENDING,
+        expiresAt: new Date(Date.now() - 60_000),
+      },
+    });
+
+    const response = await request(app)
+      .get("/api/memberships")
+      .set("Authorization", `Bearer ${owner.accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toHaveLength(1);
+    expect(response.body.meta.summary).toEqual({
+      total: 1,
+      active: 1,
+      invited: 0,
+      disabled: 0,
+    });
+
+    const [membershipAfter, invitationAfter] = await Promise.all([
+      prisma.membership.findUnique({
+        where: {
+          userId_tenantId: {
+            userId: invitedUser.id,
+            tenantId: owner.tenant.id,
+          },
+        },
+      }),
+      prisma.tenantInvitation.findUnique({
+        where: { id: invitation.id },
+      }),
+    ]);
+    expect(membershipAfter).toBeNull();
+    expect(invitationAfter?.status).toBe(InvitationStatus.EXPIRED);
   });
 
   it("protects the last active owner and blocks invited membership mutations", async () => {

@@ -41,6 +41,8 @@ This document is aligned with the Express routers under `server/src/routes` and 
 
 Customer fields include `name`, `phone`, `email`, `notes`, and `archivedAt`. Service locations are stored on jobs as `serviceAddress`, not on customer profiles.
 Customer list accepts `status=active|archived|all` and defaults to `active`.
+It also accepts `contact=all|has_contact|missing_contact`; this filter is applied before pagination and defaults to `all`.
+Customer detail returns `jobStats.total` and `jobStats.open` across all linked jobs, plus at most five recent jobs for preview.
 
 ## Dashboard
 - `GET /dashboard/summary`

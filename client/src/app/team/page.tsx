@@ -154,19 +154,37 @@ export default function TeamPage() {
     total: 0,
     totalPages: 1,
   };
-  const isLoading = membershipsQuery.isPending;
+  const membershipSummary = membershipsQuery.data?.summary;
+  const isLoading =
+    membershipsQuery.isPending || membershipsQuery.isPlaceholderData;
   const queryError = membershipsQuery.error
     ? getApiErrorView(membershipsQuery.error, "Failed to load team members.")
     : null;
   const error = actionError ?? queryError;
   const teamStats = useMemo(
     () => [
-      { label: "Total", value: String(pagination.total || memberships.length), color: "var(--color-text)" },
-      { label: "Active", value: String(memberships.filter((item) => item.status === "ACTIVE").length), color: "var(--color-success)" },
-      { label: "Invited", value: String(memberships.filter((item) => item.status === "INVITED").length), color: "var(--color-brand)" },
-      { label: "Disabled", value: String(memberships.filter((item) => item.status === "DISABLED").length), color: "var(--color-text-muted)" },
+      {
+        label: "Total",
+        value: membershipSummary ? String(membershipSummary.total) : "—",
+        color: "var(--color-text)",
+      },
+      {
+        label: "Active",
+        value: membershipSummary ? String(membershipSummary.active) : "—",
+        color: "var(--color-success)",
+      },
+      {
+        label: "Invited members",
+        value: membershipSummary ? String(membershipSummary.invited) : "—",
+        color: "var(--color-brand)",
+      },
+      {
+        label: "Disabled",
+        value: membershipSummary ? String(membershipSummary.disabled) : "—",
+        color: "var(--color-text-muted)",
+      },
     ],
-    [memberships, pagination.total],
+    [membershipSummary],
   );
 
   const roleOptions = useMemo<MembershipRole[]>(() => ["OWNER", "MANAGER", "STAFF"], []);
@@ -461,13 +479,15 @@ export default function TeamPage() {
 
             <div className="flex flex-col gap-3 text-sm text-[var(--color-text-secondary)] sm:flex-row sm:items-center sm:justify-between">
               <p>
-                Page {pagination.page} of {pagination.totalPages} | Total {pagination.total}
+                {isLoading
+                  ? "Updating team results..."
+                  : `Page ${pagination.page} of ${pagination.totalPages} | Total ${pagination.total}`}
               </p>
 
               <div className="flex gap-2">
                 <button
                   type="button"
-                  disabled={pagination.page <= 1}
+                  disabled={isLoading || pagination.page <= 1}
                   onClick={() => setPage(Math.max(1, pagination.page - 1))}
                   className={subtleButtonClassName}
                 >
@@ -475,7 +495,7 @@ export default function TeamPage() {
                 </button>
                 <button
                   type="button"
-                  disabled={pagination.page >= pagination.totalPages}
+                  disabled={isLoading || pagination.page >= pagination.totalPages}
                   onClick={() =>
                     setPage(Math.min(pagination.totalPages, pagination.page + 1))
                   }

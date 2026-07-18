@@ -11,6 +11,10 @@ const outputSchema = z.object({
       displayName: z.string(),
       email: z.string(),
     }),
+    jobStats: z.object({
+      total: z.number().int().nonnegative(),
+      open: z.number().int().nonnegative(),
+    }),
     jobs: z.array(
       z.object({
         id: z.string(),

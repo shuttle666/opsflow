@@ -2,6 +2,7 @@ import { AuditAction, MembershipRole, MembershipStatus, type Prisma } from "@pri
 import { prisma } from "../../lib/prisma";
 import type { AuthContext, RequestMetadata } from "../../types/auth";
 import { ApiError } from "../../utils/api-error";
+import { expirePendingTenantInvitations } from "../auth/auth.service";
 import type {
   MembershipListQueryInput,
   UpdateMembershipInput,
@@ -17,6 +18,13 @@ export type MembershipListItem = {
   createdAt: Date;
 };
 
+export type MembershipSummary = {
+  total: number;
+  active: number;
+  invited: number;
+  disabled: number;
+};
+
 type MembershipListResult = {
   items: MembershipListItem[];
   pagination: {
@@ -25,6 +33,7 @@ type MembershipListResult = {
     total: number;
     totalPages: number;
   };
+  summary: MembershipSummary;
 };
 
 type TenantMembershipRecord = {
@@ -102,31 +111,57 @@ export async function listMemberships(
   auth: AuthContext,
   query: MembershipListQueryInput,
 ): Promise<MembershipListResult> {
+  await expirePendingTenantInvitations(auth.tenantId);
+
   const where = buildMembershipWhere(auth, query);
   const skip = (query.page - 1) * query.pageSize;
 
-  const [total, memberships] = await prisma.$transaction([
-    prisma.membership.count({ where }),
-    prisma.membership.findMany({
-      where,
-      orderBy: [{ createdAt: "asc" }, { user: { displayName: "asc" } }],
-      skip,
-      take: query.pageSize,
-      select: {
-        id: true,
-        userId: true,
-        role: true,
-        status: true,
-        createdAt: true,
-        user: {
-          select: {
-            displayName: true,
-            email: true,
+  const { total, memberships, statusGroups } = await prisma.$transaction(
+    async (tx) => {
+      const total = await tx.membership.count({ where });
+      const memberships = await tx.membership.findMany({
+        where,
+        orderBy: [
+          { createdAt: "asc" },
+          { user: { displayName: "asc" } },
+          { id: "asc" },
+        ],
+        skip,
+        take: query.pageSize,
+        select: {
+          id: true,
+          userId: true,
+          role: true,
+          status: true,
+          createdAt: true,
+          user: {
+            select: {
+              displayName: true,
+              email: true,
+            },
           },
         },
-      },
-    }),
-  ]);
+      });
+      const statusGroups = await tx.membership.groupBy({
+        by: ["status"],
+        where: {
+          tenantId: auth.tenantId,
+        },
+        orderBy: {
+          status: "asc",
+        },
+        _count: true,
+      });
+
+      return { total, memberships, statusGroups };
+    },
+  );
+
+  const countForStatus = (status: MembershipStatus) =>
+    statusGroups.find((group) => group.status === status)?._count ?? 0;
+  const active = countForStatus(MembershipStatus.ACTIVE);
+  const invited = countForStatus(MembershipStatus.INVITED);
+  const disabled = countForStatus(MembershipStatus.DISABLED);
 
   return {
     items: memberships.map((membership) => ({
@@ -143,6 +178,12 @@ export async function listMemberships(
       pageSize: query.pageSize,
       total,
       totalPages: Math.max(1, Math.ceil(total / query.pageSize)),
+    },
+    summary: {
+      total: active + invited + disabled,
+      active,
+      invited,
+      disabled,
     },
   };
 }

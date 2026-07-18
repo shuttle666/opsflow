@@ -116,6 +116,53 @@ describeIfDb("customer service integration", () => {
     expect(searched.items[0]?.name).toBe("Olivia Davis");
   });
 
+  it("filters customers by contact availability before pagination", async () => {
+    const { auth } = await seedTenantUser({
+      email: "owner@customer-contact-filter.test",
+      displayName: "Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Contact Filter Tenant",
+      tenantSlug: "contact-filter-tenant",
+    });
+
+    await createCustomer(auth, {
+      name: "Email Contact",
+      email: "email-contact@example.com",
+    });
+    await createCustomer(auth, {
+      name: "Phone Contact",
+      phone: "0412 000 009",
+    });
+    await createCustomer(auth, {
+      name: "Missing Contact",
+    });
+
+    const withContact = await listCustomers(auth, {
+      page: 1,
+      pageSize: 1,
+      q: undefined,
+      status: "active",
+      contact: "has_contact",
+      sort: "name_asc",
+    });
+    expect(withContact.pagination.total).toBe(2);
+    expect(withContact.pagination.totalPages).toBe(2);
+    expect(withContact.items[0]?.name).toBe("Email Contact");
+
+    const missingContact = await listCustomers(auth, {
+      page: 1,
+      pageSize: 10,
+      q: undefined,
+      status: "active",
+      contact: "missing_contact",
+      sort: "name_asc",
+    });
+    expect(missingContact.pagination.total).toBe(1);
+    expect(missingContact.items.map((item) => item.name)).toEqual([
+      "Missing Contact",
+    ]);
+  });
+
   it("filters, archives, and restores customers", async () => {
     const { auth } = await seedTenantUser({
       email: "owner@customer-archive.test",
@@ -301,11 +348,58 @@ describeIfDb("customer service integration", () => {
 
     expect(detail.name).toBe("Mia Clark");
     expect(detail.createdBy.email).toBe("manager@customer-detail.test");
+    expect(detail.jobStats).toEqual({ total: 2, open: 2 });
     expect(detail.jobs).toHaveLength(2);
     expect(detail.jobs[0]?.title).toBeTruthy();
     expect(
       detail.jobs.some((job) => job.assignedToName === "Sam Staff"),
     ).toBe(true);
+  });
+
+  it("returns full job stats while limiting customer history to five recent jobs", async () => {
+    const { auth, user } = await seedTenantUser({
+      email: "manager@customer-job-stats.test",
+      displayName: "Manager",
+      role: MembershipRole.MANAGER,
+      tenantName: "Job Stats Tenant",
+      tenantSlug: "job-stats-tenant",
+    });
+    const customer = await createCustomer(auth, {
+      name: "Job Stats Customer",
+    });
+
+    const statuses = [
+      JobStatus.NEW,
+      JobStatus.SCHEDULED,
+      JobStatus.COMPLETED,
+      JobStatus.CANCELLED,
+      JobStatus.IN_PROGRESS,
+      JobStatus.COMPLETED,
+      JobStatus.PENDING_REVIEW,
+    ];
+    await prisma.job.createMany({
+      data: statuses.map((status, index) => ({
+        tenantId: auth.tenantId,
+        customerId: customer.id,
+        title: `Job ${index + 1}`,
+        serviceAddress: `${index + 1} King Street, Adelaide SA 5000`,
+        status,
+        createdById: user.id,
+        createdAt: new Date(`2026-04-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`),
+      })),
+    });
+
+    const detail = await getCustomerDetail(auth, customer.id);
+
+    expect(detail.jobStats).toEqual({ total: 7, open: 4 });
+    expect(detail.jobs).toHaveLength(5);
+    expect(detail.jobs.map((job) => job.title)).toEqual([
+      "Job 7",
+      "Job 6",
+      "Job 5",
+      "Job 4",
+      "Job 3",
+    ]);
   });
 
   it("updates customer and blocks cross-tenant access", async () => {

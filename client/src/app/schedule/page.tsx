@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AuthGuard } from "@/components/auth/auth-guard";
+import { StaffSearchSelect } from "@/components/team/staff-search-select";
 import { AppShell } from "@/components/ui/app-shell";
 import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
 import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
@@ -29,7 +30,6 @@ import {
 } from "@/components/ui/styles";
 import { formatTimeRange } from "@/features/job";
 import { useScheduleRangeQuery } from "@/features/job/schedule-queries";
-import { useMembershipsQuery } from "@/features/membership/membership-queries";
 import { getApiErrorView } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 import type { MembershipListItem } from "@/types/membership";
@@ -953,9 +953,7 @@ function CalendarToolbar({
   anchorDate,
   onDateChange,
   allowManage,
-  isLoadingMembers,
-  memberships,
-  selectedAssigneeId,
+  selectedAssignee,
   onAssigneeChange,
   datePickerRef,
 }: {
@@ -967,10 +965,8 @@ function CalendarToolbar({
   anchorDate: Date;
   onDateChange: (value: string) => void;
   allowManage: boolean;
-  isLoadingMembers: boolean;
-  memberships: MembershipListItem[];
-  selectedAssigneeId: string;
-  onAssigneeChange: (value: string) => void;
+  selectedAssignee: MembershipListItem | null;
+  onAssigneeChange: (membership: MembershipListItem | null) => void;
   datePickerRef: React.RefObject<HTMLInputElement | null>;
 }) {
   const assigneeMenuRef = useRef<HTMLDivElement>(null);
@@ -1036,56 +1032,27 @@ function CalendarToolbar({
               aria-label="Assignee filter"
               aria-expanded={isAssigneeMenuOpen}
               onClick={() => setIsAssigneeMenuOpen((open) => !open)}
-              disabled={isLoadingMembers}
-              className={cn(
+                  className={cn(
                 "flex h-11 w-11 items-center justify-center rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] text-[var(--color-text-secondary)] shadow-sm transition hover:bg-[var(--color-app-panel-muted)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50 md:h-9 md:w-9",
-                selectedAssigneeId && "border-[var(--color-brand)] bg-[var(--color-brand-soft)] text-[var(--color-brand)]",
+                    selectedAssignee && "border-[var(--color-brand)] bg-[var(--color-brand-soft)] text-[var(--color-brand)]",
               )}
             >
               <Users className="h-5 w-5" />
             </button>
 
             {isAssigneeMenuOpen ? (
-              <div className="absolute left-0 top-11 z-20 min-w-[220px] rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] p-2 shadow-[var(--shadow-floating)]">
-                <div className="mb-1 px-3 py-2 text-[11px] font-semibold uppercase text-[var(--color-text-muted)]">
-                  Assignee
-                </div>
-                <div className="space-y-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onAssigneeChange("");
+                <div className="absolute left-0 top-11 z-20 w-[min(360px,calc(100vw-2rem))] rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel)] p-3 shadow-[var(--shadow-floating)]">
+                  <StaffSearchSelect
+                    value={selectedAssignee?.userId ?? ""}
+                    valueKey="userId"
+                    selectedMembership={selectedAssignee}
+                    emptyLabel="All staff"
+                    onChange={(_userId, membership) => {
+                      onAssigneeChange(membership ?? null);
                       setIsAssigneeMenuOpen(false);
                     }}
-                    className={cn(
-                      "flex w-full items-center rounded-md px-3 py-2 text-left text-sm font-medium transition",
-                      !selectedAssigneeId
-                        ? "bg-[var(--color-text)] text-[var(--color-app-panel)]"
-                        : "text-[var(--color-text-secondary)] hover:bg-[var(--color-app-panel-muted)] hover:text-[var(--color-text)]",
-                    )}
-                  >
-                    All staff
-                  </button>
-                  {memberships.map((membership) => (
-                    <button
-                      key={membership.userId}
-                      type="button"
-                      onClick={() => {
-                        onAssigneeChange(membership.userId);
-                        setIsAssigneeMenuOpen(false);
-                      }}
-                      className={cn(
-                        "flex w-full items-center rounded-md px-3 py-2 text-left text-sm font-medium transition",
-                        selectedAssigneeId === membership.userId
-                          ? "bg-[var(--color-text)] text-[var(--color-app-panel)]"
-                          : "text-[var(--color-text-secondary)] hover:bg-[var(--color-app-panel-muted)] hover:text-[var(--color-text)]",
-                      )}
-                    >
-                      {membership.displayName}
-                    </button>
-                  ))}
+                  />
                 </div>
-              </div>
             ) : null}
           </div>
         ) : null}
@@ -1155,21 +1122,14 @@ export default function SchedulePage() {
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [anchorDate, setAnchorDate] = useState(todayLocalDate);
   const [selectedDate, setSelectedDate] = useState(todayLocalDate);
-  const [selectedAssigneeId, setSelectedAssigneeId] = useState("");
+  const [selectedAssignee, setSelectedAssignee] =
+    useState<MembershipListItem | null>(null);
 
   const allowManage = canManageSchedule(currentTenant?.role);
   const allowView = canViewSchedule(currentTenant?.role);
   const isStaffView = currentTenant?.role === "STAFF";
   const period = useMemo(() => getPeriod(anchorDate, viewMode), [anchorDate, viewMode]);
-  const membershipsQuery = useMembershipsQuery(
-    {
-      role: "STAFF",
-      status: "ACTIVE",
-      page: 1,
-      pageSize: 50,
-    },
-    allowManage,
-  );
+  const selectedAssigneeId = selectedAssignee?.userId ?? "";
   const scheduleQuery = useScheduleRangeQuery(
     {
       rangeStart: period.start.toISOString(),
@@ -1178,10 +1138,10 @@ export default function SchedulePage() {
     },
     { enabled: allowView },
   );
-  const memberships = membershipsQuery.data?.items ?? [];
   const schedule = scheduleQuery.data ?? null;
-  const isLoadingMembers = allowManage && membershipsQuery.isLoading;
-  const isLoadingSchedule = allowView && scheduleQuery.isLoading;
+  const isLoadingSchedule =
+    allowView &&
+    (scheduleQuery.isLoading || scheduleQuery.isPlaceholderData);
   const error = scheduleQuery.error
     ? getApiErrorView(scheduleQuery.error, "Failed to load schedule.")
     : null;
@@ -1326,10 +1286,8 @@ export default function SchedulePage() {
                   anchorDate={anchorDate}
                   onDateChange={handleDateChange}
                   allowManage={allowManage}
-                  isLoadingMembers={isLoadingMembers}
-                  memberships={memberships}
-                  selectedAssigneeId={selectedAssigneeId}
-                  onAssigneeChange={setSelectedAssigneeId}
+                  selectedAssignee={selectedAssignee}
+                  onAssigneeChange={setSelectedAssignee}
                   datePickerRef={datePickerRef}
                 />
               </div>

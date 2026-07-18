@@ -9,10 +9,11 @@ OpsFlow uses a small number of layered checks chosen around product and security
 | Client unit and component | Vitest, Testing Library, query-cache behavior, error states, forms, and UI permissions | `client-ci` |
 | Server unit and contract | Vitest, domain rules, schemas, Tool Registry, MCP contract, and deterministic provider behavior | `server-ci` |
 | HTTP and database integration | Supertest plus real PostgreSQL for middleware authorization, Request ID correlation, transaction races, and tenant constraints | `server-db-integration` |
+| Deployment ingress smoke | The real Nginx image plus isolated upstream fixtures for proxy IP normalization, spoof-resistant rate-limit keys, multipart limits, host routing, and unbuffered SSE | `nginx-ingress-smoke` |
 | Browser workflow | Playwright Chromium against production builds for auth, CRUD smoke, the three-role operational loop, and safe AI writes | `playwright-e2e` |
 | Mobile accessibility smoke | Playwright with a Pixel 7 profile and axe on the public landing page, sign-in, and authenticated Dashboard | `playwright-e2e` |
 
-The workflow definition is [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml). Pull requests and pushes to `main` run linting, type checking, unit/contract tests, builds, PostgreSQL integration, and browser E2E.
+The workflow definition is [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml). Pull requests and pushes to `main` run linting, type checking, unit/contract tests, builds, the Nginx ingress smoke, PostgreSQL integration, and browser E2E.
 
 ## High-value Scenarios
 
@@ -22,6 +23,7 @@ The workflow definition is [`.github/workflows/ci.yml`](../../.github/workflows/
 - [Database tenant integrity](../../server/tests/database-tenant-integrity.integration.test.ts): composite foreign keys reject cross-tenant Evidence, Completion Review, and Status History records even if application code is bypassed.
 - [Live MCP authorization](../../server/tests/mcp-tenant-revalidation.integration.test.ts): an open MCP process loses access immediately after role, membership, or tenant state changes.
 - [Membership concurrency](../../server/tests/membership.api.integration.test.ts) and [invitation acceptance](../../server/tests/auth-invitation.service.unit.test.ts): concurrent updates cannot remove the final active Owner, and acceptance revalidates the live invitation and tenant state.
+- [Production ingress](../../infra/nginx/smoke/smoke-test.mjs): Nginx discards caller-supplied forwarding chains, prevents forged IP rotation from changing a rate-limit key, accepts a 10 MiB multipart file with protocol overhead, rejects an oversized body, routes both public hosts, and streams both SSE endpoints before the upstream response completes.
 
 ## Determinism And Isolation
 
@@ -43,6 +45,14 @@ pnpm --dir client test
 pnpm --dir server typecheck
 pnpm --dir server test
 ```
+
+Run the isolated deployment-ingress smoke when changing Nginx, proxy trust, uploads, or SSE:
+
+```bash
+infra/nginx/smoke/run.sh
+```
+
+It requires Docker and OpenSSL, builds the repository's production Nginx image and disposable Node fixtures, and validates both the bootstrap and HTTPS configurations. It does not start the application, call an AI provider, or connect to a database, and it removes its containers and network when finished.
 
 Database integration tests and managed Playwright mutate disposable databases and therefore require explicit opt-in. Follow [server test setup](../../server/tests/README.md) and [browser E2E setup](../../client/e2e/README.md); do not point either suite at development, demo, or production data.
 

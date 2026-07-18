@@ -125,14 +125,15 @@ See [Local MCP Integration](mcp.md) for the current tool catalog, setup, authori
 
 ## Verification Architecture
 
-Fast client/server checks cover UI states, domain rules, schemas, Tool Registry behavior, and protocol contracts. A separate PostgreSQL job exercises the real HTTP middleware and database constraints. Playwright then composes production builds, a freshly migrated and seeded disposable database, the three user roles, Evidence storage, and the guarded deterministic AI provider. This keeps model/network variability out of CI while exercising the same Agent loop and Tool Registry used by the application.
+Fast client/server checks cover UI states, domain rules, schemas, Tool Registry behavior, and protocol contracts. A separate Nginx smoke exercises the deployable ingress boundary, and a PostgreSQL job exercises the real HTTP middleware and database constraints. Playwright then composes production builds, a freshly migrated and seeded disposable database, the three user roles, Evidence storage, and the guarded deterministic AI provider. This keeps model/network variability out of CI while exercising the same Agent loop and Tool Registry used by the application.
 
 Managed browser tests use dedicated ports and a single worker because the scenarios intentionally share seeded demo identities. Destructive database setup fails closed unless the target is loopback PostgreSQL with a database name containing an `e2e` segment. See the [Testing Strategy](testing.md) for the scenario map, CI jobs, artifacts, and current limits.
 
 ## Infrastructure
 - Local development uses `docker-compose.dev.yml`.
 - Production uses `docker-compose.prod.yml`.
-- Nginx and production deploy scripts live under `infra`.
+- Nginx is the sole public production hop. It replaces caller-supplied forwarding chains, Express trusts exactly that hop, and the API request-body allowance includes multipart overhead above the application's file-size limit.
+- Nginx configuration, deployment scripts, and the isolated ingress smoke live under `infra`.
 - GitHub Actions runs CI and deploys successful `main` builds to EC2.
 - HTTPS is served through Nginx and Certbot.
 

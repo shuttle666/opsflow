@@ -97,6 +97,18 @@ jobs:
       - name: Build
         run: pnpm build
 
+  nginx-ingress-smoke:
+    name: nginx-ingress-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify the production ingress boundary
+        run: infra/nginx/smoke/run.sh
+
   server-db-integration:
     name: server-db-integration
     runs-on: ubuntu-latest

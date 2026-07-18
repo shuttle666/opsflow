@@ -1,0 +1,63 @@
+services:
+  fixture:
+    build:
+      context: ..
+      dockerfile: smoke/Dockerfile
+    command: ["node", "/smoke/upstream.mjs"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "Promise.all([3000, 4000].map((port) => fetch('http://127.0.0.1:' + port + '/health').then((response) => { if (!response.ok) throw new Error(String(port)); }))).then(() => process.exit(0)).catch(() => process.exit(1))",
+        ]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+      start_period: 2s
+    networks:
+      default:
+        aliases:
+          - client
+          - server
+
+  nginx:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      APP_DOMAIN: app.opsflow.test
+      API_DOMAIN: api.opsflow.test
+      CERT_NAME: smoke
+      EVIDENCE_MAX_SIZE_BYTES: "10485760"
+    depends_on:
+      fixture:
+        condition: service_healthy
+
+  ssl-config:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      APP_DOMAIN: app.opsflow.test
+      API_DOMAIN: api.opsflow.test
+      CERT_NAME: smoke
+      EVIDENCE_MAX_SIZE_BYTES: "10485760"
+      NGINX_CONFIG_TEST_ONLY: "true"
+    volumes:
+      - ${NGINX_SMOKE_CERTS_DIR:?run through smoke/run.sh}:/etc/letsencrypt:ro
+    depends_on:
+      fixture:
+        condition: service_healthy
+
+  smoke:
+    build:
+      context: ..
+      dockerfile: smoke/Dockerfile
+    command: ["node", "/smoke/smoke-test.mjs"]
+    environment:
+      NGINX_BASE_URL: http://nginx
+    depends_on:
+      nginx:
+        condition: service_started

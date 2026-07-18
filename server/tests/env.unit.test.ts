@@ -25,6 +25,58 @@ describe("env parsing", () => {
     ).not.toThrow();
   });
 
+  it("applies safe proxy and evidence upload defaults", () => {
+    expect(
+      parseEnv({
+        NODE_ENV: "development",
+        PORT: "4000",
+        CLIENT_URL: "http://localhost:3000",
+        DATABASE_URL: "postgresql://opsflow:opsflow@localhost:5432/opsflow",
+        JWT_ACCESS_SECRET: "dev-access-secret-change-me",
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        TRUST_PROXY_HOPS: 0,
+        EVIDENCE_MAX_SIZE_BYTES: 10 * 1024 * 1024,
+      }),
+    );
+  });
+
+  it("parses explicit proxy and evidence upload limits", () => {
+    expect(
+      parseEnv({
+        NODE_ENV: "development",
+        PORT: "4000",
+        CLIENT_URL: "http://localhost:3000",
+        DATABASE_URL: "postgresql://opsflow:opsflow@localhost:5432/opsflow",
+        JWT_ACCESS_SECRET: "dev-access-secret-change-me",
+        TRUST_PROXY_HOPS: "1",
+        EVIDENCE_MAX_SIZE_BYTES: "12582912",
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        TRUST_PROXY_HOPS: 1,
+        EVIDENCE_MAX_SIZE_BYTES: 12 * 1024 * 1024,
+      }),
+    );
+  });
+
+  it.each(["-1", "1.5", "11", "not-a-number"])(
+    "rejects an invalid trusted proxy hop count (%s)",
+    (trustProxyHops) => {
+      expect(() =>
+        parseEnv({
+          NODE_ENV: "development",
+          PORT: "4000",
+          CLIENT_URL: "http://localhost:3000",
+          DATABASE_URL: "postgresql://opsflow:opsflow@localhost:5432/opsflow",
+          JWT_ACCESS_SECRET: "dev-access-secret-change-me",
+          TRUST_PROXY_HOPS: trustProxyHops,
+        }),
+      ).toThrow("Invalid environment variables");
+    },
+  );
+
   it("applies default AI dispatch planner settings", () => {
     expect(
       parseEnv({

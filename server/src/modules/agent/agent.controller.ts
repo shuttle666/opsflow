@@ -109,6 +109,7 @@ export const sendMessageHandler: RequestHandler = asyncHandler(
         {
           conversationId,
           timezone,
+          requestId: req.requestId,
         },
         {
           onTextDelta: (text) => {
@@ -162,7 +163,13 @@ export const sendMessageHandler: RequestHandler = asyncHandler(
       );
       const message =
         error instanceof Error ? error.message : "An unexpected error occurred.";
-      res.write(`data: ${JSON.stringify({ type: "error", message })}\n\n`);
+      res.write(
+        `data: ${JSON.stringify({
+          type: "error",
+          message,
+          requestId: req.requestId,
+        })}\n\n`,
+      );
     }
 
     res.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);

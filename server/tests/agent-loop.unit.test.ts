@@ -103,6 +103,7 @@ describe("runAgentLoop", () => {
       {
         conversationId: "conversation-1",
         timezone: "Australia/Adelaide",
+        requestId: "web-agent-request-1",
       },
       {
         onTextDelta,
@@ -136,6 +137,15 @@ describe("runAgentLoop", () => {
         result: { customers: [{ id: "customer-1" }] },
       },
     ]);
+    expect(loopMocks.executeTool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({
+          source: "WEB_AGENT",
+          requestId: "web-agent-request-1",
+          conversationId: "conversation-1",
+        }),
+      }),
+    );
   });
 
   it("instructs the model to require a later verbatim confirmation", async () => {

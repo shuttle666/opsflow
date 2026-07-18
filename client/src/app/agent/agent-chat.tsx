@@ -11,6 +11,7 @@ import {
   Sparkles,
 } from "@/components/ui/icons";
 import { LoadingPanel } from "@/components/ui/loading-panel";
+import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
 import {
   cn,
   primaryButtonClassName,
@@ -976,7 +977,7 @@ export function AgentChat() {
   const [activeToolCalls, setActiveToolCalls] = useState<ActiveToolCall[]>([]);
   const [streamingText, setStreamingText] = useState("");
   const [input, setInput] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiErrorView | null>(null);
   const [webApprovalUrl, setWebApprovalUrl] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingProposal, setStreamingProposal] =
@@ -1133,7 +1134,7 @@ export function AgentChat() {
             { name: tool, input: toolInput, status: "running" },
           ]);
         },
-        onToolResult: (tool, result) => {
+        onToolResult: (tool, result, requestId) => {
           const maybeProposal = (result as { proposal?: DispatchProposal } | undefined)?.proposal;
           if (maybeProposal) {
             latestGeneratedProposal = maybeProposal;
@@ -1157,7 +1158,10 @@ export function AgentChat() {
               setError(null);
               setWebApprovalUrl(null);
             } else if (toolError) {
-              setError(toolError.message);
+              setError({
+                message: toolError.message,
+                ...(requestId ? { requestId } : {}),
+              });
               setWebApprovalUrl(toolError.approvalUrl ?? null);
             }
           }
@@ -1170,8 +1174,8 @@ export function AgentChat() {
             ),
           );
         },
-        onError: (message) => {
-          setError(message);
+        onError: (streamError) => {
+          setError(streamError);
         },
         onDone: () => {
           if (fullText || latestGeneratedProposal) {
@@ -1203,9 +1207,7 @@ export function AgentChat() {
         },
       });
     } catch (submitError) {
-      setError(
-        submitError instanceof Error ? submitError.message : "Failed to send message.",
-      );
+      setError(getApiErrorView(submitError, "Failed to send message."));
       setIsStreaming(false);
       abortRef.current = null;
     }
@@ -1231,9 +1233,7 @@ export function AgentChat() {
       setWebApprovalUrl(null);
     } catch (confirmError) {
       setError(
-        confirmError instanceof Error
-          ? confirmError.message
-          : "Failed to confirm dispatch plan.",
+        getApiErrorView(confirmError, "Failed to confirm dispatch plan."),
       );
     }
   }
@@ -1258,11 +1258,7 @@ export function AgentChat() {
         setStreamingProposal(updated);
       }
     } catch (updateError) {
-      setError(
-        updateError instanceof Error
-          ? updateError.message
-          : "Failed to update dispatch plan.",
-      );
+      setError(getApiErrorView(updateError, "Failed to update dispatch plan."));
     }
   }
 
@@ -1375,14 +1371,22 @@ export function AgentChat() {
 
               {error ? (
                 <div className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-danger-soft)] px-4 py-3 text-sm text-[var(--color-danger)]">
-                  {error}
-                  {webApprovalUrl ? (
-                    <>
-                      {" "}
-                      <Link href={webApprovalUrl} className="font-semibold underline">
-                        Review in Web
-                      </Link>
-                    </>
+                  <p>
+                    {error.message}
+                    {webApprovalUrl ? (
+                      <>
+                        {" "}
+                        <Link href={webApprovalUrl} className="font-semibold underline">
+                          Review in Web
+                        </Link>
+                      </>
+                    ) : null}
+                  </p>
+                  {error.requestId ? (
+                    <p className="mt-1 text-xs text-[var(--color-danger)]/80">
+                      Request ID:{" "}
+                      <span className="font-mono">{error.requestId}</span>
+                    </p>
                   ) : null}
                 </div>
               ) : null}

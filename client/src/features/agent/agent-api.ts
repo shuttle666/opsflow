@@ -1,6 +1,7 @@
 import {
   ApiClientError,
   apiClient,
+  type ApiErrorView,
   type ApiSuccessResponse,
 } from "@/lib/api-client";
 import type {
@@ -57,8 +58,8 @@ const API_BASE_URL =
 type StreamCallbacks = {
   onTextDelta: (text: string) => void;
   onToolUse: (tool: string, input: unknown) => void;
-  onToolResult: (tool: string, result: unknown) => void;
-  onError: (message: string) => void;
+  onToolResult: (tool: string, result: unknown, requestId?: string) => void;
+  onError: (error: ApiErrorView) => void;
   onDone: () => void;
 };
 
@@ -111,6 +112,7 @@ export async function consumeMessageStream(
   response: Response,
   callbacks: StreamCallbacks,
 ): Promise<void> {
+  const requestId = response.headers.get("x-request-id") ?? undefined;
   let doneCalled = false;
   const finish = () => {
     if (doneCalled) return;
@@ -121,7 +123,10 @@ export async function consumeMessageStream(
   try {
     const reader = response.body?.getReader();
     if (!reader) {
-      callbacks.onError("No response body.");
+      callbacks.onError({
+        message: "No response body.",
+        ...(requestId ? { requestId } : {}),
+      });
       finish();
       return;
     }
@@ -151,15 +156,22 @@ export async function consumeMessageStream(
               callbacks.onToolUse(event.tool, event.input);
               break;
             case "tool_result":
-              callbacks.onToolResult(event.tool, event.result);
+              callbacks.onToolResult(event.tool, event.result, requestId);
               break;
-            case "error":
-              callbacks.onError(event.message);
-              break;
-            case "proposal":
-              callbacks.onToolResult("save_dispatch_proposal", {
-                proposal: event.proposal,
+            case "error": {
+              const errorRequestId = event.requestId ?? requestId;
+              callbacks.onError({
+                message: event.message,
+                ...(errorRequestId ? { requestId: errorRequestId } : {}),
               });
+              break;
+            }
+            case "proposal":
+              callbacks.onToolResult(
+                "save_dispatch_proposal",
+                { proposal: event.proposal },
+                requestId,
+              );
               break;
             case "done":
               finish();
@@ -174,7 +186,10 @@ export async function consumeMessageStream(
     finish();
   } catch (error) {
     if ((error as Error).name !== "AbortError") {
-      callbacks.onError((error as Error).message ?? "Connection failed.");
+      callbacks.onError({
+        message: (error as Error).message ?? "Connection failed.",
+        ...(requestId ? { requestId } : {}),
+      });
     }
     finish();
   }

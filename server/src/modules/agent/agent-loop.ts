@@ -172,6 +172,7 @@ export async function runAgentLoop(
   input: {
     conversationId: string;
     timezone: string;
+    requestId?: string;
   },
   callbacks: AgentCallbacks,
 ): Promise<AgentLoopResult> {
@@ -259,6 +260,7 @@ export async function runAgentLoop(
         context: {
           source: "WEB_AGENT",
           invocationId: randomUUID(),
+          requestId: input.requestId,
           conversationId: input.conversationId,
         },
       });

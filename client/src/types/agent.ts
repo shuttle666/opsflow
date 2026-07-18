@@ -222,5 +222,5 @@ export type SSEEvent =
   | { type: "tool_use"; tool: string; input: unknown }
   | { type: "tool_result"; tool: string; result: unknown }
   | { type: "proposal"; proposal: DispatchProposal }
-  | { type: "error"; message: string }
+  | { type: "error"; message: string; requestId?: string }
   | { type: "done" };

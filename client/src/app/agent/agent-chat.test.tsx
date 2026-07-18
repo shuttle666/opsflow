@@ -180,6 +180,29 @@ describe("AgentChat", () => {
     expect(await screen.findByText("已刷新 token。")).toBeInTheDocument();
   });
 
+  it("shows the request ID returned by an SSE error", async () => {
+    vi.mocked(openMessageStreamRequest).mockResolvedValueOnce(new Response("ok"));
+    vi.mocked(consumeMessageStream).mockImplementation(async (_response, callbacks) => {
+      callbacks.onError({
+        message: "AI provider unavailable",
+        requestId: "web-agent-request-123",
+      });
+      callbacks.onDone();
+    });
+
+    const user = userEvent.setup();
+    render(<AgentChat />);
+
+    await user.type(
+      screen.getByPlaceholderText("Ask the AI Planner..."),
+      "安排今天的工作",
+    );
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText("AI provider unavailable")).toBeInTheDocument();
+    expect(screen.getByText("web-agent-request-123")).toBeInTheDocument();
+  });
+
   it("renders typed job update proposals with the service address", async () => {
     vi.mocked(openMessageStreamRequest).mockResolvedValueOnce(new Response("ok"));
     vi.mocked(consumeMessageStream).mockImplementation(async (_response, callbacks) => {
@@ -333,7 +356,7 @@ describe("AgentChat", () => {
             approvalUrl:
               "http://localhost:3000/agent?conversationId=conversation-1&proposalId=proposal-conversation-confirm",
           },
-        });
+        }, "execute-request-123");
         callbacks.onDone();
       });
 
@@ -354,6 +377,7 @@ describe("AgentChat", () => {
       "href",
       expect.stringContaining("proposal-conversation-confirm"),
     );
+    expect(screen.getByText("execute-request-123")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Confirm plan" })).toBeInTheDocument();
   });
 

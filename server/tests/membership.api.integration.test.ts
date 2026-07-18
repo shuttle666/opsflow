@@ -386,6 +386,72 @@ describeIfDb("membership api integration", () => {
     expect(invitedPatch.status).toBe(409);
   });
 
+  it("keeps one active owner when two owners are removed concurrently", async () => {
+    const firstOwner = await seedTenantUser({
+      email: "first-owner@membership-concurrency.test",
+      displayName: "First Concurrent Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Membership Concurrency Tenant",
+      tenantSlug: "membership-concurrency-tenant",
+    });
+    const passwordHash = await hashPassword("password123");
+    const secondOwnerUser = await prisma.user.create({
+      data: {
+        email: "second-owner@membership-concurrency.test",
+        passwordHash,
+        displayName: "Second Concurrent Owner",
+      },
+    });
+    const secondOwnerMembership = await prisma.membership.create({
+      data: {
+        userId: secondOwnerUser.id,
+        tenantId: firstOwner.tenant.id,
+        role: MembershipRole.OWNER,
+        status: MembershipStatus.ACTIVE,
+      },
+    });
+    const secondOwnerSession = await login({
+      email: secondOwnerUser.email,
+      password: "password123",
+      tenantId: firstOwner.tenant.id,
+    });
+
+    const responses = await Promise.all([
+      request(app)
+        .patch(`/api/memberships/${firstOwner.membership.id}`)
+        .set("Authorization", `Bearer ${firstOwner.accessToken}`)
+        .send({ role: MembershipRole.MANAGER }),
+      request(app)
+        .patch(`/api/memberships/${secondOwnerMembership.id}`)
+        .set("Authorization", `Bearer ${secondOwnerSession.accessToken}`)
+        .send({ status: MembershipStatus.DISABLED }),
+    ]);
+
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
+    const conflictResponse = responses.find((response) => response.status === 409);
+    expect(conflictResponse?.body.code).toBe("CONFLICT");
+
+    const activeOwnerCount = await prisma.membership.count({
+      where: {
+        tenantId: firstOwner.tenant.id,
+        role: MembershipRole.OWNER,
+        status: MembershipStatus.ACTIVE,
+      },
+    });
+    expect(activeOwnerCount).toBe(1);
+
+    const updateAudits = await prisma.auditLog.findMany({
+      where: {
+        tenantId: firstOwner.tenant.id,
+        action: AuditAction.MEMBERSHIP_UPDATED,
+        targetId: {
+          in: [firstOwner.membership.id, secondOwnerMembership.id],
+        },
+      },
+    });
+    expect(updateAudits).toHaveLength(1);
+  });
+
   it("returns 404 for cross-tenant membership access", async () => {
     const primary = await seedTenantUser({
       email: "owner@primary-membership.test",

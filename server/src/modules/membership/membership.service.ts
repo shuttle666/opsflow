@@ -1,7 +1,14 @@
-import { AuditAction, MembershipRole, MembershipStatus, type Prisma } from "@prisma/client";
+import {
+  AuditAction,
+  MembershipRole,
+  MembershipStatus,
+  Prisma,
+  TenantStatus,
+} from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import type { AuthContext, RequestMetadata } from "../../types/auth";
 import { ApiError } from "../../utils/api-error";
+import { AuthError } from "../auth/auth-errors";
 import { expirePendingTenantInvitations } from "../auth/auth.service";
 import type {
   MembershipListQueryInput,
@@ -43,6 +50,8 @@ type TenantMembershipRecord = {
   status: MembershipStatus;
 };
 
+const SERIALIZABLE_MEMBERSHIP_UPDATE_MAX_ATTEMPTS = 3;
+
 function buildMembershipWhere(auth: AuthContext, query: MembershipListQueryInput) {
   const normalizedQuery = query.q?.trim();
 
@@ -74,10 +83,11 @@ function buildMembershipWhere(auth: AuthContext, query: MembershipListQueryInput
 }
 
 async function getMembershipOrThrow(
+  tx: Prisma.TransactionClient,
   auth: AuthContext,
   membershipId: string,
 ): Promise<TenantMembershipRecord> {
-  const membership = await prisma.membership.findFirst({
+  const membership = await tx.membership.findFirst({
     where: {
       id: membershipId,
       tenantId: auth.tenantId,
@@ -97,14 +107,124 @@ async function getMembershipOrThrow(
   return membership;
 }
 
-async function countActiveOwners(tenantId: string) {
-  return prisma.membership.count({
+async function countActiveOwners(
+  tx: Prisma.TransactionClient,
+  tenantId: string,
+) {
+  return tx.membership.count({
     where: {
       tenantId,
       role: MembershipRole.OWNER,
       status: MembershipStatus.ACTIVE,
     },
   });
+}
+
+async function assertActiveOwnerActor(
+  tx: Prisma.TransactionClient,
+  auth: AuthContext,
+) {
+  const actorMembership = await tx.membership.findUnique({
+    where: {
+      userId_tenantId: {
+        userId: auth.userId,
+        tenantId: auth.tenantId,
+      },
+    },
+    select: {
+      role: true,
+      status: true,
+      tenant: {
+        select: {
+          status: true,
+          deletedAt: true,
+        },
+      },
+    },
+  });
+
+  if (!actorMembership || actorMembership.status !== MembershipStatus.ACTIVE) {
+    throw new AuthError(
+      "MEMBERSHIP_INACTIVE",
+      "Membership is not active for this tenant.",
+      403,
+    );
+  }
+
+  if (
+    actorMembership.tenant.status !== TenantStatus.ACTIVE ||
+    actorMembership.tenant.deletedAt
+  ) {
+    throw new AuthError("TENANT_INACTIVE", "Tenant is inactive.", 403);
+  }
+
+  if (actorMembership.role !== MembershipRole.OWNER) {
+    throw new AuthError(
+      "FORBIDDEN_ROLE",
+      "Your role does not have permission for this action.",
+      403,
+    );
+  }
+}
+
+function isSerializableWriteConflict(error: unknown) {
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2034"
+  ) {
+    return true;
+  }
+
+  return (
+    error instanceof Error &&
+    error.name === "DriverAdapterError" &&
+    (error.message.includes("TransactionWriteConflict") ||
+      error.message.includes("deadlock detected"))
+  );
+}
+
+async function runSerializableMembershipUpdate<T>(
+  auth: AuthContext,
+  operation: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  for (
+    let attempt = 1;
+    attempt <= SERIALIZABLE_MEMBERSHIP_UPDATE_MAX_ATTEMPTS;
+    attempt += 1
+  ) {
+    try {
+      return await prisma.$transaction(
+        async (tx) => {
+          // This runs again inside every Serializable retry. The middleware
+          // check is not enough because the caller can be demoted or disabled
+          // after the request begins or while a conflicted transaction retries.
+          await assertActiveOwnerActor(tx, auth);
+          return operation(tx);
+        },
+        {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        },
+      );
+    } catch (error) {
+      if (!isSerializableWriteConflict(error)) {
+        throw error;
+      }
+
+      if (attempt === SERIALIZABLE_MEMBERSHIP_UPDATE_MAX_ATTEMPTS) {
+        throw new ApiError(
+          409,
+          "Membership changed concurrently. Please retry.",
+          "CONFLICT",
+        );
+      }
+    }
+  }
+
+  throw new ApiError(
+    409,
+    "Membership changed concurrently. Please retry.",
+    "CONFLICT",
+  );
 }
 
 export async function listMemberships(
@@ -231,62 +351,56 @@ export async function updateMembership(
   input: UpdateMembershipInput,
   metadata?: RequestMetadata,
 ): Promise<MembershipListItem> {
-  const membership = await getMembershipOrThrow(auth, membershipId);
+  const updated = await runSerializableMembershipUpdate(auth, async (tx) => {
+    const membership = await getMembershipOrThrow(tx, auth, membershipId);
 
-  if (membership.status === MembershipStatus.INVITED) {
-    throw new ApiError(409, "Invited memberships are read-only in this phase.", "MEMBERSHIP_INVITED_READ_ONLY");
-  }
-
-  const nextRole = input.role ?? membership.role;
-  const nextStatus = input.status ?? membership.status;
-  const removesActiveOwner =
-    membership.role === MembershipRole.OWNER &&
-    membership.status === MembershipStatus.ACTIVE &&
-    (nextRole !== MembershipRole.OWNER || nextStatus !== MembershipStatus.ACTIVE);
-
-  if (removesActiveOwner) {
-    const activeOwnerCount = await countActiveOwners(auth.tenantId);
-    if (activeOwnerCount <= 1) {
+    if (membership.status === MembershipStatus.INVITED) {
       throw new ApiError(
         409,
-        "This tenant must keep at least one active owner.",
-        "CONFLICT",
+        "Invited memberships are read-only in this phase.",
+        "MEMBERSHIP_INVITED_READ_ONLY",
       );
     }
-  }
 
-  if (nextRole === membership.role && nextStatus === membership.status) {
-    const current = await prisma.membership.findUniqueOrThrow({
-      where: {
-        id: membership.id,
-      },
-      select: {
-        id: true,
-        userId: true,
-        role: true,
-        status: true,
-        createdAt: true,
-        user: {
-          select: {
-            displayName: true,
-            email: true,
+    const nextRole = input.role ?? membership.role;
+    const nextStatus = input.status ?? membership.status;
+    const removesActiveOwner =
+      membership.role === MembershipRole.OWNER &&
+      membership.status === MembershipStatus.ACTIVE &&
+      (nextRole !== MembershipRole.OWNER || nextStatus !== MembershipStatus.ACTIVE);
+
+    if (removesActiveOwner) {
+      const activeOwnerCount = await countActiveOwners(tx, auth.tenantId);
+      if (activeOwnerCount <= 1) {
+        throw new ApiError(
+          409,
+          "This tenant must keep at least one active owner.",
+          "CONFLICT",
+        );
+      }
+    }
+
+    if (nextRole === membership.role && nextStatus === membership.status) {
+      return tx.membership.findUniqueOrThrow({
+        where: {
+          id: membership.id,
+        },
+        select: {
+          id: true,
+          userId: true,
+          role: true,
+          status: true,
+          createdAt: true,
+          user: {
+            select: {
+              displayName: true,
+              email: true,
+            },
           },
         },
-      },
-    });
+      });
+    }
 
-    return {
-      id: current.id,
-      userId: current.userId,
-      displayName: current.user.displayName,
-      email: current.user.email,
-      role: current.role,
-      status: current.status,
-      createdAt: current.createdAt,
-    };
-  }
-
-  const updated = await prisma.$transaction(async (tx) => {
     const saved = await tx.membership.update({
       where: {
         id: membership.id,

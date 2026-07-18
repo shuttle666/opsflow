@@ -3,8 +3,8 @@ import {
   InvitationStatus,
   MembershipRole,
   MembershipStatus,
+  Prisma,
   TenantStatus,
-  type Prisma,
 } from "@prisma/client";
 import { env } from "../../config/env";
 import { prisma } from "../../lib/prisma";
@@ -78,6 +78,8 @@ type TenantInvitationMutationResult = {
   status: InvitationStatus;
   expiresAt: Date;
 };
+
+const SERIALIZABLE_INVITATION_MAX_ATTEMPTS = 3;
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -371,19 +373,162 @@ async function ensureInvitationAcceptable(input: {
   }
 }
 
+function isSerializableInvitationConflict(error: unknown) {
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2034"
+  ) {
+    return true;
+  }
+
+  return (
+    error instanceof Error &&
+    error.name === "DriverAdapterError" &&
+    (error.message.includes("TransactionWriteConflict") ||
+      error.message.includes("deadlock detected"))
+  );
+}
+
+async function runSerializableInvitationTransaction<T>(
+  operation: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  for (
+    let attempt = 1;
+    attempt <= SERIALIZABLE_INVITATION_MAX_ATTEMPTS;
+    attempt += 1
+  ) {
+    try {
+      return await prisma.$transaction(operation, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      });
+    } catch (error) {
+      if (!isSerializableInvitationConflict(error)) {
+        throw error;
+      }
+
+      if (attempt === SERIALIZABLE_INVITATION_MAX_ATTEMPTS) {
+        throw new ApiError(
+          409,
+          "Invitation changed concurrently. Please retry.",
+          "CONFLICT",
+        );
+      }
+    }
+  }
+
+  throw new ApiError(
+    409,
+    "Invitation changed concurrently. Please retry.",
+    "CONFLICT",
+  );
+}
+
 async function acceptInvitationTransaction(input: {
   invitationId: string;
-  tenantId: string;
-  role: MembershipRole;
   userId: string;
   metadata?: RequestMetadata;
 }) {
-  await prisma.$transaction(async (tx) => {
+  return runSerializableInvitationTransaction(async (tx) => {
     const acceptedAt = new Date();
+    const [invitation, user] = await Promise.all([
+      tx.tenantInvitation.findUnique({
+        where: {
+          id: input.invitationId,
+        },
+        select: {
+          id: true,
+          tenantId: true,
+          email: true,
+          role: true,
+          status: true,
+          expiresAt: true,
+          tenant: {
+            select: {
+              status: true,
+              deletedAt: true,
+            },
+          },
+        },
+      }),
+      tx.user.findUnique({
+        where: { id: input.userId },
+        select: { email: true, isActive: true },
+      }),
+    ]);
+
+    if (!invitation) {
+      throw new AuthError("INVITATION_NOT_FOUND", "Invitation not found.", 404);
+    }
+
+    if (!user || !user.isActive) {
+      throw new AuthError(
+        "INVALID_CREDENTIALS",
+        "User account is inactive.",
+        401,
+      );
+    }
+
+    if (invitation.status !== InvitationStatus.PENDING) {
+      throw new AuthError(
+        "INVITATION_ALREADY_USED",
+        "Invitation is no longer pending.",
+        409,
+      );
+    }
+
+    if (invitation.expiresAt <= acceptedAt) {
+      throw new AuthError("INVITATION_EXPIRED", "Invitation has expired.", 409);
+    }
+
+    if (
+      invitation.tenant.status !== TenantStatus.ACTIVE ||
+      invitation.tenant.deletedAt
+    ) {
+      throw new AuthError("TENANT_INACTIVE", "Tenant is inactive.", 403);
+    }
+
+    const normalizedUserEmail = normalizeEmail(user.email);
+    if (normalizedUserEmail !== normalizeEmail(invitation.email)) {
+      throw new AuthError(
+        "INVITATION_USER_MISMATCH",
+        "Invitation email does not match the signed-in user.",
+        403,
+      );
+    }
+
+    const membership = await tx.membership.findUnique({
+      where: {
+        userId_tenantId: {
+          userId: input.userId,
+          tenantId: invitation.tenantId,
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    if (membership?.status === MembershipStatus.ACTIVE) {
+      throw new AuthError(
+        "INVITATION_ALREADY_USED",
+        "User is already an active member in this tenant.",
+        409,
+      );
+    }
+
+    if (membership && membership.status !== MembershipStatus.INVITED) {
+      throw new AuthError(
+        "INVITATION_ALREADY_USED",
+        "User membership is not awaiting an invitation.",
+        409,
+      );
+    }
+
     const claimedInvitation = await tx.tenantInvitation.updateMany({
       where: {
-        id: input.invitationId,
-        tenantId: input.tenantId,
+        id: invitation.id,
+        tenantId: invitation.tenantId,
         status: InvitationStatus.PENDING,
         expiresAt: {
           gt: acceptedAt,
@@ -404,23 +549,11 @@ async function acceptInvitationTransaction(input: {
       );
     }
 
-    const membership = await tx.membership.findUnique({
-      where: {
-        userId_tenantId: {
-          userId: input.userId,
-          tenantId: input.tenantId,
-        },
-      },
-      select: {
-        id: true,
-      },
-    });
-
     if (membership) {
       await tx.membership.update({
         where: { id: membership.id },
         data: {
-          role: input.role,
+          role: invitation.role,
           status: MembershipStatus.ACTIVE,
         },
       });
@@ -428,24 +561,54 @@ async function acceptInvitationTransaction(input: {
       await tx.membership.create({
         data: {
           userId: input.userId,
-          tenantId: input.tenantId,
-          role: input.role,
+          tenantId: invitation.tenantId,
+          role: invitation.role,
           status: MembershipStatus.ACTIVE,
         },
       });
     }
 
+    await tx.tenantInvitation.updateMany({
+      where: {
+        id: {
+          not: invitation.id,
+        },
+        tenantId: invitation.tenantId,
+        status: InvitationStatus.PENDING,
+        OR: [
+          {
+            invitedUserId: input.userId,
+          },
+          {
+            email: {
+              equals: normalizedUserEmail,
+              mode: "insensitive",
+            },
+          },
+        ],
+      },
+      data: {
+        status: InvitationStatus.CANCELLED,
+        cancelledAt: acceptedAt,
+      },
+    });
+
     await tx.auditLog.create({
       data: {
         action: AuditAction.TENANT_INVITATION_ACCEPTED,
-        tenantId: input.tenantId,
+        tenantId: invitation.tenantId,
         userId: input.userId,
         targetType: "tenant_invitation",
-        targetId: input.invitationId,
+        targetId: invitation.id,
         ipAddress: input.metadata?.ipAddress,
         userAgent: input.metadata?.userAgent,
       },
     });
+
+    return {
+      tenantId: invitation.tenantId,
+      role: invitation.role,
+    };
   });
 }
 
@@ -957,51 +1120,86 @@ export async function createTenantInvitation(
   }
 
   const email = normalizeEmail(input.email);
+  const tokenHash = hashRefreshToken(generateRefreshToken());
+  const expiresAt = getInvitationExpiryDate();
 
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: {
-      id: true,
-      status: true,
-      deletedAt: true,
-    },
-  });
-
-  if (!tenant || tenant.status !== TenantStatus.ACTIVE || tenant.deletedAt) {
-    throw new AuthError("TENANT_INACTIVE", "Tenant is inactive.", 403);
-  }
-
-  const invitedUser = await prisma.user.findUnique({
-    where: { email },
-    select: {
-      id: true,
-      email: true,
-    },
-  });
-
-  const existingMembership = invitedUser
-    ? await prisma.membership.findUnique({
+  return runSerializableInvitationTransaction(async (tx) => {
+    const [tenant, actorMembership, invitedUser] = await Promise.all([
+      tx.tenant.findUnique({
+        where: { id: tenantId },
+        select: {
+          status: true,
+          deletedAt: true,
+        },
+      }),
+      tx.membership.findUnique({
         where: {
           userId_tenantId: {
-            userId: invitedUser.id,
+            userId: auth.userId,
             tenantId,
           },
         },
         select: {
-          id: true,
+          role: true,
           status: true,
         },
-      })
-    : null;
+      }),
+      tx.user.findUnique({
+        where: { email },
+        select: {
+          id: true,
+        },
+      }),
+    ]);
 
-  if (existingMembership?.status === MembershipStatus.ACTIVE) {
-    throw new ApiError(409, "User is already an active member in this tenant.");
-  }
+    if (!tenant || tenant.status !== TenantStatus.ACTIVE || tenant.deletedAt) {
+      throw new AuthError("TENANT_INACTIVE", "Tenant is inactive.", 403);
+    }
 
-  const tokenHash = hashRefreshToken(generateRefreshToken());
-  const expiresAt = getInvitationExpiryDate();
+    if (
+      !actorMembership ||
+      actorMembership.status !== MembershipStatus.ACTIVE
+    ) {
+      throw new AuthError(
+        "MEMBERSHIP_INACTIVE",
+        "Membership is not active for this tenant.",
+        403,
+      );
+    }
 
-  const invitation = await prisma.$transaction(async (tx) => {
+    if (
+      actorMembership.role !== MembershipRole.OWNER &&
+      actorMembership.role !== MembershipRole.MANAGER
+    ) {
+      throw new AuthError(
+        "FORBIDDEN_ROLE",
+        "Your role does not have permission for this action.",
+        403,
+      );
+    }
+
+    const existingMembership = invitedUser
+      ? await tx.membership.findUnique({
+          where: {
+            userId_tenantId: {
+              userId: invitedUser.id,
+              tenantId,
+            },
+          },
+          select: {
+            id: true,
+            status: true,
+          },
+        })
+      : null;
+
+    if (existingMembership?.status === MembershipStatus.ACTIVE) {
+      throw new ApiError(
+        409,
+        "User is already an active member in this tenant.",
+      );
+    }
+
     if (invitedUser) {
       if (existingMembership) {
         await tx.membership.update({
@@ -1063,8 +1261,6 @@ export async function createTenantInvitation(
 
     return createdInvitation;
   });
-
-  return invitation;
 }
 
 export async function listMyInvitations(auth: AuthContext) {
@@ -1195,18 +1391,11 @@ export async function acceptTenantInvitationById(
     userEmail: user.email,
   });
 
-  await acceptInvitationTransaction({
+  return acceptInvitationTransaction({
     invitationId: invitation.id,
-    tenantId: invitation.tenantId,
-    role: invitation.role,
     userId: user.id,
     metadata,
   });
-
-  return {
-    tenantId: invitation.tenantId,
-    role: invitation.role,
-  };
 }
 
 export async function resendTenantInvitation(
@@ -1433,16 +1622,9 @@ export async function acceptTenantInvitation(
     userEmail: user.email,
   });
 
-  await acceptInvitationTransaction({
+  return acceptInvitationTransaction({
     invitationId: invitation.id,
-    tenantId: invitation.tenantId,
-    role: invitation.role,
     userId: user.id,
     metadata,
   });
-
-  return {
-    tenantId: invitation.tenantId,
-    role: invitation.role,
-  };
 }

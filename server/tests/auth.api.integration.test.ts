@@ -207,6 +207,62 @@ describeIfDb("auth api integration", () => {
     expect(forbiddenAudit).not.toBeNull();
   });
 
+  it("allows an active manager to create a tenant invitation", async () => {
+    const passwordHash = await hashPassword("password123");
+    const [tenant, manager] = await Promise.all([
+      prisma.tenant.create({
+        data: {
+          name: "Manager Invitation Tenant",
+          slug: "manager-invitation-tenant",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "manager-inviter@test.dev",
+          passwordHash,
+          displayName: "Manager Inviter",
+        },
+      }),
+    ]);
+
+    await prisma.membership.create({
+      data: {
+        userId: manager.id,
+        tenantId: tenant.id,
+        role: MembershipRole.MANAGER,
+        status: MembershipStatus.ACTIVE,
+      },
+    });
+    const managerLogin = await request(app).post("/api/auth/login").send({
+      email: manager.email,
+      password: "password123",
+      tenantId: tenant.id,
+    });
+
+    const response = await request(app)
+      .post(`/api/tenants/${tenant.id}/invitations`)
+      .set(
+        "Authorization",
+        `Bearer ${managerLogin.body.data.accessToken}`,
+      )
+      .send({
+        email: "manager-created-invite@test.dev",
+        role: MembershipRole.STAFF,
+      });
+
+    expect(response.status).toBe(201);
+    await expect(
+      prisma.tenantInvitation.findUniqueOrThrow({
+        where: { id: response.body.data.id },
+      }),
+    ).resolves.toMatchObject({
+      tenantId: tenant.id,
+      invitedById: manager.id,
+      role: MembershipRole.STAFF,
+      status: InvitationStatus.PENDING,
+    });
+  });
+
   it("returns only current user's invitations in /invitations/mine", async () => {
     const passwordHash = await hashPassword("password123");
     const [tenantA, tenantB, owner, invitee] = await Promise.all([
@@ -387,6 +443,343 @@ describeIfDb("auth api integration", () => {
       select: { status: true },
     });
     expect(invitation?.status).toBe(InvitationStatus.ACCEPTED);
+  });
+
+  it("cancels stale invitations so they cannot remove the tenant's final owner", async () => {
+    const passwordHash = await hashPassword("password123");
+    const [tenant, inviteeTenant, owner, invitee] = await Promise.all([
+      prisma.tenant.create({
+        data: {
+          name: "Stale Invitation Tenant",
+          slug: "stale-invitation-tenant",
+        },
+      }),
+      prisma.tenant.create({
+        data: {
+          name: "Stale Invitation Invitee Tenant",
+          slug: "stale-invitation-invitee-tenant",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "stale-invitation-owner@test.dev",
+          passwordHash,
+          displayName: "Stale Invitation Owner",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "stale-invitation-invitee@test.dev",
+          passwordHash,
+          displayName: "Stale Invitation Invitee",
+        },
+      }),
+    ]);
+
+    const [ownerMembership] = await Promise.all([
+      prisma.membership.create({
+        data: {
+          userId: owner.id,
+          tenantId: tenant.id,
+          role: MembershipRole.OWNER,
+          status: MembershipStatus.ACTIVE,
+        },
+      }),
+      prisma.membership.create({
+        data: {
+          userId: invitee.id,
+          tenantId: inviteeTenant.id,
+          role: MembershipRole.OWNER,
+          status: MembershipStatus.ACTIVE,
+        },
+      }),
+    ]);
+
+    const [ownerLogin, inviteeLogin] = await Promise.all([
+      request(app).post("/api/auth/login").send({
+        email: owner.email,
+        password: "password123",
+        tenantId: tenant.id,
+      }),
+      request(app).post("/api/auth/login").send({
+        email: invitee.email,
+        password: "password123",
+        tenantId: inviteeTenant.id,
+      }),
+    ]);
+
+    const managerInvitation = await request(app)
+      .post(`/api/tenants/${tenant.id}/invitations`)
+      .set("Authorization", `Bearer ${ownerLogin.body.data.accessToken}`)
+      .send({
+        email: invitee.email,
+        role: "MANAGER",
+      });
+    expect(managerInvitation.status).toBe(201);
+
+    const staleStaffInvitation = await request(app)
+      .post(`/api/tenants/${tenant.id}/invitations`)
+      .set("Authorization", `Bearer ${ownerLogin.body.data.accessToken}`)
+      .send({
+        email: invitee.email,
+        role: "STAFF",
+      });
+    expect(staleStaffInvitation.status).toBe(201);
+
+    const acceptedManagerInvitation = await request(app)
+      .post(`/api/invitations/${managerInvitation.body.data.id}/accept`)
+      .set("Authorization", `Bearer ${inviteeLogin.body.data.accessToken}`)
+      .send({});
+    expect(acceptedManagerInvitation.status).toBe(200);
+    expect(acceptedManagerInvitation.body.data.role).toBe("MANAGER");
+
+    const staleInvitationAfterAccept = await prisma.tenantInvitation.findUnique({
+      where: {
+        id: staleStaffInvitation.body.data.id,
+      },
+      select: {
+        status: true,
+        cancelledAt: true,
+      },
+    });
+    expect(staleInvitationAfterAccept?.status).toBe(
+      InvitationStatus.CANCELLED,
+    );
+    expect(staleInvitationAfterAccept?.cancelledAt).not.toBeNull();
+
+    const inviteeMembership = await prisma.membership.findUniqueOrThrow({
+      where: {
+        userId_tenantId: {
+          userId: invitee.id,
+          tenantId: tenant.id,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+    const promotedInvitee = await request(app)
+      .patch(`/api/memberships/${inviteeMembership.id}`)
+      .set("Authorization", `Bearer ${ownerLogin.body.data.accessToken}`)
+      .send({ role: "OWNER" });
+    expect(promotedInvitee.status).toBe(200);
+
+    const demotedOriginalOwner = await request(app)
+      .patch(`/api/memberships/${ownerMembership.id}`)
+      .set("Authorization", `Bearer ${ownerLogin.body.data.accessToken}`)
+      .send({ role: "STAFF" });
+    expect(demotedOriginalOwner.status).toBe(200);
+
+    // Simulate a pending invitation left behind by an older deployment. The
+    // active membership check is the final guard even if sibling cancellation
+    // did not run for legacy data.
+    await prisma.tenantInvitation.update({
+      where: {
+        id: staleStaffInvitation.body.data.id,
+      },
+      data: {
+        status: InvitationStatus.PENDING,
+        cancelledAt: null,
+      },
+    });
+
+    const staleAcceptAttempt = await request(app)
+      .post(`/api/invitations/${staleStaffInvitation.body.data.id}/accept`)
+      .set("Authorization", `Bearer ${inviteeLogin.body.data.accessToken}`)
+      .send({});
+    expect(staleAcceptAttempt.status).toBe(409);
+    expect(staleAcceptAttempt.body.code).toBe("AUTH_INVITATION_ALREADY_USED");
+    expect(staleAcceptAttempt.body.message).toBe(
+      "User is already an active member in this tenant.",
+    );
+
+    const [activeOwnerCount, memberships] = await Promise.all([
+      prisma.membership.count({
+        where: {
+          tenantId: tenant.id,
+          role: MembershipRole.OWNER,
+          status: MembershipStatus.ACTIVE,
+        },
+      }),
+      prisma.membership.findMany({
+        where: {
+          tenantId: tenant.id,
+        },
+        select: {
+          userId: true,
+          role: true,
+          status: true,
+        },
+      }),
+    ]);
+
+    expect(activeOwnerCount).toBe(1);
+    expect(memberships).toEqual(
+      expect.arrayContaining([
+        {
+          userId: owner.id,
+          role: MembershipRole.STAFF,
+          status: MembershipStatus.ACTIVE,
+        },
+        {
+          userId: invitee.id,
+          role: MembershipRole.OWNER,
+          status: MembershipStatus.ACTIVE,
+        },
+      ]),
+    );
+
+    // A legacy pending invitation must not undo an explicit disable either.
+    // Restore another active Owner first so the fixture keeps its invariant
+    // while directly simulating the old inconsistent data.
+    await prisma.$transaction([
+      prisma.membership.update({
+        where: { id: ownerMembership.id },
+        data: { role: MembershipRole.OWNER },
+      }),
+      prisma.membership.update({
+        where: { id: inviteeMembership.id },
+        data: { status: MembershipStatus.DISABLED },
+      }),
+    ]);
+
+    const disabledMemberAcceptAttempt = await request(app)
+      .post(`/api/invitations/${staleStaffInvitation.body.data.id}/accept`)
+      .set("Authorization", `Bearer ${inviteeLogin.body.data.accessToken}`)
+      .send({});
+    expect(disabledMemberAcceptAttempt.status).toBe(409);
+    expect(disabledMemberAcceptAttempt.body).toMatchObject({
+      code: "AUTH_INVITATION_ALREADY_USED",
+      message: "User membership is not awaiting an invitation.",
+    });
+    await expect(
+      prisma.membership.findUniqueOrThrow({
+        where: { id: inviteeMembership.id },
+      }),
+    ).resolves.toMatchObject({
+      role: MembershipRole.OWNER,
+      status: MembershipStatus.DISABLED,
+    });
+  });
+
+  it("accepts only one concurrent duplicate invitation for a newly registered email", async () => {
+    const passwordHash = await hashPassword("password123");
+    const [tenant, owner] = await Promise.all([
+      prisma.tenant.create({
+        data: {
+          name: "Concurrent Invitation Tenant",
+          slug: "concurrent-invitation-tenant",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "concurrent-invitation-owner@test.dev",
+          passwordHash,
+          displayName: "Concurrent Invitation Owner",
+        },
+      }),
+    ]);
+
+    await prisma.membership.create({
+      data: {
+        userId: owner.id,
+        tenantId: tenant.id,
+        role: MembershipRole.OWNER,
+        status: MembershipStatus.ACTIVE,
+      },
+    });
+
+    const ownerLogin = await request(app).post("/api/auth/login").send({
+      email: owner.email,
+      password: "password123",
+      tenantId: tenant.id,
+    });
+    const inviteeEmail = "concurrent-new-invitee@test.dev";
+
+    const firstInvitation = await request(app)
+      .post(`/api/tenants/${tenant.id}/invitations`)
+      .set("Authorization", `Bearer ${ownerLogin.body.data.accessToken}`)
+      .send({
+        email: inviteeEmail,
+        role: "STAFF",
+      });
+    const secondInvitation = await request(app)
+      .post(`/api/tenants/${tenant.id}/invitations`)
+      .set("Authorization", `Bearer ${ownerLogin.body.data.accessToken}`)
+      .send({
+        email: inviteeEmail,
+        role: "STAFF",
+      });
+    expect(firstInvitation.status).toBe(201);
+    expect(secondInvitation.status).toBe(201);
+
+    const inviteeRegistration = await request(app)
+      .post("/api/auth/register")
+      .send({
+        email: inviteeEmail,
+        password: "password123",
+        displayName: "Concurrent New Invitee",
+        tenantName: "Concurrent New Invitee Tenant",
+      });
+    expect(inviteeRegistration.status).toBe(201);
+    const inviteeId = inviteeRegistration.body.data.user.id as string;
+    const invitationIds = [
+      firstInvitation.body.data.id as string,
+      secondInvitation.body.data.id as string,
+    ];
+
+    const acceptResponses = await Promise.all(
+      invitationIds.map((invitationId) =>
+        request(app)
+          .post(`/api/invitations/${invitationId}/accept`)
+          .set(
+            "Authorization",
+            `Bearer ${inviteeRegistration.body.data.accessToken}`,
+          )
+          .send({}),
+      ),
+    );
+    expect(acceptResponses.map((response) => response.status).sort()).toEqual([
+      200, 409,
+    ]);
+
+    const [membership, invitations, acceptedAuditCount] = await Promise.all([
+      prisma.membership.findUnique({
+        where: {
+          userId_tenantId: {
+            userId: inviteeId,
+            tenantId: tenant.id,
+          },
+        },
+      }),
+      prisma.tenantInvitation.findMany({
+        where: {
+          id: {
+            in: invitationIds,
+          },
+        },
+        select: {
+          status: true,
+        },
+      }),
+      prisma.auditLog.count({
+        where: {
+          tenantId: tenant.id,
+          userId: inviteeId,
+          action: AuditAction.TENANT_INVITATION_ACCEPTED,
+        },
+      }),
+    ]);
+
+    expect(membership).toMatchObject({
+      role: MembershipRole.STAFF,
+      status: MembershipStatus.ACTIVE,
+    });
+    expect(invitations.map((invitation) => invitation.status).sort()).toEqual([
+      InvitationStatus.ACCEPTED,
+      InvitationStatus.CANCELLED,
+    ]);
+    expect(acceptedAuditCount).toBe(1);
   });
 
   it("supports owner invitation management list/resend/cancel and enforces pending-only transitions", async () => {

@@ -111,6 +111,22 @@ This roadmap is aligned with the current codebase. Phase names describe the prod
 - Agent conversation REST state and completed stream results reconciled into scoped caches while token streaming remains imperative
 - Zustand narrowed to auth/session, active-tenant, theme, and local preference state
 
+## Phase 16
+- Status: Completed
+- Guarded deterministic Fake AI provider for integration and browser verification without live model calls
+- Owner → Staff → Manager operational-loop E2E and proposal-first AI confirmation/idempotency E2E
+- Real-PostgreSQL API security and database tenant-integrity coverage
+- Live MCP membership, role, and tenant revalidation
+- Concurrency protection for final-Owner membership changes and invitation acceptance
+- CI Playwright services with isolated ports, disposable database guards, failure artifacts, and mobile axe smoke coverage
+- Daily public-demo reset extended to persisted Agent data, Tool Invocation records, and tenant Evidence files
+
+## Phase 17
+- Status: Completed
+- Recruiter-first README and public project narrative centered on safe AI writes
+- Engineering Case Study with individual ownership, scope, trade-offs, AI-use disclosure, and retrospective
+- Maintained testing strategy and repository evidence map
+
 ## Later Candidates
 - Expanded production observability: broader application logs, rate limiting, error taxonomy, and external error monitoring
 - Expanded dashboard analytics: customer count, job status breakdowns, pending invitations, recent activity, and broader upcoming schedule summaries

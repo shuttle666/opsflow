@@ -27,7 +27,7 @@ Its differentiator is not another AI chat box. The in-app Web Agent and a local 
 
 **Demo Owner:** `owner@acme.example` / `owner-password-123`
 
-> The public demo is a shared sandbox. Use fictional sample data only. Core operational demo data is re-seeded daily, but the environment should not be used for private or sensitive information.
+> The public demo uses shared accounts. During the same reset window, another visitor using the same account may see data or Agent conversations you create, so use fictional sample data only. The daily reset removes operational records, Agent history, Tool Invocation audit rows, and tenant evidence files; it is still a demonstration environment, not a place for private or sensitive information.
 
 ## What this project demonstrates
 
@@ -118,7 +118,7 @@ The product also includes tenant invitations, customer archiving, schedule confl
 | Client server state | TanStack Query caches are scoped by tenant, user, and role; mutations reconcile entity caches and invalidate affected workflows |
 | Persisted AI workflow | Conversations, tool traces, proposals, review state, and confirmation evidence are stored in PostgreSQL |
 | Operational debugging | API responses carry `X-Request-Id`; error responses and client error surfaces preserve it; backend request and error logs are structured |
-| Delivery | CI validates client and server builds, PostgreSQL-backed integration tests, and deterministic Chromium workflows against a freshly migrated and seeded database |
+| Delivery | CI validates client and server builds, PostgreSQL-backed integration tests, deterministic Chromium workflows, and a mobile axe smoke check against a freshly migrated and seeded database |
 
 The public application is deployed to AWS with EC2, RDS, Docker Compose, Nginx, and HTTPS. The codebase stays a modular monolith so domain boundaries are explicit without introducing distributed-system complexity that the current product does not need.
 
@@ -134,6 +134,8 @@ The public application is deployed to AWS with EC2, RDS, Docker Compose, Nginx, 
 - [Safe AI E2E](client/e2e/agent-proposal.spec.ts) — proposal-first writes, explicit approval, conversational confirmation safeguards, and idempotent replay are verified without a live LLM.
 - [API security integration](server/tests/security.api.integration.test.ts) — cross-tenant ID probes, stale authorization, Request ID correlation, and Proposal idempotency run through the HTTP stack.
 - [Database tenant integrity](server/tests/database-tenant-integrity.integration.test.ts) — composite foreign keys reject cross-tenant child records at the PostgreSQL boundary.
+- [Mobile accessibility smoke](client/e2e/accessibility.spec.ts) — the landing page, sign-in, and authenticated Dashboard are checked at a phone viewport with axe.
+- [Testing strategy](docs/engineering/testing.md) — explains the test layers, CI jobs, deterministic fixtures, database guardrails, and deliberate limits.
 - [OpenAPI contract](docs/engineering/openapi.yaml) — the implemented HTTP surface is documented as a machine-readable contract.
 
 ## Tech stack
@@ -185,7 +187,7 @@ pnpm --dir server build
 
 Server database integration tests are intentionally separated from the default local test command and run in CI against a disposable PostgreSQL service. They include explicit cross-tenant attack probes, database constraint checks, MCP authorization revocation, Request ID correlation, and concurrency/idempotency coverage. See [the test notes](server/tests/README.md) for the local database-test flags.
 
-The Playwright suite runs the complete Owner → Staff → Manager operational loop and the guarded AI proposal flow in CI. It uses a deterministic, network-free Fake AI provider and dedicated application ports, so it never needs an Anthropic or OpenAI key. See [the E2E test notes](client/e2e/README.md) for safe local setup.
+The Playwright suite runs the complete Owner → Staff → Manager operational loop, the guarded AI proposal flow, and a representative mobile accessibility smoke check in CI. It uses a deterministic, network-free Fake AI provider and dedicated application ports, so it never needs an Anthropic or OpenAI key. See [the testing strategy](docs/engineering/testing.md) and [E2E test notes](client/e2e/README.md) for coverage and safe local setup.
 
 ## Current scope
 
@@ -199,6 +201,7 @@ OpsFlow is production-shaped rather than presented as production-complete.
 ## Deeper documentation
 
 - [Engineering case study: role, scope, trade-offs, and retrospective](docs/engineering/case-study.md)
+- [Testing strategy](docs/engineering/testing.md)
 - [Architecture](docs/engineering/architecture.md)
 - [MCP design and security boundary](docs/engineering/mcp.md)
 - [API design](docs/engineering/api-design.md)

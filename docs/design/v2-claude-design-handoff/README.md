@@ -7,6 +7,9 @@
 > decisions, implementation review, verification, and final acceptance. See the
 > [Engineering Case Study](../../engineering/case-study.md) for the contribution and
 > AI-use boundary. The production application lives under [`client`](../../../client).
+> The instructions below are archived historical input and apply only if this v2
+> prototype is explicitly revisited; they are not standing instructions for the
+> current production UI.
 
 This is a **handoff bundle** from Claude Design (claude.ai/design).
 

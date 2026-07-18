@@ -26,7 +26,7 @@ OpsFlow centralizes the operational workflow so owners, managers, and staff can 
 - Completion review flow: staff submit, owner/manager approve or return for rework
 - Tenant activity feed backed by audit logs
 - In-app notifications with unread state and authenticated SSE streaming
-- AI dispatch planner that can draft customer/job/schedule/assignee proposals and requires manager confirmation before writes
+- AI dispatch planner that can draft customer/job/schedule/assignee proposals and requires confirmation by an authorized Owner or Manager before writes
 - TanStack Query-managed REST state for dashboard, customer, job, schedule, membership, activity, invitation, notification, and Agent conversation surfaces, with authorization-scoped keys and mutation-driven cache reconciliation
 - Request correlation through `X-Request-Id`, stable API error codes, structured request/error logs, and request IDs on primary frontend error surfaces
 - Docker Compose local development and production deployment through GitHub Actions, EC2, Nginx, and Certbot

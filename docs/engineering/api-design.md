@@ -42,7 +42,7 @@ This document is aligned with the Express routers under `server/src/routes` and 
 Customer fields include `name`, `phone`, `email`, `notes`, and `archivedAt`. Service locations are stored on jobs as `serviceAddress`, not on customer profiles.
 Customer list accepts `status=active|archived|all` and defaults to `active`.
 It also accepts `contact=all|has_contact|missing_contact`; this filter is applied before pagination and defaults to `all`.
-Customer detail returns `jobStats.total` and `jobStats.open` across all linked jobs, plus at most five recent jobs for preview.
+Customer detail is role-scoped: Owner and Manager receive `jobStats.total` and `jobStats.open` across all linked jobs plus at most five recent jobs, while Staff totals and previews include only jobs assigned to the current Staff user.
 
 ## Dashboard
 - `GET /dashboard/summary`
@@ -90,7 +90,7 @@ Supported job statuses:
 
 ## Job Workflow
 - `GET /jobs/:jobId/history`
-- `POST /jobs/:jobId/status-transitions` - owner/manager
+- `POST /jobs/:jobId/status-transitions` - owner/manager; assigned Staff may only perform `SCHEDULED -> IN_PROGRESS`
 
 The status machine allows:
 - `NEW -> SCHEDULED | CANCELLED`
@@ -173,9 +173,9 @@ Supported notification types:
 - `PATCH /agent/conversations/:conversationId/proposals/:proposalId`
 - `POST /agent/conversations/:conversationId/proposals/:proposalId/confirm`
 
-The planner is available to authenticated tenant users, but proposal confirmation rejects `STAFF`. Proposal review updates can resolve `customerId`, `jobId`, `membershipId`, or schedule draft fields before confirmation. Conversations, messages, tool calls, and proposals are persisted for restart recovery, multi-instance operation, and audit. Assistant responses stream over SSE and require `ANTHROPIC_API_KEY`.
+The planner is available to authenticated tenant users, but proposal confirmation rejects `STAFF`. Proposal review updates can resolve `customerId`, `jobId`, `membershipId`, or schedule draft fields before confirmation. Conversations, messages, tool calls, and proposals are persisted for restart recovery, multi-instance operation, and audit. Assistant responses stream over SSE and require credentials for the configured real planner provider; the guarded Fake provider is limited to non-production automated tests and does not use a model key.
 
-The same canonical Tool Registry also powers a local stdio MCP server. MCP is not an HTTP route in this API contract. It validates an OpsFlow access session on each tool call, exposes a role-filtered subset of read/proposal tools, and returns Web approval URLs for pending proposals. See [Local MCP Integration](mcp.md).
+The same canonical Tool Registry also powers a local stdio MCP server. MCP is not an HTTP route in this API contract. It revalidates the OpsFlow access session and current membership/tenant state for discovery and execution, exposes a role-filtered subset of read/proposal tools, and returns Web approval URLs for pending proposals. See [Local MCP Integration](mcp.md).
 
 ## Contract Notes
 - All successful JSON responses use the common `success/message/data/meta` envelope.

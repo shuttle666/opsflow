@@ -281,7 +281,10 @@ paths:
       operationId: getCustomerDetail
       responses:
         "200":
-          description: Customer detail with accurate job totals and up to five recent jobs.
+          description: Role-scoped customer detail with job totals and up to five recent visible jobs.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
           content:
             application/json:
               schema:
@@ -370,6 +373,9 @@ paths:
       responses:
         "200":
           description: Daily dashboard summary for the current tenant and role.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
           content:
             application/json:
               schema:
@@ -723,6 +729,9 @@ paths:
       responses:
         "200":
           description: Binary evidence file stream.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
           content:
             application/octet-stream:
               schema:
@@ -831,6 +840,9 @@ paths:
       responses:
         "200":
           description: Server-sent notification events.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
           content:
             text/event-stream:
               schema:
@@ -895,6 +907,9 @@ paths:
       responses:
         "200":
           description: Server-sent assistant events.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
           content:
             text/event-stream:
               schema:
@@ -944,6 +959,13 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+
+  headers:
+    RequestId:
+      description: Correlation identifier returned by every API response.
+      required: true
+      schema:
+        type: string
 
   parameters:
     TenantId:
@@ -1150,12 +1172,18 @@ components:
   responses:
     Success:
       description: Successful JSON response.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ApiSuccessResponse"
     PagelessListSuccess:
       description: Successful JSON response with an array data payload.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
       content:
         application/json:
           schema:
@@ -1170,6 +1198,9 @@ components:
                       additionalProperties: true
     PaginatedListSuccess:
       description: Successful JSON response with an array data payload and pagination metadata.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
       content:
         application/json:
           schema:
@@ -1191,6 +1222,9 @@ components:
     MembershipListSuccess:
       description: >-
         Successful membership list with filtered pagination and tenant-wide status totals.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
       content:
         application/json:
           schema:
@@ -1213,42 +1247,63 @@ components:
                         $ref: "#/components/schemas/MembershipSummary"
     BadRequest:
       description: Validation failed or request payload is invalid.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ApiErrorResponse"
     Unauthorized:
       description: Authentication failed or token is invalid.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ApiErrorResponse"
     Forbidden:
       description: Authenticated but not allowed for this action or tenant.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ApiErrorResponse"
     NotFound:
       description: Resource does not exist or is not visible in the current tenant.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ApiErrorResponse"
     Conflict:
       description: Request conflicts with current resource state.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ApiErrorResponse"
     ServiceUnavailable:
       description: Required external service or configuration is unavailable.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ApiErrorResponse"
     InternalServerError:
       description: Unexpected server error.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
       content:
         application/json:
           schema:
@@ -1516,6 +1571,7 @@ components:
           maxLength: 2000
     CustomerDetail:
       type: object
+      description: Owner and Manager see all linked jobs; Staff see only jobs assigned to them.
       required:
         - id
         - name
@@ -1795,7 +1851,7 @@ components:
           additionalProperties: true
     ApiErrorResponse:
       type: object
-      required: [success, code, message]
+      required: [success, code, message, requestId]
       properties:
         success:
           type: boolean

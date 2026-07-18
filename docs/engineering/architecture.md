@@ -17,6 +17,7 @@ OpsFlow is a modular monolith with a Next.js frontend, an Express API, Prisma, P
 - TanStack Query for scoped REST server state, cache reconciliation, and mutation invalidation
 - React Hook Form and Zod for form handling and validation
 - Vitest and Testing Library for UI tests
+- Playwright for production-build browser workflows and mobile axe smoke coverage
 
 Current app surfaces:
 - Login, register, and invitation acceptance
@@ -122,6 +123,12 @@ External MCP proposals also create a persisted Agent conversation and assistant 
 
 See [Local MCP Integration](mcp.md) for the current tool catalog, setup, authorization boundary, and deferred remote transport work.
 
+## Verification Architecture
+
+Fast client/server checks cover UI states, domain rules, schemas, Tool Registry behavior, and protocol contracts. A separate PostgreSQL job exercises the real HTTP middleware and database constraints. Playwright then composes production builds, a freshly migrated and seeded disposable database, the three user roles, Evidence storage, and the guarded deterministic AI provider. This keeps model/network variability out of CI while exercising the same Agent loop and Tool Registry used by the application.
+
+Managed browser tests use dedicated ports and a single worker because the scenarios intentionally share seeded demo identities. Destructive database setup fails closed unless the target is loopback PostgreSQL with a database name containing an `e2e` segment. See the [Testing Strategy](testing.md) for the scenario map, CI jobs, artifacts, and current limits.
+
 ## Infrastructure
 - Local development uses `docker-compose.dev.yml`.
 - Production uses `docker-compose.prod.yml`.
@@ -132,6 +139,6 @@ See [Local MCP Integration](mcp.md) for the current tool catalog, setup, authori
 ## Current Limitations
 - Dashboard metrics for the current daily dispatch surface are backed by a dedicated summary API; broader tenant analytics remain a future option.
 - Request IDs and structured request/error logs are implemented. Broader rate limiting, a production error taxonomy, and external error monitoring remain planned hardening work.
-- Evidence storage is local-first; S3-compatible storage is a future upgrade.
+- Evidence storage is local-first; development and public-demo resets remove scoped files, while S3-compatible storage and object lifecycle policy remain future upgrades.
 - There is no customer-facing portal yet.
 - MCP is local stdio only. Remote transport, OAuth/client registration, and public MCP operations are deferred.

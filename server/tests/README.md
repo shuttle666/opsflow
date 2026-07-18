@@ -3,7 +3,7 @@
 ## Run
 
 ```bash
-pnpm test
+pnpm --dir server test
 ```
 
 By default, DB integration tests are skipped.
@@ -14,7 +14,7 @@ To run integration coverage against PostgreSQL:
 DATABASE_URL=postgresql://opsflow:opsflow@localhost:5432/opsflow_test \
 RUN_DB_TESTS=true \
 ALLOW_DB_TEST_RESET=true \
-pnpm test
+pnpm --dir server test
 ```
 
 The test runner fails closed unless `DATABASE_URL` points to PostgreSQL on a
@@ -33,7 +33,10 @@ tests reset every table; never point them at the development or demo database.
 - `mcp-tenant-revalidation.integration.test.ts` keeps one MCP connection open
   while the caller is demoted or disabled and while the tenant is deactivated.
 - Customer and membership API suites verify Staff job visibility and protect
-  the final active Owner under concurrent updates.
+  the final active Owner under concurrent updates. Invitation tests also prove
+  that stale acceptance revalidates the live invitation, tenant, and membership.
+- Seed implementations purge Agent/Tool Invocation rows; Evidence storage unit
+  and integration coverage verifies safe, tenant-scoped durable-file cleanup.
 
 ## Deterministic AI provider
 
@@ -50,7 +53,7 @@ ALLOW_FAKE_AI_PROVIDER=true \
 AI_DISPATCH_PLANNER_PROVIDER=fake \
 AI_DISPATCH_PLANNER_MODEL=opsflow-scripted-e2e-v1 \
 AI_INTENT_EXTRACTOR_ENABLED=false \
-pnpm exec vitest run tests/security.api.integration.test.ts
+pnpm --dir server exec vitest run tests/security.api.integration.test.ts
 ```
 
 The provider is rejected in production and accepts only this test command shape:
@@ -63,3 +66,12 @@ It deterministically searches for one exact customer, creates a pending job
 Proposal, and stops. A later allowlisted confirmation causes it to reload the
 Proposal before requesting execution. Ordinary natural-language messages do not
 produce tool calls.
+
+## Where this layer stops
+
+Server unit and contract tests cover domain branching, schemas, Registry/MCP
+contracts, and provider behavior. Guarded PostgreSQL suites cover HTTP and
+database security boundaries. The production-build role workflow, AI approval,
+and mobile axe checks live in [`client/e2e`](../../client/e2e/README.md). See the
+repository [Testing Strategy](../../docs/engineering/testing.md) for the CI map
+and deliberate limits.

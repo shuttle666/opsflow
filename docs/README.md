@@ -10,11 +10,15 @@ This directory is grouped by document purpose so the root stays small and easy t
 
 ## Engineering
 
+- [Engineering Case Study](engineering/case-study.md) - individual ownership, scope, trade-offs, evidence, AI-assisted workflow, and retrospective.
 - [Architecture](engineering/architecture.md) - system shape, stack, and major domains.
+- [Testing Strategy](engineering/testing.md) - verification layers, CI mapping, deterministic E2E setup, safety guardrails, and limits.
 - [Local MCP Integration](engineering/mcp.md) - shared Tool Registry architecture, stdio setup, security boundaries, and client configuration.
 - [ERD](engineering/erd.md) - data model relationships and Mermaid ERD notes.
 - [API Design](engineering/api-design.md) - implemented API surface summary checked against Express routes.
 - [OpenAPI Specification](engineering/openapi.yaml) - machine-readable API contract.
+
+Focused execution notes live beside the suites: [server tests](../server/tests/README.md) and [browser E2E](../client/e2e/README.md).
 
 ## Design
 

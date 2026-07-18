@@ -41,7 +41,7 @@ The current case-study boundary includes:
 - persisted AI conversations, tool calls, and proposals;
 - a provider-neutral Tool Registry shared by the Web Agent and local MCP adapter;
 - separate approval/confirmation checkpoints and confirmation-time validation for AI-proposed business changes;
-- client and server tests, CI validation, Docker environments, and an EC2/Nginx deployment path.
+- layered client/server tests, real-PostgreSQL security integration, deterministic browser workflows, CI validation, Docker environments, and an EC2/Nginx deployment path.
 
 Payments, a customer portal, route optimization, remote MCP transport, object storage, and a full production observability platform are deliberately outside the current boundary. See the [PRD](../product/prd.md) and [roadmap](../product/roadmap.md) for the maintained scope.
 
@@ -77,7 +77,13 @@ This reduces schema and authorization drift. The cost is adapter work at each pr
 
 ### Local-first Evidence Storage Behind An Abstraction
 
-Evidence storage uses the local filesystem in the current deployment, behind a storage interface. That made the upload and review workflow deliverable without introducing cloud-storage configuration into the first release. It is not horizontally portable, so an S3-compatible implementation and lifecycle cleanup are explicit follow-up work.
+Evidence storage uses the local filesystem in the current deployment, behind a storage interface. That made the upload and review workflow deliverable without introducing cloud-storage configuration into the first release. Development seeds clear known tenant Evidence directories beneath the configured root, and the scheduled public-demo reset removes files for the demo tenant together with Agent and Tool Invocation records. Local disk is still not horizontally portable, so an S3-compatible implementation with object-store retention and lifecycle policy remains follow-up work.
+
+### Boundary-led Verification Over Test-count Targets
+
+The verification strategy concentrates expensive integration and browser coverage on the boundaries most likely to invalidate the project: tenant access, membership races, the operational role handoff, and AI Proposal confirmation. Fast unit and contract tests cover branching domain rules; PostgreSQL and browser tests prove the composed behavior.
+
+This keeps CI understandable and deterministic. The trade-off is that not every visual permutation or browser engine receives end-to-end coverage. The exact layers, scenarios, isolation model, and deliberate limits are documented in the [Testing Strategy](testing.md).
 
 ## Evidence In The Repository
 
@@ -89,7 +95,10 @@ Evidence storage uses the local filesystem in the current deployment, behind a s
 | Shared Web/MCP business tools | [Tool Registry](../../server/src/modules/operations-tools/tool-registry.ts) and [MCP contract tests](../../server/tests/mcp-server.contract.test.ts) |
 | Proposal-first AI changes | [Proposal tool definitions](../../server/src/modules/operations-tools/definitions/proposal-tools.ts), [proposal tool tests](../../server/tests/proposal-tools.unit.test.ts), and [persistence integration tests](../../server/tests/agent-persistence.integration.test.ts) |
 | PII-minimized cross-adapter invocation audit | [Invocation audit adapter](../../server/src/modules/operations-tools/tool-invocation-audit.ts) |
-| Automated delivery checks | [CI workflow](../../.github/workflows/ci.yml) and client/server package scripts |
+| Three-role operational workflow | [Owner → Staff → Manager E2E](../../client/e2e/role-workflow.spec.ts) |
+| Safe and idempotent AI writes | [Safe AI E2E](../../client/e2e/agent-proposal.spec.ts) and [API security integration](../../server/tests/security.api.integration.test.ts) |
+| Database-enforced tenant integrity | [PostgreSQL boundary tests](../../server/tests/database-tenant-integrity.integration.test.ts) |
+| Automated delivery checks | [Testing Strategy](testing.md), [CI workflow](../../.github/workflows/ci.yml), and client/server package scripts |
 
 These are engineering signals, not claims of customer adoption or production scale. The portfolio evidence is the explicit boundary design, code, tests, and deployment automation.
 
@@ -117,12 +126,12 @@ This workflow demonstrates an additional skill relevant to modern engineering: u
 
 - Introduce a consistent server-state query layer before page-level data fetching spread across the client.
 - Design public demo isolation as per-visitor leased workspaces instead of relying on a shared account and scheduled resets.
-- Separate database cleanup from durable-file lifecycle cleanup from the first evidence-storage iteration.
+- Define the database and durable-file reset boundary together from the first evidence-storage iteration.
 - Define AI usage budgets and production telemetry alongside the first externally accessible AI endpoint.
 
 ### Next Engineering Priorities
 
-1. Isolate public demo visitors with bounded workspace leases, complete agent-data resets, and durable evidence cleanup.
+1. Isolate public demo visitors with bounded workspace leases or per-visitor sessions; the current daily reset already clears demo Agent records, Tool Invocation rows, and tenant Evidence files.
 2. Add lease-level and global AI budgets with persistent usage accounting.
 3. Replace local evidence storage with an S3-compatible implementation.
 4. Expand request-level logs into centralized monitoring, metrics, tracing, and external error reporting when deployment needs justify it.

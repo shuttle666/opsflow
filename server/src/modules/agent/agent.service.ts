@@ -1436,10 +1436,7 @@ async function findExistingJobCandidatesForReview(
         in: openDispatchJobStatuses,
       },
     },
-    orderBy: {
-      createdAt: "desc",
-    },
-    take: 10,
+    orderBy: [{ createdAt: "desc" }, { id: "asc" }],
     select: {
       id: true,
       title: true,

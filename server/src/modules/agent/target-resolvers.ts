@@ -2,6 +2,7 @@ import {
   JobStatus,
   MembershipRole,
   MembershipStatus,
+  type Prisma,
 } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import type { AuthContext } from "../../types/auth";
@@ -45,12 +46,129 @@ type StaffCandidate = {
   email: string;
 };
 
+const resolverScanBatchSize = 100;
+const resolverCandidateLimit = 10;
+
+const resolverJobSelect = {
+  id: true,
+  title: true,
+  description: true,
+  serviceAddress: true,
+  status: true,
+  scheduledStartAt: true,
+  scheduledEndAt: true,
+  customer: {
+    select: {
+      id: true,
+      name: true,
+    },
+  },
+  assignedTo: {
+    select: {
+      displayName: true,
+    },
+  },
+} satisfies Prisma.JobSelect;
+
+type ResolverJobRecord = Prisma.JobGetPayload<{
+  select: typeof resolverJobSelect;
+}>;
+
 const openJobStatuses = [
   JobStatus.NEW,
   JobStatus.SCHEDULED,
   JobStatus.IN_PROGRESS,
   JobStatus.PENDING_REVIEW,
 ];
+
+async function findCustomersMentionedInQuery(
+  auth: AuthContext,
+  query: string,
+): Promise<CustomerCandidate[]> {
+  const normalizedQuery = normalize(query);
+  const matches: CustomerCandidate[] = [];
+  let cursorId: string | undefined;
+
+  while (matches.length < resolverCandidateLimit) {
+    const customers = await prisma.customer.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        archivedAt: null,
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+      take: resolverScanBatchSize,
+      ...(cursorId
+        ? {
+            cursor: { id: cursorId },
+            skip: 1,
+          }
+        : {}),
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+      },
+    });
+
+    for (const customer of customers) {
+      const normalizedName = normalize(customer.name);
+      if (normalizedName.length >= 2 && normalizedQuery.includes(normalizedName)) {
+        matches.push(customer);
+      }
+
+      if (matches.length >= resolverCandidateLimit) {
+        break;
+      }
+    }
+
+    if (customers.length < resolverScanBatchSize) {
+      break;
+    }
+
+    cursorId = customers[customers.length - 1]?.id;
+    if (!cursorId) {
+      break;
+    }
+  }
+
+  return matches;
+}
+
+async function listResolverJobs(
+  where: Prisma.JobWhereInput,
+  scanAll: boolean,
+): Promise<ResolverJobRecord[]> {
+  const jobs: ResolverJobRecord[] = [];
+  let cursorId: string | undefined;
+
+  while (true) {
+    const batch = await prisma.job.findMany({
+      where,
+      orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+      take: scanAll ? resolverScanBatchSize : 20,
+      ...(cursorId
+        ? {
+            cursor: { id: cursorId },
+            skip: 1,
+          }
+        : {}),
+      select: resolverJobSelect,
+    });
+    jobs.push(...batch);
+
+    if (!scanAll || batch.length < resolverScanBatchSize) {
+      break;
+    }
+
+    cursorId = batch[batch.length - 1]?.id;
+    if (!cursorId) {
+      break;
+    }
+  }
+
+  return jobs;
+}
 
 function normalize(value?: string | null) {
   return normalizeSearchText(value);
@@ -160,7 +278,7 @@ export async function resolveCustomerTarget(
         ...(phone ? [{ phone }] : []),
       ],
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "asc" }],
     take: 10,
     select: {
       id: true,
@@ -171,28 +289,7 @@ export async function resolveCustomerTarget(
   });
 
   if (customers.length === 0 && q) {
-    const recentCustomers = await prisma.customer.findMany({
-      where: {
-        tenantId: auth.tenantId,
-        archivedAt: null,
-      },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        email: true,
-      },
-    });
-    const normalizedQuery = normalize(q);
-
-    customers = recentCustomers
-      .filter((customer) => {
-        const normalizedName = normalize(customer.name);
-        return normalizedName.length >= 2 && normalizedQuery.includes(normalizedName);
-      })
-      .slice(0, 10);
+    customers = await findCustomersMentionedInQuery(auth, q);
   }
 
   if (customers.length === 0) {
@@ -283,8 +380,9 @@ export async function resolveJobTarget(
     };
   }
 
-  const jobs = await prisma.job.findMany({
-    where: {
+  const scanAll = Boolean(input.customerId || hasConcepts);
+  const jobs = await listResolverJobs(
+    {
       tenantId: auth.tenantId,
       ...(input.customerId ? { customerId: input.customerId } : {}),
       ...(input.includeClosed
@@ -312,29 +410,8 @@ export async function resolveJobTarget(
           }
         : {}),
     },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-    select: {
-      id: true,
-      title: true,
-      description: true,
-      serviceAddress: true,
-      status: true,
-      scheduledStartAt: true,
-      scheduledEndAt: true,
-      customer: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
-      assignedTo: {
-        select: {
-          displayName: true,
-        },
-      },
-    },
-  });
+    scanAll,
+  );
 
   if (jobs.length === 0) {
     return {
@@ -453,11 +530,7 @@ export async function resolveStaffTarget(
         },
       ],
     },
-    orderBy: {
-      user: {
-        displayName: "asc",
-      },
-    },
+    orderBy: [{ user: { displayName: "asc" } }, { id: "asc" }],
     take: 10,
     select: {
       id: true,

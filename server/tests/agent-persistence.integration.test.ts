@@ -23,7 +23,10 @@ import {
   storeTypedProposal,
   updateProposalReview,
 } from "../src/modules/agent/agent.service";
-import { resolveJobTarget } from "../src/modules/agent/target-resolvers";
+import {
+  resolveCustomerTarget,
+  resolveJobTarget,
+} from "../src/modules/agent/target-resolvers";
 import { describeIfDb, resetDatabase } from "./helpers/db";
 
 describeIfDb("agent persistence integration", () => {
@@ -627,6 +630,75 @@ describeIfDb("agent persistence integration", () => {
     );
   });
 
+  it("resolves customer and job targets beyond legacy fixed candidate windows", async () => {
+    const owner = await seedTenantUser({
+      email: "owner-resolver-pagination@agent-persistence.test",
+      displayName: "Resolver Pagination Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Resolver Pagination Tenant",
+      tenantSlug: "resolver-pagination-tenant",
+    });
+    const customer = await prisma.customer.create({
+      data: {
+        tenantId: owner.tenant.id,
+        createdById: owner.user.id,
+        name: "Legacy Customer",
+        createdAt: new Date("2020-01-01T00:00:00.000Z"),
+      },
+    });
+    await prisma.customer.createMany({
+      data: Array.from({ length: 105 }, (_, index) => ({
+        tenantId: owner.tenant.id,
+        createdById: owner.user.id,
+        name: `Recent Customer ${String(index + 1).padStart(3, "0")}`,
+      })),
+    });
+
+    const resolvedCustomer = await resolveCustomerTarget(owner.auth, {
+      q: "Please create a new visit for Legacy Customer next Tuesday",
+    });
+    expect(resolvedCustomer).toEqual(
+      expect.objectContaining({
+        status: "matched",
+        customer: expect.objectContaining({ id: customer.id }),
+      }),
+    );
+
+    const targetJob = await prisma.job.create({
+      data: {
+        tenantId: owner.tenant.id,
+        customerId: customer.id,
+        createdById: owner.user.id,
+        title: "Historic boiler inspection",
+        serviceAddress: "1 Legacy Lane, Adelaide SA 5000",
+        description: "Inspect the old boiler pressure valve.",
+        createdAt: new Date("2020-01-02T00:00:00.000Z"),
+      },
+    });
+    await prisma.job.createMany({
+      data: Array.from({ length: 25 }, (_, index) => ({
+        tenantId: owner.tenant.id,
+        customerId: customer.id,
+        createdById: owner.user.id,
+        title: `Recent routine visit ${index + 1}`,
+        serviceAddress: `${index + 10} Current Road, Adelaide SA 5000`,
+        description: "General exterior maintenance.",
+      })),
+    });
+
+    const resolvedJob = await resolveJobTarget(owner.auth, {
+      customerId: customer.id,
+      q: "Historic boiler inspection",
+      concepts: ["inspection"],
+    });
+    expect(resolvedJob).toEqual(
+      expect.objectContaining({
+        status: "matched",
+        job: expect.objectContaining({ id: targetJob.id }),
+      }),
+    );
+  });
+
   it("rejects saving typed schedule changes when the assignee is not active staff", async () => {
     const owner = await seedTenantUser({
       email: "owner-typed-schedule-rollback@agent-persistence.test",
@@ -752,7 +824,18 @@ describeIfDb("agent persistence integration", () => {
         title: "Leaking kitchen tap - Adelaide",
         serviceAddress: "7 Bourke Street, Docklands VIC 3008",
         description: "Kitchen tap is leaking under the sink.",
+        createdAt: new Date("2020-01-01T00:00:00.000Z"),
       },
+    });
+    await prisma.job.createMany({
+      data: Array.from({ length: 10 }, (_, index) => ({
+        tenantId: owner.tenant.id,
+        customerId: customer.id,
+        createdById: owner.user.id,
+        title: `Unrelated maintenance ${index + 1}`,
+        serviceAddress: `${index + 1} Example Street, Adelaide SA 5000`,
+        description: "Routine exterior inspection.",
+      })),
     });
 
     const conversation = await createConversation(owner.auth);

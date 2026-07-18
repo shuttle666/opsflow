@@ -1507,6 +1507,9 @@ describeIfDb("agent persistence integration", () => {
       },
     });
     const conversation = await createConversation(owner.auth);
+    const originalRequest =
+      "Create a leaking tap job for Conversational Customer tomorrow morning.";
+    await addUserMessage(owner.auth, conversation.id, originalRequest);
     const proposal = await storeTypedProposal(owner.auth, conversation.id, {
       type: "CREATE_JOB",
       target: { customerId: customer.id },
@@ -1521,6 +1524,16 @@ describeIfDb("agent persistence integration", () => {
       },
       warnings: [],
       confidence: 1,
+    });
+
+    await expect(
+      executeProposal(owner.auth, proposal.id, {
+        source: "WEB_AGENT",
+        confirmationText: originalRequest,
+        appendReceiptMessage: false,
+      }),
+    ).rejects.toMatchObject({
+      details: { code: "PROPOSAL_CONFIRMATION_REQUIRED" },
     });
 
     await expect(
@@ -1616,6 +1629,259 @@ describeIfDb("agent persistence integration", () => {
         where: {
           tenantId: owner.tenant.id,
           title: "Conversation-confirmed job",
+        },
+      }),
+    ).resolves.toBe(1);
+  });
+
+  it("accepts allowlisted English and Chinese confirmations while keeping unsafe text pending for Web approval", async () => {
+    const owner = await seedTenantUser({
+      email: "owner-confirmation-policy@agent-persistence.test",
+      displayName: "Confirmation Policy Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Confirmation Policy Tenant",
+      tenantSlug: "confirmation-policy-tenant",
+    });
+    const customer = await prisma.customer.create({
+      data: {
+        tenantId: owner.tenant.id,
+        createdById: owner.user.id,
+        name: "Confirmation Policy Customer",
+      },
+    });
+    const conversation = await createConversation(owner.auth);
+    const storeCreateJobProposal = (title: string) =>
+      storeTypedProposal(owner.auth, conversation.id, {
+        type: "CREATE_JOB",
+        target: { customerId: customer.id },
+        customer: {
+          status: "matched",
+          matchedCustomerId: customer.id,
+          matches: [{ id: customer.id, name: customer.name }],
+        },
+        jobDraft: {
+          title,
+          serviceAddress: "10 Grenfell Street, Adelaide SA 5000",
+        },
+        warnings: [],
+        confidence: 1,
+      });
+
+    const englishProposal = await storeCreateJobProposal(
+      "English-confirmed job",
+    );
+    await addUserMessage(owner.auth, conversation.id, "CONFIRM!");
+    await expect(
+      executeProposal(owner.auth, englishProposal.id, {
+        source: "WEB_AGENT",
+        confirmationText: "CONFIRM!",
+        appendReceiptMessage: false,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        result: expect.objectContaining({
+          createdJobTitle: "English-confirmed job",
+        }),
+      }),
+    );
+
+    const chineseProposal = await storeCreateJobProposal(
+      "Chinese-confirmed job",
+    );
+    await addUserMessage(owner.auth, conversation.id, "可以了！");
+    await expect(
+      executeProposal(owner.auth, chineseProposal.id, {
+        source: "WEB_AGENT",
+        confirmationText: "可以了！",
+        appendReceiptMessage: false,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        result: expect.objectContaining({
+          createdJobTitle: "Chinese-confirmed job",
+        }),
+      }),
+    );
+
+    const webProposal = await storeCreateJobProposal("Web-approved job");
+    for (const rejectedText of [
+      "Do not execute",
+      "Confirm?",
+      "Can you move it to the afternoon?",
+      "可以改到下午吗",
+      "I have reviewed the complete proposal and would now like you to execute it exactly as described above.",
+    ]) {
+      await addUserMessage(owner.auth, conversation.id, rejectedText);
+      await expect(
+        executeProposal(owner.auth, webProposal.id, {
+          source: "WEB_AGENT",
+          confirmationText: rejectedText,
+          appendReceiptMessage: false,
+        }),
+      ).rejects.toMatchObject({
+        details: { code: "PROPOSAL_CONFIRMATION_NOT_EXPLICIT" },
+      });
+    }
+
+    await expect(
+      prisma.agentProposal.findUniqueOrThrow({ where: { id: webProposal.id } }),
+    ).resolves.toEqual(
+      expect.objectContaining({ status: AgentProposalStatus.PENDING }),
+    );
+    await expect(
+      prisma.job.count({
+        where: {
+          tenantId: owner.tenant.id,
+          title: "Web-approved job",
+        },
+      }),
+    ).resolves.toBe(0);
+
+    await expect(
+      confirmDispatchProposal(owner.auth, conversation.id, webProposal.id),
+    ).resolves.toEqual(
+      expect.objectContaining({ createdJobTitle: "Web-approved job" }),
+    );
+
+    const mcpProposal = await storeCreateJobProposal("MCP-confirmed job");
+    await expect(
+      executeProposal(owner.auth, mcpProposal.id, {
+        source: "MCP",
+        confirmationText: "Do not execute",
+        appendReceiptMessage: false,
+      }),
+    ).rejects.toMatchObject({
+      details: { code: "PROPOSAL_CONFIRMATION_NOT_EXPLICIT" },
+    });
+    await expect(
+      executeProposal(owner.auth, mcpProposal.id, {
+        source: "MCP",
+        confirmationText: "OK, execute it",
+        appendReceiptMessage: false,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        result: expect.objectContaining({
+          createdJobTitle: "MCP-confirmed job",
+        }),
+      }),
+    );
+  });
+
+  it("requires Web selection when one conversation has multiple pending proposals", async () => {
+    const owner = await seedTenantUser({
+      email: "owner-ambiguous-confirmation@agent-persistence.test",
+      displayName: "Ambiguous Confirmation Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Ambiguous Confirmation Tenant",
+      tenantSlug: "ambiguous-confirmation-tenant",
+    });
+    const customer = await prisma.customer.create({
+      data: {
+        tenantId: owner.tenant.id,
+        createdById: owner.user.id,
+        name: "Ambiguous Confirmation Customer",
+      },
+    });
+    const conversation = await createConversation(owner.auth);
+    const storeCreateJobProposal = (title: string) =>
+      storeTypedProposal(owner.auth, conversation.id, {
+        type: "CREATE_JOB",
+        target: { customerId: customer.id },
+        customer: {
+          status: "matched",
+          matchedCustomerId: customer.id,
+          matches: [{ id: customer.id, name: customer.name }],
+        },
+        jobDraft: {
+          title,
+          serviceAddress: "25 Pirie Street, Adelaide SA 5000",
+        },
+        warnings: [],
+        confidence: 1,
+      });
+    const firstProposal = await storeCreateJobProposal(
+      "First ambiguous job",
+    );
+    const selectedProposal = await storeCreateJobProposal(
+      "Selected Web-approved job",
+    );
+    await addUserMessage(owner.auth, conversation.id, "Confirm");
+
+    await expect(
+      executeProposal(owner.auth, firstProposal.id, {
+        source: "WEB_AGENT",
+        confirmationText: "Confirm",
+        appendReceiptMessage: false,
+      }),
+    ).rejects.toMatchObject({
+      details: expect.objectContaining({
+        code: "PROPOSAL_CONFIRMATION_AMBIGUOUS",
+        approvalUrl: expect.stringContaining(firstProposal.id),
+      }),
+    });
+
+    await expect(
+      prisma.agentProposal.findMany({
+        where: {
+          id: { in: [firstProposal.id, selectedProposal.id] },
+        },
+        orderBy: { id: "asc" },
+        select: { id: true, status: true },
+      }),
+    ).resolves.toEqual(
+      [firstProposal.id, selectedProposal.id]
+        .sort()
+        .map((id) => ({ id, status: AgentProposalStatus.PENDING })),
+    );
+    await expect(
+      prisma.job.count({
+        where: {
+          tenantId: owner.tenant.id,
+          title: { in: ["First ambiguous job", "Selected Web-approved job"] },
+        },
+      }),
+    ).resolves.toBe(0);
+
+    await expect(
+      confirmDispatchProposal(
+        owner.auth,
+        conversation.id,
+        selectedProposal.id,
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        createdJobTitle: "Selected Web-approved job",
+      }),
+    );
+
+    await expect(
+      prisma.agentProposal.findUniqueOrThrow({
+        where: { id: firstProposal.id },
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({ status: AgentProposalStatus.PENDING }),
+    );
+    await expect(
+      prisma.agentProposal.findUniqueOrThrow({
+        where: { id: selectedProposal.id },
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({ status: AgentProposalStatus.CONFIRMED }),
+    );
+    await expect(
+      prisma.job.count({
+        where: {
+          tenantId: owner.tenant.id,
+          title: "First ambiguous job",
+        },
+      }),
+    ).resolves.toBe(0);
+    await expect(
+      prisma.job.count({
+        where: {
+          tenantId: owner.tenant.id,
+          title: "Selected Web-approved job",
         },
       }),
     ).resolves.toBe(1);

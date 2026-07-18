@@ -68,7 +68,7 @@ export const proposalExecutionTools: AnyOpsFlowTool[] = [
     name: "execute_proposal",
     title: "Execute a confirmed proposal",
     description:
-      "Execute an eligible OpsFlow proposal only after displaying it and receiving explicit confirmation in a new user message after proposal creation. Pass the user's latest confirmation message verbatim as confirmationText. Never treat the original business request as confirmation, never call this in the same user turn as propose_*, and never call propose_* and execute_proposal consecutively in one turn.",
+      'Execute an eligible OpsFlow proposal only after displaying it and receiving a short, explicit confirmation such as "Confirm", "OK", or "确认" in a new user message after proposal creation. Pass the user\'s latest confirmation message verbatim as confirmationText. Rejections, questions, qualifications, and change requests are not confirmation. Never treat the original business request as confirmation, never call this in the same user turn as propose_*, and never call propose_* and execute_proposal consecutively in one turn.',
     audiences: ["web-agent", "external-mcp"],
     allowedRoles: managerRoles,
     inputSchema: executeProposalInputSchema,

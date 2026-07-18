@@ -182,6 +182,18 @@ describe("runAgentLoop", () => {
     expect(loopMocks.streamFactory.mock.calls[0]?.[0]?.system).toContain(
       "asks a question, requests any change",
     );
+    expect(loopMocks.streamFactory.mock.calls[0]?.[0]?.system).toContain(
+      'accepts only these confirmation phrases: "ok", "okay", "confirm"',
+    );
+    expect(loopMocks.streamFactory.mock.calls[0]?.[0]?.system).toContain(
+      '"ok, execute it"',
+    );
+    expect(loopMocks.streamFactory.mock.calls[0]?.[0]?.system).toContain(
+      "do not rewrite it into an accepted phrase",
+    );
+    expect(loopMocks.streamFactory.mock.calls[0]?.[0]?.system).toContain(
+      "more than one pending proposal",
+    );
   });
 
   it("passes an LLM-selected explicit confirmation to the execution tool", async () => {

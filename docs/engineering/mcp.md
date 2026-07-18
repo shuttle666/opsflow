@@ -128,7 +128,7 @@ The two externally exposed Proposal tools currently return:
 }
 ```
 
-The host must pass the user's latest confirmation message verbatim. It must not call `execute_proposal` in the same user turn as `propose_*`, and it must show the Proposal before asking for confirmation.
+The host must pass the user's latest confirmation message verbatim. The service accepts a deliberately small allowlist of short phrases, including `OK`, `Confirm`, `OK, execute it`, `确认`, `可以了`, and `就这样执行`; matching ignores case, surrounding whitespace, and trailing full stops or exclamation marks. Questions, rejections, qualifications, change requests, and other text fail closed. The host must not call `execute_proposal` in the same user turn as `propose_*`, and it must show the Proposal before asking for confirmation.
 
 ## Confirmation And Trust Boundary
 
@@ -137,12 +137,14 @@ There are three execution sources with intentionally different evidence:
 | Source | Evidence required by OpsFlow | Notes |
 | --- | --- | --- |
 | Web `Confirm plan` button | Authenticated Owner/Manager button request | Does not depend on LLM interpretation |
-| Web Agent conversation | A persisted User Message created after the Proposal; `confirmationText` must match it exactly | The LLM decides whether the text is an explicit confirmation |
-| External MCP host | Non-empty `confirmationText` supplied by the client | The server cannot prove that external chat text came from a human |
+| Web Agent conversation | Exactly one pending Proposal in the conversation, plus a persisted User Message created after it; `confirmationText` must match exactly and pass the server allowlist | Multiple pending Proposals require the user to choose a Web approval button; non-allowlisted text fails closed |
+| External MCP host | An allowlisted `confirmationText` supplied by the client | The server can reject unsafe text, but cannot prove that external chat text came from a human or followed the Proposal |
 
 For external MCP, `destructiveHint: true` tells capable hosts that `execute_proposal` changes business state and should receive native tool approval. This annotation is a host hint, not proof of user identity or consent. Hosts without native approval fall back to the conversational checkpoint.
 
-This is the explicit trust boundary: OpsFlow authenticates the token and revalidates the business operation, while the external host is responsible for faithfully presenting the Proposal, waiting for a later user response, and passing that response without rewriting it.
+This is the explicit trust boundary: OpsFlow authenticates the token, requires allowlisted confirmation text, and revalidates the business operation, while the external host is responsible for faithfully presenting the Proposal, proving that confirmation came from a later human response, and passing that response without rewriting it. The server-side allowlist prevents obvious negative, questioning, or modifying text from being treated as approval; it does not establish the provenance of MCP input. The Web `Confirm plan` button remains the strongest approval path because it does not depend on an LLM or external host interpreting conversational intent.
+
+The single-pending-Proposal rule applies to the Web Agent because a short reply such as `Confirm` does not identify a Proposal by itself. MCP execution already includes an explicit `proposalId`; its host remains responsible for associating that ID with the Proposal it displayed and the later confirmation it collected.
 
 ## Execution Safety And Idempotency
 
@@ -150,6 +152,8 @@ Before any write, the shared execution service verifies:
 
 - the caller is an Owner or Manager;
 - the Proposal belongs to the authenticated user and tenant;
+- conversational confirmation text is allowlisted (and, for the Web Agent, exactly matches a post-Proposal User Message);
+- Web Agent conversational execution targets the conversation's only pending Proposal;
 - the Proposal review has no blocker;
 - the source is allowed to execute that Proposal type;
 - referenced jobs, customers, staff memberships, schedules, and job states are still valid;

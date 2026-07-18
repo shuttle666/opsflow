@@ -27,6 +27,7 @@ import {
   normalizeScheduleDraftTimezone,
   type ScheduleDraftWithLocalTime,
 } from "./agent-time";
+import { isExplicitConfirmationText } from "./confirmation-policy";
 
 export type AgentProposalType =
   | "CREATE_CUSTOMER"
@@ -298,7 +299,7 @@ export function getProposalApprovalPolicy(
         approvalMode: "CONVERSATIONAL_OR_WEB",
         executionTool: "execute_proposal",
         confirmationPrompt:
-          "Review the proposal above, then reply in a new message with an explicit confirmation if you want it executed.",
+          'Review the proposal above, then reply in a new message with a short explicit confirmation such as "Confirm" or "确认" if you want it executed.',
       }
     : {
         approvalMode: "WEB_ONLY",
@@ -2744,6 +2745,16 @@ function requireConfirmationText(options: ExecuteProposalOptions) {
   return confirmationText;
 }
 
+function assertExplicitConfirmationText(confirmationText: string) {
+  if (!isExplicitConfirmationText(confirmationText)) {
+    throw new ApiError(
+      409,
+      'The confirmation is not explicit. Reply with a short confirmation such as "Confirm" or "确认", or use the Web approval button.',
+      { code: "PROPOSAL_CONFIRMATION_NOT_EXPLICIT" },
+    );
+  }
+}
+
 async function assertWebAgentConfirmation(
   proposal: ProposalRecord,
   confirmationText: string,
@@ -2762,6 +2773,36 @@ async function assertWebAgentConfirmation(
       409,
       "A newer user message matching confirmationText is required before this proposal can be executed.",
       { code: "PROPOSAL_CONFIRMATION_REQUIRED" },
+    );
+  }
+
+  assertExplicitConfirmationText(confirmationText);
+
+  const pendingProposals = await prisma.agentProposal.findMany({
+    where: {
+      conversationId: proposal.conversationId,
+      tenantId: proposal.tenantId,
+      userId: proposal.userId,
+      status: AgentProposalStatus.PENDING,
+    },
+    select: { id: true },
+    take: 2,
+  });
+
+  if (
+    pendingProposals.length !== 1 ||
+    pendingProposals[0]?.id !== proposal.id
+  ) {
+    throw new ApiError(
+      409,
+      "Conversational confirmation requires exactly one pending proposal. Choose the intended proposal with its Web approval button.",
+      {
+        code: "PROPOSAL_CONFIRMATION_AMBIGUOUS",
+        approvalUrl: getProposalApprovalUrl(
+          proposal.conversationId,
+          proposal.id,
+        ),
+      },
     );
   }
 }
@@ -2853,7 +2894,10 @@ export async function executeProposal(
       requireConfirmationText(options),
     );
   } else if (options.source === "MCP") {
-    requireConfirmationText(options);
+    // MCP hosts do not persist an authoritative latest user chat message in
+    // OpsFlow, so they remain responsible for proving that the confirmation
+    // followed the proposal. OpsFlow can still reject semantically unsafe text.
+    assertExplicitConfirmationText(requireConfirmationText(options));
   }
 
   if (proposal.review?.status === "NEEDS_RESOLUTION") {

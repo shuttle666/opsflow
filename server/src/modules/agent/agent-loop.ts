@@ -16,6 +16,7 @@ import {
   type IntentExtractionSummary,
 } from "./intent-extractor";
 import type { AgentIntentClassification } from "./intent-router";
+import { EXPLICIT_CONFIRMATION_PHRASES } from "./confirmation-policy";
 
 type AgentCallbacks = {
   onTextDelta: (text: string) => void;
@@ -85,6 +86,9 @@ function buildSystemPrompt(
   timezone: string,
   intentClassification?: AgentIntentClassification,
 ): string {
+  const acceptedConfirmationPhrases = EXPLICIT_CONFIRMATION_PHRASES.map(
+    (phrase) => JSON.stringify(phrase),
+  ).join(", ");
   const routerContext = intentClassification
     ? `\nRouter preclassification for the latest user message:
 - intent: ${intentClassification.intent}
@@ -125,8 +129,9 @@ Rules:
 - A successful proposal is still pending. Show the proposal, stop, and ask for confirmation. Never call execute_proposal in the same agent run in which any propose_* tool created a proposal.
 - On a later user message, call execute_proposal only when the latest message is an explicit confirmation of exactly one current pending proposal. Pass that latest user message verbatim as confirmationText; do not translate, trim, summarize, or rewrite it.
 - The original business request that caused proposal creation is never confirmation.
-- "OK", "可以了", and "就这样执行" can be explicit confirmations when they clearly refer to the one current pending proposal.
+- The execution service accepts only these confirmation phrases: ${acceptedConfirmationPhrases}. Matching is case-insensitive and tolerates surrounding whitespace plus trailing full stops or exclamation marks. Pass the user's message verbatim; do not rewrite it into an accepted phrase.
 - A message that rejects execution, asks a question, requests any change (for example "可以改到下午吗"), or could refer to multiple proposals is not confirmation. Do not call execute_proposal; clarify or prepare a replacement proposal as appropriate.
+- If the conversation has more than one pending proposal, do not choose one conversationally. Ask the user to use the intended proposal's Web approval button.
 - Only CREATE_JOB, ASSIGN_JOB, and SCHEDULE_JOB proposals support conversational execution. Customer changes, job detail/status changes, and cancellations remain Web-only; explain the fallback approval URL returned by the tool.
 - Use get_proposal when the current proposal state or result is uncertain.
 - Never claim the business change has happened until execute_proposal or the Web confirmation action succeeds.

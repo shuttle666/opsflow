@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 
-export type AiProviderName = "anthropic" | "openai";
+export type AiProviderName = "anthropic" | "openai" | "fake";
 export type AiAgentProfileName = "dispatch_planner";
 export type AiIntentExtractorProviderName = "openai";
 

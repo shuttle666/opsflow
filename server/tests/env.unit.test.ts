@@ -37,6 +37,7 @@ describe("env parsing", () => {
     ).toEqual(
       expect.objectContaining({
         AI_DISPATCH_PLANNER_PROVIDER: "anthropic",
+        ALLOW_FAKE_AI_PROVIDER: false,
         AI_DISPATCH_PLANNER_MODEL: "claude-sonnet-4-20250514",
         AI_DISPATCH_PLANNER_MAX_TOKENS: 4096,
         AI_DISPATCH_PLANNER_MAX_ITERATIONS: 10,
@@ -96,5 +97,75 @@ describe("env parsing", () => {
         AI_DISPATCH_PLANNER_MAX_ITERATIONS: "0",
       }),
     ).toThrow("Invalid environment variables");
+  });
+
+  it("requires an explicit opt-in for the fake AI provider", () => {
+    expect(() =>
+      parseEnv({
+        NODE_ENV: "test",
+        PORT: "4000",
+        CLIENT_URL: "http://localhost:3000",
+        DATABASE_URL: "postgresql://opsflow:opsflow@localhost:5432/opsflow",
+        JWT_ACCESS_SECRET: "dev-access-secret-change-me",
+        AI_DISPATCH_PLANNER_PROVIDER: "fake",
+      }),
+    ).toThrow(
+      "ALLOW_FAKE_AI_PROVIDER=true is required to use the fake AI provider.",
+    );
+  });
+
+  it("allows the opted-in fake AI provider outside production without an API key", () => {
+    expect(
+      parseEnv({
+        NODE_ENV: "test",
+        PORT: "4000",
+        CLIENT_URL: "http://localhost:3000",
+        DATABASE_URL: "postgresql://opsflow:opsflow@localhost:5432/opsflow",
+        JWT_ACCESS_SECRET: "dev-access-secret-change-me",
+        AI_DISPATCH_PLANNER_PROVIDER: "fake",
+        ALLOW_FAKE_AI_PROVIDER: "true",
+        AI_DISPATCH_PLANNER_MODEL: "opsflow-scripted-e2e-v1",
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        NODE_ENV: "test",
+        AI_DISPATCH_PLANNER_PROVIDER: "fake",
+        ALLOW_FAKE_AI_PROVIDER: true,
+        AI_DISPATCH_PLANNER_MODEL: "opsflow-scripted-e2e-v1",
+        ANTHROPIC_API_KEY: "",
+        OPENAI_API_KEY: "",
+      }),
+    );
+  });
+
+  it("always rejects the fake AI provider in production", () => {
+    expect(() =>
+      parseEnv({
+        NODE_ENV: "production",
+        PORT: "4000",
+        CLIENT_URL: "https://app.example.com",
+        DATABASE_URL: "postgresql://opsflow:opsflow@localhost:5432/opsflow",
+        JWT_ACCESS_SECRET: "production-access-secret",
+        AI_DISPATCH_PLANNER_PROVIDER: "fake",
+        ALLOW_FAKE_AI_PROVIDER: "true",
+      }),
+    ).toThrow("Fake AI provider cannot be enabled in production.");
+  });
+
+  it("rejects a network-backed intent extractor alongside the fake provider", () => {
+    expect(() =>
+      parseEnv({
+        NODE_ENV: "test",
+        PORT: "4000",
+        CLIENT_URL: "http://localhost:3000",
+        DATABASE_URL: "postgresql://opsflow:opsflow@localhost:5432/opsflow",
+        JWT_ACCESS_SECRET: "dev-access-secret-change-me",
+        AI_DISPATCH_PLANNER_PROVIDER: "fake",
+        ALLOW_FAKE_AI_PROVIDER: "true",
+        AI_INTENT_EXTRACTOR_ENABLED: "true",
+      }),
+    ).toThrow(
+      "AI_INTENT_EXTRACTOR_ENABLED must be false when using the fake AI provider.",
+    );
   });
 });

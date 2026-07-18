@@ -45,7 +45,10 @@ const envSchema = z.object({
   EVIDENCE_MAX_SIZE_BYTES: z.coerce.number().int().positive().default(10 * 1024 * 1024),
   ANTHROPIC_API_KEY: z.string().default(""),
   OPENAI_API_KEY: z.string().default(""),
-  AI_DISPATCH_PLANNER_PROVIDER: z.enum(["anthropic", "openai"]).default("anthropic"),
+  ALLOW_FAKE_AI_PROVIDER: booleanEnvSchema.default(false),
+  AI_DISPATCH_PLANNER_PROVIDER: z
+    .enum(["anthropic", "openai", "fake"])
+    .default("anthropic"),
   AI_DISPATCH_PLANNER_MODEL: z
     .string()
     .trim()
@@ -103,6 +106,24 @@ export function parseEnv(source: NodeJS.ProcessEnv) {
     throw new Error(
       "JWT_ACCESS_SECRET must be explicitly configured in production.",
     );
+  }
+
+  if (env.AI_DISPATCH_PLANNER_PROVIDER === "fake") {
+    if (env.NODE_ENV === "production") {
+      throw new Error("Fake AI provider cannot be enabled in production.");
+    }
+
+    if (!env.ALLOW_FAKE_AI_PROVIDER) {
+      throw new Error(
+        "ALLOW_FAKE_AI_PROVIDER=true is required to use the fake AI provider.",
+      );
+    }
+
+    if (env.AI_INTENT_EXTRACTOR_ENABLED) {
+      throw new Error(
+        "AI_INTENT_EXTRACTOR_ENABLED must be false when using the fake AI provider.",
+      );
+    }
   }
 
   return env;

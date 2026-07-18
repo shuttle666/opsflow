@@ -1,6 +1,7 @@
 import { env } from "../../config/env";
 import { ApiError } from "../../utils/api-error";
 import { createAnthropicProvider } from "./providers/anthropic-provider";
+import { createFakeAiProvider } from "./providers/fake-provider";
 import type {
   AiAgentProfile,
   AiAgentProfileName,
@@ -40,6 +41,9 @@ export function createAiProvider(providerName: AiProviderName): AiProvider {
   switch (providerName) {
     case "anthropic":
       return createAnthropicProvider();
+    case "fake":
+      assertFakeProviderAllowed();
+      return createFakeAiProvider();
     case "openai":
       throw new ApiError(
         503,
@@ -57,10 +61,19 @@ export function assertAiAgentProfileConfigured(name: AiAgentProfileName): void {
         throw new ApiError(503, "AI agent is not configured.");
       }
       return;
+    case "fake":
+      assertFakeProviderAllowed();
+      return;
     case "openai":
       throw new ApiError(
         503,
         "OpenAI provider is reserved but not implemented yet.",
       );
+  }
+}
+
+function assertFakeProviderAllowed(): void {
+  if (env.NODE_ENV === "production" || !env.ALLOW_FAKE_AI_PROVIDER) {
+    throw new ApiError(503, "Fake AI provider is not enabled.");
   }
 }

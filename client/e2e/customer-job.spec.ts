@@ -29,7 +29,7 @@ test("owner can create a customer and a job for that customer", async ({
 
   await page.getByRole("link", { name: "Create job" }).click();
   await expect(page.getByRole("heading", { name: "Create Job" })).toBeVisible();
-  await expect(page.getByLabel("Customer")).toHaveValue(/.+/);
+  await expect(page.getByLabel("Customer", { exact: true })).toHaveValue(/.+/);
   await page.getByPlaceholder("Leaking kitchen tap").fill(jobTitle);
   await page.getByPlaceholder("18 Collins Street, Melbourne VIC 3000").fill(serviceAddress);
   await page

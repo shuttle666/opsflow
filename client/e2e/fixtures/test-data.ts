@@ -1,7 +1,7 @@
 import type { TestInfo } from "@playwright/test";
 
 export function uniqueTestValue(label: string, testInfo: TestInfo) {
-  const suffix = `${testInfo.workerIndex}-${Date.now().toString(36)}`;
+  const suffix = `${testInfo.workerIndex}-${testInfo.retry}-${Date.now().toString(36)}`;
   return `E2E ${label} ${suffix}`;
 }
 

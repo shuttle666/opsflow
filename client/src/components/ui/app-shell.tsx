@@ -19,6 +19,7 @@ import {
   Menu,
   Monitor,
   Moon,
+  Palette,
   Search,
   Sparkles,
   Sun,
@@ -259,7 +260,7 @@ export function ThemeToggle() {
         aria-label={`Theme: ${modeLabel}, ${schemeLabel}`}
         title={`Theme: ${modeLabel}, ${schemeLabel}`}
       >
-        {themeModeIcon(mode)}
+        <Palette className="h-5 w-5" />
       </button>
 
       {isOpen ? (

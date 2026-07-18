@@ -177,22 +177,22 @@ button {
 }
 
 :root[data-theme="dark"] .landing-hero-video {
-  opacity: 0.72;
-  filter: saturate(0.88) brightness(0.68);
+  opacity: 0.88;
+  filter: saturate(0.94) brightness(0.86) contrast(0.98);
 }
 
 :root[data-theme="dark"] .landing-hero-scrim {
   background:
     linear-gradient(
       90deg,
-      rgba(9, 9, 11, 0.82),
-      rgba(9, 9, 11, 0.64) 46%,
-      rgba(9, 9, 11, 0.48)
+      rgba(9, 9, 11, 0.58),
+      rgba(9, 9, 11, 0.38) 46%,
+      rgba(9, 9, 11, 0.24)
     ),
     linear-gradient(
       180deg,
-      rgba(9, 9, 11, 0.12),
-      rgba(9, 9, 11, 0.2) 62%,
+      rgba(9, 9, 11, 0.06),
+      rgba(9, 9, 11, 0.12) 62%,
       var(--color-app) 100%
     );
 }

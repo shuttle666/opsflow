@@ -1,4 +1,4 @@
-import { AuditAction, JobStatus, type Prisma } from "@prisma/client";
+import { AuditAction, JobStatus, MembershipRole, type Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import type { AuthContext, RequestMetadata } from "../../types/auth";
 import { ApiError } from "../../utils/api-error";
@@ -230,7 +230,13 @@ export async function getCustomerDetail(
   auth: AuthContext,
   customerId: string,
 ): Promise<CustomerDetail> {
-  const [customer, openJobCount] = await prisma.$transaction([
+  const visibleJobWhere = {
+    tenantId: auth.tenantId,
+    customerId,
+    ...(auth.role === MembershipRole.STAFF ? { assignedToId: auth.userId } : {}),
+  } satisfies Prisma.JobWhereInput;
+
+  const [customer, totalJobCount, openJobCount] = await prisma.$transaction([
     prisma.customer.findFirst({
       where: {
         id: customerId,
@@ -252,12 +258,8 @@ export async function getCustomerDetail(
             email: true,
           },
         },
-        _count: {
-          select: {
-            jobs: true,
-          },
-        },
         jobs: {
+          where: visibleJobWhere,
           take: 5,
           orderBy: {
             createdAt: "desc",
@@ -279,9 +281,11 @@ export async function getCustomerDetail(
       },
     }),
     prisma.job.count({
+      where: visibleJobWhere,
+    }),
+    prisma.job.count({
       where: {
-        tenantId: auth.tenantId,
-        customerId,
+        ...visibleJobWhere,
         status: {
           in: openJobStatuses,
         },
@@ -304,7 +308,7 @@ export async function getCustomerDetail(
     updatedAt: customer.updatedAt,
     createdBy: customer.createdBy,
     jobStats: {
-      total: customer._count.jobs,
+      total: totalJobCount,
       open: openJobCount,
     },
     jobs: customer.jobs.map((job) => ({

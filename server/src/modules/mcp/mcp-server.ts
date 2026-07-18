@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { MembershipRole } from "@prisma/client";
+import { z } from "zod";
 import type { AuthContext } from "../../types/auth";
 import {
   appendExternalProposalExecutionMessage,
@@ -8,6 +10,7 @@ import {
 } from "../agent/agent.service";
 import {
   opsFlowToolRegistry,
+  type AnyOpsFlowTool,
   type OpsFlowToolRegistry,
   type ToolErrorResult,
 } from "../operations-tools";
@@ -116,6 +119,48 @@ async function defaultPersistProposalExecutionMessage(
   });
 }
 
+function listAllExternalMcpTools(
+  registry: OpsFlowToolRegistry,
+  auth: AuthContext,
+): AnyOpsFlowTool[] {
+  const toolsByName = new Map<string, AnyOpsFlowTool>();
+
+  for (const role of Object.values(MembershipRole)) {
+    for (const tool of registry.list({
+      auth: { ...auth, role },
+      audience: "external-mcp",
+    })) {
+      toolsByName.set(tool.name, tool);
+    }
+  }
+
+  return Array.from(toolsByName.values());
+}
+
+function toMcpToolDefinition(tool: AnyOpsFlowTool) {
+  const inputSchema = z.toJSONSchema(tool.inputSchema, {
+    target: "draft-07",
+  });
+
+  if (inputSchema.type !== "object") {
+    throw new Error(`Tool input schema must be an object: ${tool.name}`);
+  }
+
+  return {
+    name: tool.name,
+    title: tool.title,
+    description: tool.description,
+    inputSchema: inputSchema as { type: "object"; [key: string]: unknown },
+    annotations: {
+      title: tool.title,
+      readOnlyHint: tool.annotations.readOnly,
+      destructiveHint: tool.annotations.destructive,
+      idempotentHint: tool.annotations.idempotent,
+      openWorldHint: tool.annotations.openWorld,
+    },
+  };
+}
+
 export function createOpsFlowMcpServer(
   options: CreateOpsFlowMcpServerOptions,
 ): McpServer {
@@ -125,10 +170,7 @@ export function createOpsFlowMcpServer(
   const persistProposalExecutionMessage =
     options.persistProposalExecutionMessage ??
     defaultPersistProposalExecutionMessage;
-  const tools = registry.list({
-    auth: options.auth,
-    audience: "external-mcp",
-  });
+  const tools = listAllExternalMcpTools(registry, options.auth);
   const server = new McpServer({
     name: "opsflow-local",
     version: "1.0.0",
@@ -136,7 +178,6 @@ export function createOpsFlowMcpServer(
 
   if (tools.length === 0) {
     server.server.registerCapabilities({ tools: {} });
-    server.server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [] }));
   }
 
   for (const tool of tools) {
@@ -158,8 +199,14 @@ export function createOpsFlowMcpServer(
         const currentAuth = options.resolveAuth
           ? await options.resolveAuth()
           : options.auth;
+        const remainsAccessible = registry
+          .list({
+            auth: currentAuth,
+            audience: "external-mcp",
+          })
+          .some((candidate) => candidate.name === tool.name);
         const conversationId =
-          tool.conversationContext === "required"
+          remainsAccessible && tool.conversationContext === "required"
             ? await options.getConversationId()
             : undefined;
         const result = await registry.execute({
@@ -221,6 +268,22 @@ export function createOpsFlowMcpServer(
       },
     );
   }
+
+  // The SDK's default list handler reflects the tools registered when the
+  // connection was created. Replace it with a live, tenant-aware view so a
+  // role or membership change is visible without reconnecting. Execution is
+  // still independently revalidated in each registered tool callback.
+  server.server.setRequestHandler(ListToolsRequestSchema, async () => {
+    const currentAuth = options.resolveAuth
+      ? await options.resolveAuth()
+      : options.auth;
+
+    return {
+      tools: registry
+        .list({ auth: currentAuth, audience: "external-mcp" })
+        .map(toMcpToolDefinition),
+    };
+  });
 
   return server;
 }

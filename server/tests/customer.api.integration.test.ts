@@ -264,6 +264,137 @@ describeIfDb("customer api integration", () => {
     expect(restoreRes.status).toBe(403);
   });
 
+  it("limits staff customer job details and stats to their own assignments", async () => {
+    const owner = await seedTenantUser({
+      email: "owner@customer-detail-rbac.test",
+      displayName: "Customer Detail Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Customer Detail RBAC Tenant",
+      tenantSlug: "customer-detail-rbac-tenant",
+    });
+
+    const passwordHash = await hashPassword("password123");
+    const [staffUser, otherStaffUser] = await Promise.all([
+      prisma.user.create({
+        data: {
+          email: "staff@customer-detail-rbac.test",
+          passwordHash,
+          displayName: "Assigned Staff",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "other-staff@customer-detail-rbac.test",
+          passwordHash,
+          displayName: "Other Staff",
+        },
+      }),
+    ]);
+    await prisma.membership.createMany({
+      data: [
+        {
+          userId: staffUser.id,
+          tenantId: owner.tenant.id,
+          role: MembershipRole.STAFF,
+          status: MembershipStatus.ACTIVE,
+        },
+        {
+          userId: otherStaffUser.id,
+          tenantId: owner.tenant.id,
+          role: MembershipRole.STAFF,
+          status: MembershipStatus.ACTIVE,
+        },
+      ],
+    });
+    const staffSession = await login({
+      email: staffUser.email,
+      password: "password123",
+      tenantId: owner.tenant.id,
+    });
+
+    const customer = await prisma.customer.create({
+      data: {
+        tenantId: owner.tenant.id,
+        createdById: owner.user.id,
+        name: "Shared Customer",
+        phone: "0412 000 099",
+        email: "shared-customer@example.com",
+      },
+    });
+    const jobs = await Promise.all([
+      prisma.job.create({
+        data: {
+          tenantId: owner.tenant.id,
+          customerId: customer.id,
+          title: "Assigned open job",
+          serviceAddress: "1 Assigned Street, Adelaide SA 5000",
+          status: JobStatus.NEW,
+          assignedToId: staffUser.id,
+          createdById: owner.user.id,
+        },
+      }),
+      prisma.job.create({
+        data: {
+          tenantId: owner.tenant.id,
+          customerId: customer.id,
+          title: "Assigned completed job",
+          serviceAddress: "2 Assigned Street, Adelaide SA 5000",
+          status: JobStatus.COMPLETED,
+          assignedToId: staffUser.id,
+          createdById: owner.user.id,
+        },
+      }),
+      prisma.job.create({
+        data: {
+          tenantId: owner.tenant.id,
+          customerId: customer.id,
+          title: "Other staff job",
+          serviceAddress: "3 Hidden Street, Adelaide SA 5000",
+          status: JobStatus.IN_PROGRESS,
+          assignedToId: otherStaffUser.id,
+          createdById: owner.user.id,
+        },
+      }),
+      prisma.job.create({
+        data: {
+          tenantId: owner.tenant.id,
+          customerId: customer.id,
+          title: "Unassigned job",
+          serviceAddress: "4 Hidden Street, Adelaide SA 5000",
+          status: JobStatus.SCHEDULED,
+          createdById: owner.user.id,
+        },
+      }),
+    ]);
+
+    const staffDetail = await request(app)
+      .get(`/api/customers/${customer.id}`)
+      .set("Authorization", `Bearer ${staffSession.accessToken}`);
+
+    expect(staffDetail.status).toBe(200);
+    expect(staffDetail.body.data).toMatchObject({
+      phone: "0412 000 099",
+      email: "shared-customer@example.com",
+      jobStats: { total: 2, open: 1 },
+    });
+    expect(staffDetail.body.data.jobs.map((job: { id: string }) => job.id).sort()).toEqual(
+      jobs
+        .slice(0, 2)
+        .map((job) => job.id)
+        .sort(),
+    );
+
+    const ownerDetail = await request(app)
+      .get(`/api/customers/${customer.id}`)
+      .set("Authorization", `Bearer ${owner.accessToken}`);
+
+    expect(ownerDetail.status).toBe(200);
+    expect(ownerDetail.body.data.jobStats).toEqual({ total: 4, open: 3 });
+    expect(ownerDetail.body.data.jobs.map((job: { id: string }) => job.id).sort()).toEqual(
+      jobs.map((job) => job.id).sort(),
+    );
+  });
+
   it("archives, filters, restores, and blocks customers with open jobs", async () => {
     const { tenant, user, accessToken } = await seedTenantUser({
       email: "owner@customer-archive-api.test",

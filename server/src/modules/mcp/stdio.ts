@@ -1,7 +1,17 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { resolveAuthContextFromAccessToken } from "../auth/auth-context";
+import {
+  resolveAuthContextFromAccessToken,
+  revalidateTenantAuthContext,
+} from "../auth/auth-context";
 import { createConversation } from "../agent/agent.service";
 import { createOpsFlowMcpServer } from "./mcp-server";
+
+export async function resolveMcpAuthContextFromAccessToken(
+  accessToken: string,
+) {
+  const auth = await resolveAuthContextFromAccessToken(accessToken);
+  return revalidateTenantAuthContext(auth);
+}
 
 export async function startStdioMcpServer() {
   const accessToken = process.env.OPSFLOW_ACCESS_TOKEN?.trim();
@@ -9,7 +19,8 @@ export async function startStdioMcpServer() {
     throw new Error("OPSFLOW_ACCESS_TOKEN is required to start the MCP server.");
   }
 
-  const auth = await resolveAuthContextFromAccessToken(accessToken);
+  const resolveAuth = () => resolveMcpAuthContextFromAccessToken(accessToken);
+  const auth = await resolveAuth();
   let conversationIdPromise: Promise<string> | undefined;
   const getConversationId = () => {
     conversationIdPromise ??= createConversation(auth).then(
@@ -20,7 +31,7 @@ export async function startStdioMcpServer() {
 
   const server = createOpsFlowMcpServer({
     auth,
-    resolveAuth: () => resolveAuthContextFromAccessToken(accessToken),
+    resolveAuth,
     getConversationId,
   });
   await server.connect(new StdioServerTransport());

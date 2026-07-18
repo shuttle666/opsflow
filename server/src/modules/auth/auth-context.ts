@@ -1,8 +1,52 @@
 import type { JwtPayload } from "jsonwebtoken";
+import { MembershipStatus, TenantStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import type { AuthContext } from "../../types/auth";
 import { AuthError } from "./auth-errors";
 import { verifyAccessToken } from "./auth-tokens";
+
+export async function revalidateTenantAuthContext(
+  auth: AuthContext,
+): Promise<AuthContext> {
+  const membership = await prisma.membership.findUnique({
+    where: {
+      userId_tenantId: {
+        userId: auth.userId,
+        tenantId: auth.tenantId,
+      },
+    },
+    select: {
+      role: true,
+      status: true,
+      tenant: {
+        select: {
+          status: true,
+          deletedAt: true,
+        },
+      },
+    },
+  });
+
+  if (!membership || membership.status !== MembershipStatus.ACTIVE) {
+    throw new AuthError(
+      "MEMBERSHIP_INACTIVE",
+      "Membership is not active for this tenant.",
+      403,
+    );
+  }
+
+  if (
+    membership.tenant.status !== TenantStatus.ACTIVE ||
+    membership.tenant.deletedAt
+  ) {
+    throw new AuthError("TENANT_INACTIVE", "Tenant is inactive.", 403);
+  }
+
+  return {
+    ...auth,
+    role: membership.role,
+  };
+}
 
 export async function resolveAuthContextFromAccessToken(
   token: string,

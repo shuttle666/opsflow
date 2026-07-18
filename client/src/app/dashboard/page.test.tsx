@@ -1,4 +1,4 @@
-import { render, screen } from "@/test/render";
+import { act, fireEvent, render, screen } from "@/test/render";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import DashboardPage from "@/app/dashboard/page";
@@ -119,7 +119,8 @@ describe("dashboard page", () => {
   });
 
   it("loads backend dashboard summary metrics and schedule preview", async () => {
-    vi.mocked(getDashboardSummaryRequest).mockResolvedValue(summaryFixture());
+    const summary = summaryFixture();
+    vi.mocked(getDashboardSummaryRequest).mockResolvedValue(summary);
 
     render(<DashboardPage />);
 
@@ -130,6 +131,10 @@ describe("dashboard page", () => {
     expect(screen.getByText("3 / 4")).toBeInTheDocument();
     expect(screen.getByText("Needs review")).toBeInTheDocument();
     expect(screen.getByText("Unassigned roof leak")).toBeInTheDocument();
+    expect(screen.getByText(/Last updated/)).toHaveAttribute(
+      "datetime",
+      summary.generatedAt,
+    );
     expect(screen.queryByText("Recent Activity")).not.toBeInTheDocument();
     expect(getDashboardSummaryRequest).toHaveBeenCalledWith(
       "access-token",
@@ -138,6 +143,20 @@ describe("dashboard page", () => {
         timezoneOffsetMinutes: expect.any(Number),
       }),
     );
+  });
+
+  it("does not present loading as a real zero-value dashboard", () => {
+    vi.mocked(getDashboardSummaryRequest).mockReturnValue(
+      new Promise<DashboardSummary>(() => undefined),
+    );
+
+    render(<DashboardPage />);
+
+    expect(screen.getByText("Loading today's board...")).toBeInTheDocument();
+    expect(
+      screen.queryByText("You have 0 jobs scheduled today"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("All clear")).not.toBeInTheDocument();
   });
 
   it("renders all-clear when the backend summary has no attention items", async () => {
@@ -181,12 +200,58 @@ describe("dashboard page", () => {
     expect(await screen.findByText("Plan with AI")).toBeInTheDocument();
   });
 
-  it("falls back to an empty dashboard when the summary request fails", async () => {
-    vi.mocked(getDashboardSummaryRequest).mockRejectedValue(new Error("API failed"));
+  it("shows an explicit error without substituting zero metrics and can retry", async () => {
+    vi.mocked(getDashboardSummaryRequest)
+      .mockRejectedValueOnce(new Error("API failed"))
+      .mockResolvedValueOnce(summaryFixture());
 
     render(<DashboardPage />);
 
-    expect(await screen.findByText("All clear")).toBeInTheDocument();
-    expect(screen.getByText("You have 0 jobs scheduled today")).toBeInTheDocument();
+    expect(await screen.findByText("Dashboard unavailable")).toBeInTheDocument();
+    expect(
+      screen.getByText(/No metrics have been substituted/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("All clear")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("You have 0 jobs scheduled today"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(
+      await screen.findByText("You have 6 jobs scheduled today"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Dashboard unavailable")).not.toBeInTheDocument();
+    expect(getDashboardSummaryRequest).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the last successful dashboard visible when a refresh fails", async () => {
+    vi.mocked(getDashboardSummaryRequest)
+      .mockResolvedValueOnce(summaryFixture())
+      .mockRejectedValueOnce(new Error("API failed"));
+
+    const { queryClient } = render(<DashboardPage />);
+
+    expect(
+      await screen.findByText("You have 6 jobs scheduled today"),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: ["opsflow"] });
+    });
+
+    expect(
+      await screen.findByText("Dashboard couldn't refresh"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Showing the last successful data from/),
+    ).toBeInTheDocument();
+    expect(screen.getByText("You have 6 jobs scheduled today")).toBeInTheDocument();
+    expect(screen.getAllByText("Boiler inspection")).not.toHaveLength(0);
+    expect(screen.getByText("Needs review")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(
+      screen.queryByText("You have 0 jobs scheduled today"),
+    ).not.toBeInTheDocument();
   });
 });

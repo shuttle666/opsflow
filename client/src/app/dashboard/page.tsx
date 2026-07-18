@@ -25,8 +25,8 @@ import {
 } from "@/components/ui/styles";
 import { useDashboardSummaryQuery } from "@/features/dashboard/dashboard-queries";
 import { formatTimeRange } from "@/features/job";
+import { getApiErrorView } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
-import type { DashboardSummary } from "@/types/dashboard";
 
 function initialsFor(name: string) {
   return name
@@ -44,30 +44,6 @@ function localDateString(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function emptyDashboardSummary(date = localDateString(new Date())): DashboardSummary {
-  const now = new Date().toISOString();
-
-  return {
-    date,
-    rangeStart: now,
-    rangeEnd: now,
-    generatedAt: now,
-    metrics: {
-      todayJobs: 0,
-      scheduledRows: 0,
-      assignedJobs: 0,
-      pendingReview: 0,
-      unassignedJobs: 0,
-      activeCrewScheduled: 0,
-      activeCrewTotal: 0,
-      needsAttention: 0,
-      conflictCount: 0,
-    },
-    schedulePreview: [],
-    attentionItems: [],
-  };
-}
-
 function todaySummaryQuery() {
   const now = new Date();
 
@@ -75,6 +51,19 @@ function todaySummaryQuery() {
     date: localDateString(now),
     timezoneOffsetMinutes: now.getTimezoneOffset(),
   };
+}
+
+function formatLastUpdated(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "recently";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
 }
 
 export default function DashboardPage() {
@@ -91,13 +80,23 @@ export default function DashboardPage() {
   });
   const summaryQueryInput = useMemo(() => todaySummaryQuery(), []);
   const summaryQuery = useDashboardSummaryQuery(summaryQueryInput);
-  const summary = summaryQuery.data ?? emptyDashboardSummary(summaryQueryInput.date);
-  const isSummaryLoading = summaryQuery.isPending;
+  const summary = summaryQuery.data;
+  const isSummaryLoading = !summary && summaryQuery.isPending;
+  const summaryError = summaryQuery.error
+    ? getApiErrorView(
+        summaryQuery.error,
+        "We couldn't load today's dashboard data.",
+      )
+    : null;
   const allowPlanner = currentTenant?.role === "OWNER" || currentTenant?.role === "MANAGER";
 
   const scheduleItems = useMemo<ScheduleItem[]>(
-    () =>
-      summary.schedulePreview.map((item) => ({
+    () => {
+      if (!summary) {
+        return [];
+      }
+
+      return summary.schedulePreview.map((item) => ({
         id: item.id,
         customerName: item.customerName,
         customerInitials: item.customerInitials || initialsFor(item.customerName),
@@ -106,9 +105,14 @@ export default function DashboardPage() {
         status: item.status,
         time: formatTimeRange(item.scheduledStartAt, item.scheduledEndAt),
         assignee: item.assignee,
-      })),
-    [summary.schedulePreview],
+      }));
+    },
+    [summary],
   );
+
+  const retrySummary = () => {
+    void summaryQuery.refetch();
+  };
 
   return (
     <AppShell
@@ -116,6 +120,67 @@ export default function DashboardPage() {
       description="Daily dispatch context, schedule movement, and AI-assisted planning."
     >
       <AuthGuard>
+        {!summary && summaryQuery.isError ? (
+          <section
+            role="alert"
+            className={`${surfaceClassName} border-[var(--color-danger)] bg-[var(--color-danger-soft)] px-6 py-8 sm:px-8`}
+          >
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--color-danger)]">
+              Live data unavailable
+            </p>
+            <h2 className="mt-2 text-xl font-bold text-[var(--color-text)]">
+              Dashboard unavailable
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--color-text-secondary)]">
+              {summaryError?.message ?? "We couldn't load today's dashboard data."}
+              <span className="mt-1 block">No metrics have been substituted.</span>
+            </p>
+            {summaryError?.requestId ? (
+              <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+                Request ID: <span className="font-mono">{summaryError.requestId}</span>
+              </p>
+            ) : null}
+            <button
+              type="button"
+              className={`${secondaryButtonClassName} mt-5`}
+              onClick={retrySummary}
+              disabled={summaryQuery.isFetching}
+            >
+              {summaryQuery.isFetching ? "Retrying..." : "Try again"}
+            </button>
+          </section>
+        ) : (
+          <>
+            {summary && summaryQuery.isError ? (
+              <section
+                role="alert"
+                className="flex flex-col gap-3 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-danger-soft)] px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <p className="font-semibold text-[var(--color-danger)]">
+                    Dashboard couldn&apos;t refresh
+                  </p>
+                  <p className="mt-1 text-[var(--color-text-secondary)]">
+                    Showing the last successful data from{" "}
+                    {formatLastUpdated(summary.generatedAt)}.
+                  </p>
+                  {summaryError?.requestId ? (
+                    <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                      Request ID: <span className="font-mono">{summaryError.requestId}</span>
+                    </p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  className={secondaryButtonClassName}
+                  onClick={retrySummary}
+                  disabled={summaryQuery.isFetching}
+                >
+                  {summaryQuery.isFetching ? "Retrying..." : "Retry"}
+                </button>
+              </section>
+            ) : null}
+
         <section className="relative overflow-hidden rounded-lg bg-[image:var(--gradient-brand)] px-7 py-6 text-white shadow-[0_18px_44px_-28px_var(--color-brand-glow)] sm:px-8">
           <div className="pointer-events-none absolute -right-7 -top-8 h-[128px] w-[128px] rounded-full bg-white/10" />
           <div className="pointer-events-none absolute -bottom-12 right-24 h-[92px] w-[92px] rounded-full bg-white/10 opacity-60" />
@@ -125,42 +190,62 @@ export default function DashboardPage() {
               {greeting}{user?.displayName ? `, ${user.displayName.split(" ")[0]}` : ""}
             </p>
             <h2 className="mt-1 text-[22px] font-extrabold leading-tight text-white sm:text-2xl">
-              You have {summary.metrics.todayJobs} {summary.metrics.todayJobs === 1 ? "job" : "jobs"} scheduled today
+              {summary
+                ? `You have ${summary.metrics.todayJobs} ${summary.metrics.todayJobs === 1 ? "job" : "jobs"} scheduled today`
+                : "Loading today's board..."}
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-white/75">
-              {summary.metrics.assignedJobs} assigned · {summary.metrics.pendingReview} pending review · {summary.metrics.unassignedJobs === 0 ? "All crew on track" : `${summary.metrics.unassignedJobs} unassigned`}
+              {summary
+                ? `${summary.metrics.assignedJobs} assigned · ${summary.metrics.pendingReview} pending review · ${summary.metrics.unassignedJobs === 0 ? "All crew on track" : `${summary.metrics.unassignedJobs} unassigned`}`
+                : "Fetching live dispatch, review, and crew status."}
             </p>
+            {summary ? (
+              <p className="mt-3 text-xs font-medium text-white/70">
+                <time dateTime={summary.generatedAt}>
+                  Last updated {formatLastUpdated(summary.generatedAt)}
+                </time>
+                {summaryQuery.isFetching ? " · Refreshing..." : null}
+              </p>
+            ) : null}
           </div>
         </section>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Today Jobs"
-            value={String(summary.metrics.todayJobs)}
+            value={summary ? String(summary.metrics.todayJobs) : "—"}
             icon={<Briefcase className="h-[18px] w-[18px]" />}
             tone="brand"
-            meta="Visible on board"
+            meta={summary ? "Visible on board" : "Loading live data"}
           />
           <StatCard
             label="Scheduled Rows"
-            value={String(summary.metrics.scheduledRows)}
+            value={summary ? String(summary.metrics.scheduledRows) : "—"}
             icon={<Calendar className="h-[18px] w-[18px]" />}
             tone="indigo"
-            meta="Loaded for today"
+            meta={summary ? "Loaded for today" : "Loading live data"}
           />
           <StatCard
             label="Pending Review"
-            value={String(summary.metrics.pendingReview)}
+            value={summary ? String(summary.metrics.pendingReview) : "—"}
             icon={<CheckCircle2 className="h-[18px] w-[18px]" />}
             tone="warning"
-            meta="Needs manager action"
+            meta={summary ? "Needs manager action" : "Loading live data"}
           />
           <StatCard
             label="Active Crew"
-            value={`${summary.metrics.activeCrewScheduled} / ${summary.metrics.activeCrewTotal}`}
+            value={
+              summary
+                ? `${summary.metrics.activeCrewScheduled} / ${summary.metrics.activeCrewTotal}`
+                : "—"
+            }
             icon={<Users className="h-[18px] w-[18px]" />}
             tone="success"
-            meta={`${summary.metrics.unassignedJobs} unassigned`}
+            meta={
+              summary
+                ? `${summary.metrics.unassignedJobs} unassigned`
+                : "Loading live data"
+            }
           />
         </section>
 
@@ -176,13 +261,13 @@ export default function DashboardPage() {
                     "border-[var(--color-app-border)] bg-[var(--color-warning-soft)] text-[var(--color-warning)]",
                   )}
                 >
-                  {summary.metrics.needsAttention}
+                  {summary?.metrics.needsAttention ?? "—"}
                 </span>
               </div>
             </div>
 
             <div className="space-y-1 p-2">
-              {isSummaryLoading ? (
+              {isSummaryLoading || !summary ? (
                 <p className="px-3 py-6 text-sm text-[var(--color-text-muted)]">Checking today&apos;s board...</p>
               ) : summary.attentionItems.length === 0 ? (
                 <div className="px-3 py-6 text-sm text-[var(--color-text-secondary)]">
@@ -222,6 +307,8 @@ export default function DashboardPage() {
             ) : null}
           </section>
         </div>
+          </>
+        )}
       </AuthGuard>
     </AppShell>
   );

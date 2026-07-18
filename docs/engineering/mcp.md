@@ -171,7 +171,7 @@ Successful MCP execution writes an assistant receipt and tool call into the orig
 ## Authentication
 
 - The stdio server requires an OpsFlow access token in `OPSFLOW_ACCESS_TOKEN`.
-- Startup and every tool call validate the signed token, persisted session, expiry/revocation, active user, tenant, and role.
+- Startup, every `tools/list`, and every tool call validate the signed token, persisted session, expiry/revocation, active user, tenant, and role.
 - The Registry repeats audience and role checks during execution.
 - Domain services repeat tenant/user ownership checks and return not-found/permission errors for cross-user or cross-tenant Proposal IDs.
 
@@ -283,8 +283,12 @@ The automated coverage includes:
 Useful commands:
 
 ```bash
-pnpm --dir server test mcp-server.contract.test.ts
-pnpm --dir server test agent-persistence.integration.test.ts
+pnpm --dir server exec vitest run tests/mcp-server.contract.test.ts
+DATABASE_URL='postgresql://opsflow:opsflow@localhost:5432/opsflow_test' \
+RUN_DB_TESTS=true ALLOW_DB_TEST_RESET=true \
+pnpm --dir server exec vitest run \
+  tests/mcp-tenant-revalidation.integration.test.ts \
+  tests/agent-persistence.integration.test.ts
 pnpm --dir server ai:eval:cheap
 pnpm --dir client test agent-chat.test.tsx
 ```
@@ -301,6 +305,7 @@ Database integration tests require the repository's explicit safe-test environme
 - `server/src/modules/mcp/mcp-server.ts` — MCP registration, invocation, structured errors, and conversation persistence
 - `server/src/modules/mcp/stdio.ts` — local stdio entry point and session authentication
 - `server/tests/mcp-server.contract.test.ts` — real MCP client/server contract tests using an in-memory transport
+- `server/tests/mcp-tenant-revalidation.integration.test.ts` — current role, membership, and tenant state are rechecked on an already-open MCP connection
 
 ## Current Scope
 

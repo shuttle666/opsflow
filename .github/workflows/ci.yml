@@ -153,6 +153,14 @@ jobs:
       - name: Run database integration tests
         run: pnpm test
 
+      - name: Verify Agent request correlation without a live model
+        run: pnpm exec vitest run tests/security.api.integration.test.ts
+        env:
+          ALLOW_FAKE_AI_PROVIDER: "true"
+          AI_DISPATCH_PLANNER_PROVIDER: fake
+          AI_DISPATCH_PLANNER_MODEL: opsflow-scripted-e2e-v1
+          AI_INTENT_EXTRACTOR_ENABLED: "false"
+
   playwright-e2e:
     name: playwright-e2e
     runs-on: ubuntu-latest

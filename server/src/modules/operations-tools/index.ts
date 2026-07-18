@@ -10,10 +10,15 @@ import { proposalExecutionTools } from "./definitions/proposal-execution-tools";
 import { recordToolInvocationSafe } from "./tool-invocation-audit";
 import { OpsFlowToolRegistry } from "./tool-registry";
 
+const recordsToolInvocations =
+  process.env.NODE_ENV !== "test" ||
+  (process.env.RUN_DB_TESTS === "true" &&
+    process.env.ALLOW_DB_TEST_RESET === "true");
+
 export const opsFlowToolRegistry = new OpsFlowToolRegistry({
-  ...(process.env.NODE_ENV === "test"
-    ? {}
-    : { recordInvocation: recordToolInvocationSafe }),
+  ...(recordsToolInvocations
+    ? { recordInvocation: recordToolInvocationSafe }
+    : {}),
 });
 
 [

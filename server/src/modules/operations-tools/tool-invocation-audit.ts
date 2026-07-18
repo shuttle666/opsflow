@@ -31,7 +31,9 @@ export async function recordToolInvocationSafe(
   try {
     await prisma.toolInvocation.upsert({
       where: {
-        source_invocationId: {
+        tenantId_userId_source_invocationId: {
+          tenantId: event.tenantId,
+          userId: event.userId,
           source: event.source,
           invocationId: event.invocationId,
         },

@@ -112,7 +112,7 @@ The product also includes tenant invitations, customer archiving, schedule confl
 
 | Boundary | Implementation |
 | --- | --- |
-| Tenant isolation | Requests derive tenant context from authenticated membership; business queries and relationships remain tenant-scoped |
+| Tenant isolation | Web and MCP calls revalidate current membership and tenant state; business queries and relationships remain tenant-scoped |
 | Authorization | Server routes, domain services, and AI tools enforce role-aware access for Owner, Manager, and Staff |
 | Workflow integrity | Job status transitions are constrained, recorded in history, and surfaced in the UI |
 | Client server state | TanStack Query caches are scoped by tenant, user, and role; mutations reconcile entity caches and invalidate affected workflows |
@@ -124,7 +124,7 @@ The public application is deployed to AWS with EC2, RDS, Docker Compose, Nginx, 
 
 ## Five-minute code tour
 
-- [Tenant membership revalidation](server/src/middleware/require-tenant-access.ts) — tenant and role context is re-established on protected requests.
+- [Tenant membership revalidation](server/src/modules/auth/auth-context.ts) — Web and MCP calls re-establish current tenant, membership, and role context before protected work.
 - [Job state machine](server/src/modules/job/job-status-machine.ts) — operational status changes are constrained by domain rules.
 - [Canonical Tool Registry](server/src/modules/operations-tools/tool-registry.ts) — Web and MCP tools share schemas, audience rules, role rules, execution, and invocation audit hooks.
 - [Proposal confirmation](server/src/modules/agent/agent.service.ts) — approved plans re-check key targets and execute through transactional domain services.
@@ -132,6 +132,8 @@ The public application is deployed to AWS with EC2, RDS, Docker Compose, Nginx, 
 - [Database-backed CI](.github/workflows/ci.yml) — migrations and integration tests run against a real PostgreSQL service.
 - [Role workflow E2E](client/e2e/role-workflow.spec.ts) — Owner dispatch, Staff evidence and completion submission, and Manager approval run as one browser scenario.
 - [Safe AI E2E](client/e2e/agent-proposal.spec.ts) — proposal-first writes, explicit approval, conversational confirmation safeguards, and idempotent replay are verified without a live LLM.
+- [API security integration](server/tests/security.api.integration.test.ts) — cross-tenant ID probes, stale authorization, Request ID correlation, and Proposal idempotency run through the HTTP stack.
+- [Database tenant integrity](server/tests/database-tenant-integrity.integration.test.ts) — composite foreign keys reject cross-tenant child records at the PostgreSQL boundary.
 - [OpenAPI contract](docs/engineering/openapi.yaml) — the implemented HTTP surface is documented as a machine-readable contract.
 
 ## Tech stack
@@ -181,7 +183,7 @@ pnpm --dir server test
 pnpm --dir server build
 ```
 
-Server database integration tests are intentionally separated from the default local test command and run in CI against a disposable PostgreSQL service. See [the test notes](server/tests/README.md) for the local database-test flags.
+Server database integration tests are intentionally separated from the default local test command and run in CI against a disposable PostgreSQL service. They include explicit cross-tenant attack probes, database constraint checks, MCP authorization revocation, Request ID correlation, and concurrency/idempotency coverage. See [the test notes](server/tests/README.md) for the local database-test flags.
 
 The Playwright suite runs the complete Owner → Staff → Manager operational loop and the guarded AI proposal flow in CI. It uses a deterministic, network-free Fake AI provider and dedicated application ports, so it never needs an Anthropic or OpenAI key. See [the E2E test notes](client/e2e/README.md) for safe local setup.
 

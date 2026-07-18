@@ -1,12 +1,28 @@
 import { prisma } from "../../src/lib/prisma";
+import {
+  assertSafeDatabaseResetEnvironment,
+  assertSafeTestDatabaseUrl,
+} from "./database-safety";
 
-export const runDbTests =
+const dbTestsRequested =
   process.env.RUN_DB_TESTS === "true" &&
   process.env.ALLOW_DB_TEST_RESET === "true";
+
+if (dbTestsRequested) {
+  assertSafeTestDatabaseUrl(process.env.DATABASE_URL);
+}
+
+export const runDbTests = dbTestsRequested;
 
 export const describeIfDb = runDbTests ? describe : describe.skip;
 
 export async function resetDatabase() {
+  // Keep this assertion inside the destructive helper. `runDbTests` is a
+  // module-load-time convenience for suite selection, but callers can invoke
+  // this function later after the environment has changed.
+  assertSafeDatabaseResetEnvironment(process.env);
+
+  await prisma.toolInvocation.deleteMany();
   await prisma.agentToolCall.deleteMany();
   await prisma.agentProposal.deleteMany();
   await prisma.agentMessage.deleteMany();

@@ -417,8 +417,9 @@ export const demoSeedProfiles = {
 
 export function assertSafeDevelopmentDatabaseUrl(value: string) {
   const allowOverride = process.env.ALLOW_NON_DEV_SEED === "1";
+  const e2eSeed = process.env.E2E_SEED === "1";
 
-  if (process.env.NODE_ENV === "production" && !allowOverride) {
+  if (process.env.NODE_ENV === "production" && !allowOverride && !e2eSeed) {
     throw new Error("Refusing to seed while NODE_ENV=production. Set ALLOW_NON_DEV_SEED=1 to override.");
   }
 
@@ -431,12 +432,36 @@ export function assertSafeDevelopmentDatabaseUrl(value: string) {
   }
 
   const allowedHosts = new Set(["localhost", "127.0.0.1", "postgres", "opsflow-postgres"]);
-  const databaseName = parsed.pathname.replace(/^\//, "");
+  const loopbackHosts = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+  const databaseName = decodeURIComponent(parsed.pathname.replace(/^\/+/, ""));
+  const hasHostOverride = Array.from(parsed.searchParams.keys()).some(
+    (key) => key.toLowerCase() === "host",
+  );
+  const isPostgres = ["postgres:", "postgresql:"].includes(parsed.protocol);
+
+  if (e2eSeed) {
+    const isExplicitE2eDatabase = /(?:^|[_-])e2e(?:$|[_-])/iu.test(databaseName);
+
+    if (
+      !isPostgres ||
+      !loopbackHosts.has(parsed.hostname) ||
+      !isExplicitE2eDatabase ||
+      hasHostOverride
+    ) {
+      throw new Error(
+        "Refusing E2E seed. DATABASE_URL must target a local PostgreSQL database whose name contains an e2e segment, without a host query override.",
+      );
+    }
+
+    return;
+  }
+
   const isDefaultDevDatabase =
-    parsed.protocol.startsWith("postgres") &&
+    isPostgres &&
     allowedHosts.has(parsed.hostname) &&
     parsed.username === "opsflow" &&
-    databaseName === "opsflow";
+    databaseName === "opsflow" &&
+    !hasHostOverride;
 
   if (!allowOverride && !isDefaultDevDatabase) {
     throw new Error(

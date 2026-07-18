@@ -188,6 +188,7 @@ jobs:
       PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
       PLAYWRIGHT_API_URL: http://127.0.0.1:4100/api
       NEXT_PUBLIC_API_URL: http://127.0.0.1:4100/api
+      EVIDENCE_DIR: ${{ github.workspace }}/client/test-results/evidence
 
     steps:
       - name: Checkout
@@ -222,7 +223,7 @@ jobs:
       - name: Seed disposable E2E database
         run: pnpm --dir server prisma:seed
         env:
-          ALLOW_NON_DEV_SEED: "1"
+          E2E_SEED: "1"
 
       - name: Install Chromium
         run: pnpm --dir client exec playwright install --with-deps chromium

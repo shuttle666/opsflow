@@ -8,17 +8,17 @@
   --color-app-border-strong: #d8d5ce;
   --color-text: #18181b;
   --color-text-secondary: #52525b;
-  --color-text-muted: #a1a1aa;
-  --color-brand: #7c5cfc;
-  --color-brand-strong: #6b4fe0;
+  --color-text-muted: #686870;
+  --color-brand: #6b4fe0;
+  --color-brand-strong: #5938c8;
   --color-brand-soft: rgba(124, 92, 252, 0.08);
   --color-brand-surface: #f1edff;
   --color-brand-glow: rgba(124, 92, 252, 0.25);
   --color-accent: #f59e0b;
   --color-accent-surface: #fffbeb;
-  --color-success: #16a34a;
+  --color-success: #15803d;
   --color-success-soft: #f0fdf4;
-  --color-warning: #d97706;
+  --color-warning: #b45309;
   --color-warning-soft: #fffbeb;
   --color-danger: #dc2626;
   --color-danger-soft: #fef2f2;
@@ -43,7 +43,7 @@
   --color-app-border-strong: #3f3f46;
   --color-text: #fafafa;
   --color-text-secondary: #d4d4d8;
-  --color-text-muted: #71717a;
+  --color-text-muted: #a1a1aa;
   --color-brand: #a78bfa;
   --color-brand-strong: #8b5cf6;
   --color-brand-soft: rgba(167, 139, 250, 0.13);
@@ -69,8 +69,8 @@
 }
 
 :root[data-scheme="violet"] {
-  --color-brand: #7c5cfc;
-  --color-brand-strong: #6b4fe0;
+  --color-brand: #6b4fe0;
+  --color-brand-strong: #5938c8;
   --color-brand-soft: rgba(124, 92, 252, 0.08);
   --color-brand-surface: #f1edff;
   --color-brand-glow: rgba(124, 92, 252, 0.25);
@@ -82,6 +82,8 @@
 }
 
 :root[data-theme="dark"][data-scheme="violet"] {
+  --color-brand: #a78bfa;
+  --color-brand-strong: #c4b5fd;
   --color-brand-soft: rgba(124, 92, 252, 0.16);
   --color-brand-surface: rgba(124, 92, 252, 0.16);
   --color-accent-surface: rgba(249, 115, 22, 0.13);
@@ -101,14 +103,16 @@
 }
 
 :root[data-theme="dark"][data-scheme="ocean"] {
+  --color-brand: #60a5fa;
+  --color-brand-strong: #93c5fd;
   --color-brand-soft: rgba(37, 99, 235, 0.16);
   --color-brand-surface: rgba(37, 99, 235, 0.16);
   --color-accent-surface: rgba(245, 158, 11, 0.13);
 }
 
 :root[data-scheme="ember"] {
-  --color-brand: #e04f16;
-  --color-brand-strong: #c4420f;
+  --color-brand: #b9380c;
+  --color-brand-strong: #9a2d09;
   --color-brand-soft: rgba(224, 79, 22, 0.07);
   --color-brand-surface: #fff4ed;
   --color-brand-glow: rgba(224, 79, 22, 0.22);
@@ -120,6 +124,8 @@
 }
 
 :root[data-theme="dark"][data-scheme="ember"] {
+  --color-brand: #fb923c;
+  --color-brand-strong: #fdba74;
   --color-brand-soft: rgba(224, 79, 22, 0.15);
   --color-brand-surface: rgba(224, 79, 22, 0.15);
   --color-accent-surface: rgba(124, 58, 237, 0.13);

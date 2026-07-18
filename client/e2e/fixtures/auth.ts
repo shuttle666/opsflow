@@ -21,9 +21,11 @@ export async function loginAs(page: Page, account: DemoAccount) {
   const credentials = demoAccounts[account];
 
   await page.goto("/login");
-  await page.waitForLoadState("networkidle");
   const emailInput = page.getByLabel("Email");
   const passwordInput = page.getByLabel("Password");
+  await expect(emailInput).toBeVisible();
+  await expect(passwordInput).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign In" })).toBeVisible();
   await passwordInput.fill(credentials.password);
   await emailInput.fill(credentials.email);
   await expect(emailInput).toHaveValue(credentials.email);

@@ -248,14 +248,19 @@ function DetailCard({
   title,
   children,
   className,
+  ariaLabel,
 }: {
   eyebrow?: string;
   title?: string;
   children: React.ReactNode;
   className?: string;
+  ariaLabel?: string;
 }) {
   return (
-    <section className={cn(surfaceClassName, className?.includes("p-0") ? "p-0" : "p-4", className)}>
+    <section
+      aria-label={ariaLabel}
+      className={cn(surfaceClassName, className?.includes("p-0") ? "p-0" : "p-4", className)}
+    >
       {eyebrow || title ? (
         <div className="mb-3 space-y-1">
           {eyebrow ? (
@@ -323,7 +328,11 @@ function WorkflowActivityCard({ history }: { history: JobHistoryItem[] }) {
   const recentItems = history.slice(-4).reverse();
 
   return (
-    <DetailCard eyebrow="Activity" title="Recent workflow activity">
+    <DetailCard
+      eyebrow="Activity"
+      title="Recent workflow activity"
+      ariaLabel="Recent workflow activity"
+    >
       {recentItems.length === 0 ? (
         <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
           No workflow changes have been recorded yet.

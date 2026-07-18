@@ -43,7 +43,9 @@ test("owner dispatches work, staff completes it, and manager approves it", async
     await page
       .getByPlaceholder("Describe the issue or requested work")
       .fill(description);
-    await page.getByLabel("Start time").fill(futureDateTimeLocal(24));
+    await page
+      .getByLabel("Start time")
+      .fill(futureDateTimeLocal(48 + testInfo.retry * 4));
     await page.getByRole("button", { name: "Create job" }).click();
 
     await expect(page).toHaveURL(/\/jobs\/[0-9a-f-]+$/);
@@ -122,10 +124,9 @@ test("owner dispatches work, staff completes it, and manager approves it", async
 
     await expect(page.getByText("Completion approved.").first()).toBeVisible();
     await expect(page.getByText(/Reviewed by Daniel Brooks/)).toBeVisible();
-    const activity = page
-      .getByRole("heading", { name: "Recent workflow activity" })
-      .locator("..")
-      .locator("..");
+    const activity = page.getByRole("region", {
+      name: "Recent workflow activity",
+    });
     await expect(
       activity.getByText("Pending review to Completed", { exact: true }),
     ).toBeVisible();

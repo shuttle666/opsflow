@@ -307,7 +307,7 @@ export default function HomePage() {
         <section className="mx-auto max-w-[1240px] px-4 py-20 sm:px-6 sm:py-28">
           <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-end lg:gap-16">
             <div>
-              <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-brand)]">
+              <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-brand-strong)]">
                 Role-aware operations
               </p>
               <h2 className="mt-5 max-w-xl text-4xl font-extrabold leading-[1.08] tracking-[-0.04em] text-[var(--color-text)] sm:text-5xl">
@@ -340,7 +340,7 @@ export default function HomePage() {
                     <h3 className="mt-7 text-2xl font-extrabold tracking-[-0.025em] text-[var(--color-text)]">
                       {role.name}
                     </h3>
-                    <p className="mt-2 text-base font-semibold text-[var(--color-brand)]">
+                    <p className="mt-2 text-base font-semibold text-[var(--color-brand-strong)]">
                       {role.focus}
                     </p>
                     <p className="mt-4 max-w-xs text-sm leading-6 text-[var(--color-text-secondary)]">
@@ -364,7 +364,12 @@ export default function HomePage() {
                 <FileClock className="h-5 w-5 text-[var(--color-brand)]" />
               </div>
 
-              <div className="mt-6 overflow-x-auto pb-1">
+              <div
+                className="mt-6 overflow-x-auto pb-1"
+                role="region"
+                aria-label="Job lifecycle stages"
+                tabIndex={0}
+              >
                 <ol className="job-lifecycle-rail" aria-label="Job lifecycle">
                   {jobLifecycle.map((status) => (
                     <li key={status}>

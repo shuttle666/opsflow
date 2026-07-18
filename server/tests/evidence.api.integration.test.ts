@@ -10,6 +10,20 @@ import { login } from "../src/modules/auth/auth.service";
 import { describeIfDb, resetDatabase } from "./helpers/db";
 
 const uploadsDirectory = path.resolve(process.cwd(), env.EVIDENCE_DIR);
+const testResultsDirectory = path.resolve(process.cwd(), "test-results");
+
+function assertSafeEvidenceTestDirectory() {
+  const relativePath = path.relative(testResultsDirectory, uploadsDirectory);
+  if (
+    relativePath === "" ||
+    relativePath.startsWith("..") ||
+    path.isAbsolute(relativePath)
+  ) {
+    throw new Error(
+      "Refusing to clean evidence outside the server test-results directory.",
+    );
+  }
+}
 
 function binaryParser(
   res: NodeJS.ReadableStream,
@@ -32,11 +46,13 @@ describeIfDb("evidence api integration", () => {
 
   beforeEach(async () => {
     await resetDatabase();
+    assertSafeEvidenceTestDirectory();
     await fs.rm(uploadsDirectory, { recursive: true, force: true });
   });
 
   afterAll(async () => {
     await resetDatabase();
+    assertSafeEvidenceTestDirectory();
     await fs.rm(uploadsDirectory, { recursive: true, force: true });
     await prisma.$disconnect();
   });

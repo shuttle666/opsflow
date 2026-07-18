@@ -2,6 +2,7 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 import { Pool } from "pg";
+import { evidenceStorage } from "../src/modules/evidence/evidence-storage";
 import {
   assertProductionDemoSeedConfirmation,
   buildDemoSeedData,
@@ -109,6 +110,15 @@ async function resetProductionDemoData() {
 
     remapDemoSeedUserIds(data, userIdReplacements);
 
+    await tx.toolInvocation.deleteMany({ where: { tenantId } });
+    await tx.agentToolCall.deleteMany({
+      where: { conversation: { tenantId } },
+    });
+    await tx.agentProposal.deleteMany({ where: { tenantId } });
+    await tx.agentMessage.deleteMany({
+      where: { conversation: { tenantId } },
+    });
+    await tx.agentConversation.deleteMany({ where: { tenantId } });
     await tx.auditLog.deleteMany({ where: { tenantId } });
     await tx.notification.deleteMany({ where: { tenantId } });
     await tx.tenantInvitation.deleteMany({ where: { tenantId } });
@@ -185,6 +195,7 @@ async function resetProductionDemoDataWithRetry() {
 
 async function main() {
   const seededData = await resetProductionDemoDataWithRetry();
+  await evidenceStorage.removeTenant(seededData.tenant.id);
 
   console.log("Production demo reset complete: Acme Home Services demo tenant refreshed.");
   printDemoSeedSummary(seededData);

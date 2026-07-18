@@ -1,6 +1,7 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 import { Pool } from "pg";
+import { evidenceStorage } from "../src/modules/evidence/evidence-storage";
 import {
   assertSafeDevelopmentDatabaseUrl,
   buildDemoSeedData,
@@ -25,6 +26,11 @@ async function main() {
   const data = buildDemoSeedData(demoSeedProfiles.developmentLarge);
 
   await prisma.$transaction([
+    prisma.toolInvocation.deleteMany(),
+    prisma.agentToolCall.deleteMany(),
+    prisma.agentProposal.deleteMany(),
+    prisma.agentMessage.deleteMany(),
+    prisma.agentConversation.deleteMany(),
     prisma.auditLog.deleteMany(),
     prisma.notification.deleteMany(),
     prisma.tenantInvitation.deleteMany(),
@@ -38,6 +44,8 @@ async function main() {
     prisma.tenant.deleteMany(),
     prisma.user.deleteMany(),
   ]);
+
+  await evidenceStorage.removeAll();
 
   await prisma.tenant.create({ data: data.tenant });
   await prisma.user.createMany({ data: data.users });

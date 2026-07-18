@@ -221,6 +221,135 @@ describeIfDb("job transition service + schema constraints", () => {
     });
   });
 
+  it("rejects stale staff transition authorization inside the transaction", async () => {
+    const [creator, previousAssignee, replacementAssignee] = await Promise.all([
+      prisma.user.create({
+        data: {
+          email: "stale-creator@test.dev",
+          passwordHash: "hash",
+          displayName: "Stale Creator",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "stale-staff@test.dev",
+          passwordHash: "hash",
+          displayName: "Stale Staff",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "replacement-staff@test.dev",
+          passwordHash: "hash",
+          displayName: "Replacement Staff",
+        },
+      }),
+    ]);
+    const tenant = await prisma.tenant.create({
+      data: {
+        name: "Stale Authorization Tenant",
+        slug: "stale-authorization-tenant",
+      },
+    });
+    const customer = await prisma.customer.create({
+      data: {
+        tenantId: tenant.id,
+        name: "Stale Authorization Customer",
+        createdById: creator.id,
+      },
+    });
+    const [reassignedJob, statusChangedJob] = await Promise.all([
+      prisma.job.create({
+        data: {
+          tenantId: tenant.id,
+          customerId: customer.id,
+          title: "Reassigned after authorization",
+          serviceAddress: "18 Collins Street, Melbourne VIC 3000",
+          status: JobStatus.SCHEDULED,
+          createdById: creator.id,
+          assignedToId: previousAssignee.id,
+        },
+      }),
+      prisma.job.create({
+        data: {
+          tenantId: tenant.id,
+          customerId: customer.id,
+          title: "Status changed after authorization",
+          serviceAddress: "18 Collins Street, Melbourne VIC 3000",
+          status: JobStatus.SCHEDULED,
+          createdById: creator.id,
+          assignedToId: previousAssignee.id,
+        },
+      }),
+    ]);
+
+    await Promise.all([
+      prisma.job.update({
+        where: { id: reassignedJob.id },
+        data: { assignedToId: replacementAssignee.id },
+      }),
+      prisma.job.update({
+        where: { id: statusChangedJob.id },
+        data: { status: JobStatus.PENDING_REVIEW },
+      }),
+    ]);
+
+    const staleAuthorization = {
+      tenantId: tenant.id,
+      toStatus: JobStatus.IN_PROGRESS,
+      changedById: previousAssignee.id,
+      expectedAssignedToId: previousAssignee.id,
+      expectedFromStatus: JobStatus.SCHEDULED,
+    };
+
+    await expect(
+      transitionJobStatus({
+        ...staleAuthorization,
+        jobId: reassignedJob.id,
+      }),
+    ).rejects.toMatchObject<JobDomainError>({
+      code: "JOB_NOT_FOUND",
+    });
+    await expect(
+      transitionJobStatus({
+        ...staleAuthorization,
+        jobId: statusChangedJob.id,
+      }),
+    ).rejects.toMatchObject<JobDomainError>({
+      code: "JOB_STATUS_TRANSITION_FORBIDDEN",
+    });
+
+    const unchangedJobs = await prisma.job.findMany({
+      where: {
+        id: {
+          in: [reassignedJob.id, statusChangedJob.id],
+        },
+      },
+      orderBy: { title: "asc" },
+    });
+    expect(unchangedJobs).toEqual([
+      expect.objectContaining({
+        id: reassignedJob.id,
+        assignedToId: replacementAssignee.id,
+        status: JobStatus.SCHEDULED,
+      }),
+      expect.objectContaining({
+        id: statusChangedJob.id,
+        assignedToId: previousAssignee.id,
+        status: JobStatus.PENDING_REVIEW,
+      }),
+    ]);
+    expect(
+      await prisma.jobStatusHistory.count({
+        where: {
+          jobId: {
+            in: [reassignedJob.id, statusChangedJob.id],
+          },
+        },
+      }),
+    ).toBe(0);
+  });
+
   it("requires a reason when cancelling a job", async () => {
     const creator = await prisma.user.create({
       data: {

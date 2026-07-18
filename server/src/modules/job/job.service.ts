@@ -1245,12 +1245,27 @@ export async function transitionJobStatusForActor(
       id: true,
       tenantId: true,
       title: true,
+      status: true,
       assignedToId: true,
     },
   });
 
   if (!visibleJob) {
     throw new ApiError(404, "Job not found.", "JOB_NOT_FOUND");
+  }
+
+  if (
+    auth.role === MembershipRole.STAFF &&
+    !(
+      visibleJob.status === JobStatus.SCHEDULED &&
+      input.toStatus === JobStatus.IN_PROGRESS
+    )
+  ) {
+    throw new ApiError(
+      403,
+      "Staff can only start assigned scheduled jobs.",
+      "JOB_STATUS_TRANSITION_FORBIDDEN",
+    );
   }
 
   const transitioned = await transitionJobStatus({
@@ -1260,6 +1275,12 @@ export async function transitionJobStatusForActor(
     changedById: auth.userId,
     reason: input.reason,
     metadata,
+    ...(auth.role === MembershipRole.STAFF
+      ? {
+          expectedAssignedToId: auth.userId,
+          expectedFromStatus: JobStatus.SCHEDULED,
+        }
+      : {}),
   });
   const notifications = await prisma.$transaction((tx) =>
     createJobStatusChangedNotification(tx, {

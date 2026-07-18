@@ -314,6 +314,244 @@ describeIfDb("job api integration", () => {
     expect(managerMembership.role).toBe(MembershipRole.MANAGER);
   });
 
+  it("only allows assigned staff to start scheduled jobs through status transitions", async () => {
+    const owner = await seedTenantUser({
+      email: "owner@staff-transition-api.test",
+      displayName: "Staff Transition Owner",
+      role: MembershipRole.OWNER,
+      tenantName: "Staff Transition API Tenant",
+      tenantSlug: "staff-transition-api-tenant",
+    });
+
+    const passwordHash = await hashPassword("password123");
+    const [managerUser, staffUser, otherStaffUser] = await Promise.all([
+      prisma.user.create({
+        data: {
+          email: "manager@staff-transition-api.test",
+          passwordHash,
+          displayName: "Staff Transition Manager",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "staff@staff-transition-api.test",
+          passwordHash,
+          displayName: "Assigned Transition Staff",
+        },
+      }),
+      prisma.user.create({
+        data: {
+          email: "other-staff@staff-transition-api.test",
+          passwordHash,
+          displayName: "Other Transition Staff",
+        },
+      }),
+    ]);
+
+    await prisma.membership.createMany({
+      data: [
+        {
+          userId: managerUser.id,
+          tenantId: owner.tenant.id,
+          role: MembershipRole.MANAGER,
+          status: MembershipStatus.ACTIVE,
+        },
+        {
+          userId: staffUser.id,
+          tenantId: owner.tenant.id,
+          role: MembershipRole.STAFF,
+          status: MembershipStatus.ACTIVE,
+        },
+        {
+          userId: otherStaffUser.id,
+          tenantId: owner.tenant.id,
+          role: MembershipRole.STAFF,
+          status: MembershipStatus.ACTIVE,
+        },
+      ],
+    });
+
+    const [managerSession, staffSession] = await Promise.all([
+      login({
+        email: managerUser.email,
+        password: "password123",
+        tenantId: owner.tenant.id,
+      }),
+      login({
+        email: staffUser.email,
+        password: "password123",
+        tenantId: owner.tenant.id,
+      }),
+    ]);
+
+    const customer = await seedCustomer(
+      owner.tenant.id,
+      owner.user.id,
+      "Staff Transition Customer",
+    );
+    const [startJob, cancelJob, reviewJob, scheduleJob, hiddenJob, managerJob] =
+      await Promise.all([
+        prisma.job.create({
+          data: {
+            tenantId: owner.tenant.id,
+            customerId: customer.id,
+            title: "Assigned scheduled start",
+            serviceAddress: testServiceAddress,
+            status: JobStatus.SCHEDULED,
+            createdById: owner.user.id,
+            assignedToId: staffUser.id,
+          },
+        }),
+        prisma.job.create({
+          data: {
+            tenantId: owner.tenant.id,
+            customerId: customer.id,
+            title: "Assigned scheduled cancel",
+            serviceAddress: testServiceAddress,
+            status: JobStatus.SCHEDULED,
+            createdById: owner.user.id,
+            assignedToId: staffUser.id,
+          },
+        }),
+        prisma.job.create({
+          data: {
+            tenantId: owner.tenant.id,
+            customerId: customer.id,
+            title: "Assigned direct review",
+            serviceAddress: testServiceAddress,
+            status: JobStatus.IN_PROGRESS,
+            createdById: owner.user.id,
+            assignedToId: staffUser.id,
+          },
+        }),
+        prisma.job.create({
+          data: {
+            tenantId: owner.tenant.id,
+            customerId: customer.id,
+            title: "Assigned direct schedule",
+            serviceAddress: testServiceAddress,
+            status: JobStatus.NEW,
+            createdById: owner.user.id,
+            assignedToId: staffUser.id,
+          },
+        }),
+        prisma.job.create({
+          data: {
+            tenantId: owner.tenant.id,
+            customerId: customer.id,
+            title: "Hidden scheduled job",
+            serviceAddress: testServiceAddress,
+            status: JobStatus.SCHEDULED,
+            createdById: owner.user.id,
+            assignedToId: otherStaffUser.id,
+          },
+        }),
+        prisma.job.create({
+          data: {
+            tenantId: owner.tenant.id,
+            customerId: customer.id,
+            title: "Manager cancellation job",
+            serviceAddress: testServiceAddress,
+            status: JobStatus.SCHEDULED,
+            createdById: owner.user.id,
+            assignedToId: staffUser.id,
+          },
+        }),
+      ]);
+
+    const hiddenTransition = await request(app)
+      .post(`/api/jobs/${hiddenJob.id}/status-transitions`)
+      .set("Authorization", `Bearer ${staffSession.accessToken}`)
+      .send({
+        toStatus: JobStatus.IN_PROGRESS,
+      });
+    expect(hiddenTransition.status).toBe(404);
+    expect(hiddenTransition.body.code).toBe("JOB_NOT_FOUND");
+
+    const forbiddenTransitions = [
+      {
+        jobId: cancelJob.id,
+        input: {
+          toStatus: JobStatus.CANCELLED,
+          reason: "Staff must not cancel an assigned job.",
+        },
+      },
+      {
+        jobId: reviewJob.id,
+        input: {
+          toStatus: JobStatus.PENDING_REVIEW,
+        },
+      },
+      {
+        jobId: reviewJob.id,
+        input: {
+          toStatus: JobStatus.CANCELLED,
+          reason: "Staff must submit completion through the review endpoint.",
+        },
+      },
+      {
+        jobId: scheduleJob.id,
+        input: {
+          toStatus: JobStatus.SCHEDULED,
+        },
+      },
+    ];
+
+    for (const transition of forbiddenTransitions) {
+      const response = await request(app)
+        .post(`/api/jobs/${transition.jobId}/status-transitions`)
+        .set("Authorization", `Bearer ${staffSession.accessToken}`)
+        .send(transition.input);
+
+      expect(response.status).toBe(403);
+      expect(response.body.code).toBe("JOB_STATUS_TRANSITION_FORBIDDEN");
+    }
+
+    const forbiddenHistoryCount = await prisma.jobStatusHistory.count({
+      where: {
+        jobId: {
+          in: [cancelJob.id, reviewJob.id, scheduleJob.id],
+        },
+      },
+    });
+    expect(forbiddenHistoryCount).toBe(0);
+
+    const started = await request(app)
+      .post(`/api/jobs/${startJob.id}/status-transitions`)
+      .set("Authorization", `Bearer ${staffSession.accessToken}`)
+      .send({
+        toStatus: JobStatus.IN_PROGRESS,
+      });
+    expect(started.status).toBe(200);
+    expect(started.body.data.job.status).toBe("IN_PROGRESS");
+    expect(started.body.data.historyEntry.fromStatus).toBe("SCHEDULED");
+    expect(started.body.data.historyEntry.toStatus).toBe("IN_PROGRESS");
+    expect(started.body.data.historyEntry.changedBy.id).toBe(staffUser.id);
+
+    const staffStartAudit = await prisma.auditLog.findFirst({
+      where: {
+        action: AuditAction.JOB_STATUS_TRANSITION,
+        tenantId: owner.tenant.id,
+        userId: staffUser.id,
+        targetId: startJob.id,
+      },
+    });
+    expect(staffStartAudit?.metadata).toMatchObject({
+      fromStatus: JobStatus.SCHEDULED,
+      toStatus: JobStatus.IN_PROGRESS,
+    });
+
+    const managerCancelled = await request(app)
+      .post(`/api/jobs/${managerJob.id}/status-transitions`)
+      .set("Authorization", `Bearer ${managerSession.accessToken}`)
+      .send({
+        toStatus: JobStatus.CANCELLED,
+        reason: "Manager cancelled the visit.",
+      });
+    expect(managerCancelled.status).toBe(200);
+    expect(managerCancelled.body.data.job.status).toBe("CANCELLED");
+  });
+
   it("loads schedule ranges and enforces staff range visibility", async () => {
     const owner = await seedTenantUser({
       email: "owner@schedule-range-api.test",
@@ -686,7 +924,7 @@ describeIfDb("job api integration", () => {
         toStatus: JobStatus.PENDING_REVIEW,
         reason: "Should not be allowed",
       });
-    expect(hiddenStaffTransition.status).toBe(403);
+    expect(hiddenStaffTransition.status).toBe(404);
 
     const otherStaffSubmit = await request(app)
       .post(`/api/jobs/${job.id}/completion-review`)

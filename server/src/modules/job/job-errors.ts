@@ -4,6 +4,7 @@ export type JobDomainErrorCode =
   | "JOB_NOT_FOUND"
   | "CROSS_TENANT_ACCESS"
   | "INVALID_STATUS_TRANSITION"
+  | "STATUS_TRANSITION_FORBIDDEN"
   | "TENANT_INACTIVE"
   | "TRANSITION_REASON_REQUIRED";
 
@@ -12,6 +13,8 @@ function getStatusCode(code: JobDomainErrorCode) {
     case "JOB_NOT_FOUND":
       return 404;
     case "CROSS_TENANT_ACCESS":
+      return 403;
+    case "STATUS_TRANSITION_FORBIDDEN":
       return 403;
     case "TENANT_INACTIVE":
       return 403;
@@ -29,6 +32,8 @@ function toApiErrorCode(code: JobDomainErrorCode) {
       return "JOB_CROSS_TENANT_ACCESS";
     case "INVALID_STATUS_TRANSITION":
       return "JOB_INVALID_STATUS_TRANSITION";
+    case "STATUS_TRANSITION_FORBIDDEN":
+      return "JOB_STATUS_TRANSITION_FORBIDDEN";
     case "TENANT_INACTIVE":
       return "AUTH_TENANT_INACTIVE";
     case "TRANSITION_REASON_REQUIRED":

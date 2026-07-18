@@ -96,7 +96,7 @@ jobRouter.get("/:jobId", getJobDetailHandler);
 jobRouter.get("/:jobId/history", getJobHistoryHandler);
 jobRouter.post(
   "/:jobId/status-transitions",
-  requireRole(MembershipRole.OWNER, MembershipRole.MANAGER),
+  requireRole(MembershipRole.OWNER, MembershipRole.MANAGER, MembershipRole.STAFF),
   jobMutationLimiter,
   transitionJobStatusHandler,
 );

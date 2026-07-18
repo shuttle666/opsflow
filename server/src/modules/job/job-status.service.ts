@@ -11,7 +11,38 @@ export type TransitionJobStatusServiceInput = {
   changedById?: string | null;
   reason?: string;
   metadata?: RequestMetadata;
+  expectedAssignedToId?: string;
+  expectedFromStatus?: JobStatus;
 };
+
+function assertExpectedTransitionState(
+  job: { assignedToId: string | null; status: JobStatus },
+  input: TransitionJobStatusServiceInput,
+) {
+  if (
+    input.expectedAssignedToId !== undefined &&
+    job.assignedToId !== input.expectedAssignedToId
+  ) {
+    throw new JobDomainError("JOB_NOT_FOUND", "Job not found.", {
+      tenantId: input.tenantId,
+      jobId: input.jobId,
+    });
+  }
+
+  if (
+    input.expectedFromStatus !== undefined &&
+    job.status !== input.expectedFromStatus
+  ) {
+    throw new JobDomainError(
+      "STATUS_TRANSITION_FORBIDDEN",
+      "The job is no longer in a state this actor can transition.",
+      {
+        expectedFromStatus: input.expectedFromStatus,
+        actualFromStatus: job.status,
+      },
+    );
+  }
+}
 
 export async function transitionJobStatusInTransaction(
   tx: Prisma.TransactionClient,
@@ -54,6 +85,7 @@ export async function transitionJobStatusInTransaction(
       id: true,
       tenantId: true,
       status: true,
+      assignedToId: true,
     },
   });
 
@@ -77,12 +109,63 @@ export async function transitionJobStatusInTransaction(
     });
   }
 
+  assertExpectedTransitionState(job, input);
   assertValidTransition(job.status, toStatus);
 
-  const updatedJob = await tx.job.update({
-    where: { id: job.id },
-    data: { status: toStatus },
-  });
+  let updatedJob;
+  if (
+    input.expectedAssignedToId !== undefined ||
+    input.expectedFromStatus !== undefined
+  ) {
+    const updated = await tx.job.updateMany({
+      where: {
+        id: job.id,
+        tenantId,
+        ...(input.expectedAssignedToId !== undefined
+          ? { assignedToId: input.expectedAssignedToId }
+          : {}),
+        ...(input.expectedFromStatus !== undefined
+          ? { status: input.expectedFromStatus }
+          : {}),
+      },
+      data: { status: toStatus },
+    });
+
+    if (updated.count !== 1) {
+      const currentJob = await tx.job.findFirst({
+        where: {
+          id: job.id,
+          tenantId,
+        },
+        select: {
+          assignedToId: true,
+          status: true,
+        },
+      });
+
+      if (!currentJob) {
+        throw new JobDomainError("JOB_NOT_FOUND", "Job not found.", {
+          tenantId,
+          jobId,
+        });
+      }
+
+      assertExpectedTransitionState(currentJob, input);
+      throw new JobDomainError(
+        "STATUS_TRANSITION_FORBIDDEN",
+        "The job transition authorization is no longer current.",
+      );
+    }
+
+    updatedJob = await tx.job.findUniqueOrThrow({
+      where: { id: job.id },
+    });
+  } else {
+    updatedJob = await tx.job.update({
+      where: { id: job.id },
+      data: { status: toStatus },
+    });
+  }
 
   const history = await tx.jobStatusHistory.create({
     data: {

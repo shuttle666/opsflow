@@ -14,6 +14,16 @@ const controllerMocks = vi.hoisted(() => ({
   addUserMessage: vi.fn(),
   appendAssistantMessage: vi.fn(),
   updateProposalReview: vi.fn(),
+  revalidateAuth: vi.fn(async (auth) => auth),
+  consumeDemoAiBudget: vi.fn(),
+}));
+
+vi.mock("../src/modules/auth/auth-context", () => ({
+  revalidateTenantAuthContext: controllerMocks.revalidateAuth,
+}));
+
+vi.mock("../src/modules/demo-workspace/demo-workspace.service", () => ({
+  consumePrivateDemoAiRequestBudget: controllerMocks.consumeDemoAiBudget,
 }));
 
 vi.mock("../src/modules/ai", () => ({

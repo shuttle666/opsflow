@@ -41,8 +41,9 @@ async function main() {
     prisma.job.deleteMany(),
     prisma.customer.deleteMany(),
     prisma.membership.deleteMany(),
-    prisma.tenant.deleteMany(),
     prisma.user.deleteMany(),
+    prisma.demoWorkspace.deleteMany(),
+    prisma.tenant.deleteMany(),
   ]);
 
   await evidenceStorage.removeAll();

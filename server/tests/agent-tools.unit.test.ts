@@ -9,6 +9,11 @@ const serviceMocks = vi.hoisted(() => ({
   listActivityFeed: vi.fn(),
   storeDispatchProposal: vi.fn(),
   storeTypedProposal: vi.fn(),
+  revalidateAuth: vi.fn(async (auth) => auth),
+}));
+
+vi.mock("../src/modules/auth/auth-context", () => ({
+  revalidateTenantAuthContext: serviceMocks.revalidateAuth,
 }));
 
 vi.mock("../src/modules/job/job.service", () => ({

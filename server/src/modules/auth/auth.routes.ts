@@ -1,5 +1,6 @@
 import { MembershipRole } from "@prisma/client";
 import { Router } from "express";
+import { env } from "../../config/env";
 import { authenticate } from "../../middleware/authenticate";
 import {
   createRateLimiter,
@@ -18,6 +19,7 @@ import {
   loginHandler,
   logoutHandler,
   meHandler,
+  privateDemoSessionHandler,
   refreshHandler,
   registerHandler,
   resendTenantInvitationHandler,
@@ -41,6 +43,12 @@ const refreshLimiter = createRateLimiter({
   message: "Too many token refresh attempts. Please try again later.",
 });
 
+const privateDemoCreationLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  maxRequests: env.DEMO_WORKSPACE_CREATE_LIMIT,
+  message: "Too many quick demo requests. Please try again later.",
+});
+
 const invitationMutationLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
   maxRequests: 30,
@@ -50,6 +58,11 @@ const invitationMutationLimiter = createRateLimiter({
 
 authRouter.post("/register", authMutationLimiter, registerHandler);
 authRouter.post("/login", authMutationLimiter, loginHandler);
+authRouter.post(
+  "/demo-session",
+  privateDemoCreationLimiter,
+  privateDemoSessionHandler,
+);
 authRouter.post("/refresh", refreshLimiter, refreshHandler);
 authRouter.post("/logout", authenticate, logoutHandler);
 authRouter.get("/me", authenticate, requireTenantAccess, meHandler);

@@ -17,6 +17,7 @@ import {
 } from "./intent-extractor";
 import type { AgentIntentClassification } from "./intent-router";
 import { EXPLICIT_CONFIRMATION_PHRASES } from "./confirmation-policy";
+import { revalidateTenantAuthContext } from "../auth/auth-context";
 
 type AgentCallbacks = {
   onTextDelta: (text: string) => void;
@@ -183,8 +184,9 @@ export async function runAgentLoop(
 ): Promise<AgentLoopResult> {
   const profile = getAiAgentProfile("dispatch_planner");
   const provider = createAiProvider(profile.provider);
+  const initialAuth = await revalidateTenantAuthContext(auth);
   const canonicalTools = opsFlowToolRegistry.list({
-    auth,
+    auth: initialAuth,
     audience: "web-agent",
   });
   const tools = canonicalTools.map(toAnthropicTool);
@@ -203,6 +205,7 @@ export async function runAgentLoop(
 
   for (let i = 0; i < profile.maxIterations; i += 1) {
     iterationCount = i + 1;
+    await revalidateTenantAuthContext(auth);
     const stream = await provider.streamMessages({
       profile,
       system: buildSystemPrompt(input.timezone, intentClassification),
@@ -257,8 +260,9 @@ export async function runAgentLoop(
 
     for (const toolUse of toolUseBlocks) {
       callbacks.onToolUse(toolUse.name, toolUse.input);
+      const currentAuth = await revalidateTenantAuthContext(auth);
       const result = await opsFlowToolRegistry.execute({
-        auth,
+        auth: currentAuth,
         audience: "web-agent",
         toolName: toolUse.name,
         arguments: toolUse.input,

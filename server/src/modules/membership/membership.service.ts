@@ -10,6 +10,7 @@ import type { AuthContext, RequestMetadata } from "../../types/auth";
 import { ApiError } from "../../utils/api-error";
 import { AuthError } from "../auth/auth-errors";
 import { expirePendingTenantInvitations } from "../auth/auth.service";
+import { throwDemoAdministrationError } from "../demo-workspace/demo-workspace.policy";
 import type {
   MembershipListQueryInput,
   UpdateMembershipInput,
@@ -138,6 +139,9 @@ async function assertActiveOwnerActor(
         select: {
           status: true,
           deletedAt: true,
+          demoWorkspace: {
+            select: { id: true },
+          },
         },
       },
     },
@@ -156,6 +160,10 @@ async function assertActiveOwnerActor(
     actorMembership.tenant.deletedAt
   ) {
     throw new AuthError("TENANT_INACTIVE", "Tenant is inactive.", 403);
+  }
+
+  if (actorMembership.tenant.demoWorkspace) {
+    throwDemoAdministrationError();
   }
 
   if (actorMembership.role !== MembershipRole.OWNER) {

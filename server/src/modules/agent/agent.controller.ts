@@ -24,6 +24,9 @@ import {
   updateProposalReview,
 } from "./agent.service";
 import { runAgentLoop, type AgentLoopResult } from "./agent-loop";
+import { registerAgentStream } from "./agent-stream-registry";
+import { revalidateTenantAuthContext } from "../auth/auth-context";
+import { consumePrivateDemoAiRequestBudget } from "../demo-workspace/demo-workspace.service";
 
 export const createConversationHandler: RequestHandler = asyncHandler(
   async (req, res) => {
@@ -86,6 +89,7 @@ export const sendMessageHandler: RequestHandler = asyncHandler(
     const conversation = await getConversation(req.auth, conversationId);
     if (!conversation) throw new ApiError(404, "Conversation not found.");
 
+    await consumePrivateDemoAiRequestBudget(req.auth.tenantId);
     await addUserMessage(req.auth, conversationId, content);
 
     const updatedConversation = await getConversation(req.auth, conversationId);
@@ -99,6 +103,14 @@ export const sendMessageHandler: RequestHandler = asyncHandler(
     });
 
     const auth = req.auth;
+    const unregisterStream = registerAgentStream(auth.tenantId, res);
+    const writeStreamEvent = (event: Record<string, unknown>) => {
+      if (res.writableEnded || res.destroyed) {
+        return;
+      }
+
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
     const traceStartedAt = new Date();
     let agentResult: AgentLoopResult | undefined;
 
@@ -113,26 +125,21 @@ export const sendMessageHandler: RequestHandler = asyncHandler(
         },
         {
           onTextDelta: (text) => {
-            res.write(`data: ${JSON.stringify({ type: "text_delta", text })}\n\n`);
+            writeStreamEvent({ type: "text_delta", text });
           },
           onToolUse: (toolName, input) => {
-            res.write(
-              `data: ${JSON.stringify({ type: "tool_use", tool: toolName, input })}\n\n`,
-            );
+            writeStreamEvent({ type: "tool_use", tool: toolName, input });
           },
           onToolResult: (toolName, result) => {
-            res.write(
-              `data: ${JSON.stringify({ type: "tool_result", tool: toolName, result })}\n\n`,
-            );
+            writeStreamEvent({ type: "tool_result", tool: toolName, result });
           },
           onProposal: (proposal) => {
-            res.write(
-              `data: ${JSON.stringify({ type: "proposal", proposal })}\n\n`,
-            );
+            writeStreamEvent({ type: "proposal", proposal });
           },
         },
       );
 
+      await revalidateTenantAuthContext(auth);
       await appendAssistantMessage(
         conversationId,
         agentResult.fullText,
@@ -163,17 +170,18 @@ export const sendMessageHandler: RequestHandler = asyncHandler(
       );
       const message =
         error instanceof Error ? error.message : "An unexpected error occurred.";
-      res.write(
-        `data: ${JSON.stringify({
-          type: "error",
-          message,
-          requestId: req.requestId,
-        })}\n\n`,
-      );
+      writeStreamEvent({
+        type: "error",
+        message,
+        requestId: req.requestId,
+      });
     }
 
-    res.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
-    res.end();
+    writeStreamEvent({ type: "done" });
+    if (!res.writableEnded && !res.destroyed) {
+      res.end();
+    }
+    unregisterStream();
   },
 );
 

@@ -1,8 +1,10 @@
 import { createServer } from "node:http";
 import { app } from "./app";
 import { env } from "./config/env";
+import { startDemoWorkspaceCleanupScheduler } from "./modules/demo-workspace/demo-workspace.service";
 
 const server = createServer(app);
+const stopDemoWorkspaceCleanup = startDemoWorkspaceCleanupScheduler();
 
 server.listen(env.PORT, () => {
   console.log(`OpsFlow API listening on http://localhost:${env.PORT}`);
@@ -10,6 +12,7 @@ server.listen(env.PORT, () => {
 
 function shutdown(signal: string) {
   console.log(`Received ${signal}. Shutting down gracefully.`);
+  stopDemoWorkspaceCleanup();
 
   server.close((error) => {
     if (error) {

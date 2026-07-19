@@ -1,5 +1,9 @@
 import type { JwtPayload } from "jsonwebtoken";
-import { MembershipStatus, TenantStatus } from "@prisma/client";
+import {
+  DemoWorkspaceStatus,
+  MembershipStatus,
+  TenantStatus,
+} from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import type { AuthContext } from "../../types/auth";
 import { AuthError } from "./auth-errors";
@@ -22,6 +26,12 @@ export async function revalidateTenantAuthContext(
         select: {
           status: true,
           deletedAt: true,
+          demoWorkspace: {
+            select: {
+              status: true,
+              expiresAt: true,
+            },
+          },
         },
       },
     },
@@ -32,6 +42,19 @@ export async function revalidateTenantAuthContext(
       "MEMBERSHIP_INACTIVE",
       "Membership is not active for this tenant.",
       403,
+    );
+  }
+
+  const demoWorkspace = membership.tenant.demoWorkspace;
+  if (
+    demoWorkspace &&
+    (demoWorkspace.status !== DemoWorkspaceStatus.ACTIVE ||
+      demoWorkspace.expiresAt <= new Date())
+  ) {
+    throw new AuthError(
+      "SESSION_EXPIRED",
+      "Quick demo workspace has expired.",
+      401,
     );
   }
 
@@ -78,6 +101,16 @@ export async function resolveAuthContextFromAccessToken(
       role: true,
       revokedAt: true,
       expiresAt: true,
+      tenant: {
+        select: {
+          demoWorkspace: {
+            select: {
+              status: true,
+              expiresAt: true,
+            },
+          },
+        },
+      },
     },
   });
 
@@ -89,7 +122,28 @@ export async function resolveAuthContextFromAccessToken(
     throw new AuthError("SESSION_REVOKED", "Session has been revoked.", 401);
   }
 
-  if (session.expiresAt <= new Date()) {
+  const demoWorkspace = session.tenant.demoWorkspace;
+  const now = new Date();
+  if (
+    demoWorkspace &&
+    (demoWorkspace.status !== DemoWorkspaceStatus.ACTIVE ||
+      demoWorkspace.expiresAt <= now)
+  ) {
+    await prisma.authSession.updateMany({
+      where: {
+        tenantId: session.tenantId,
+        revokedAt: null,
+      },
+      data: { revokedAt: now },
+    });
+    throw new AuthError(
+      "SESSION_EXPIRED",
+      "Quick demo workspace has expired.",
+      401,
+    );
+  }
+
+  if (session.expiresAt <= now) {
     throw new AuthError("SESSION_EXPIRED", "Session has expired.", 401);
   }
 

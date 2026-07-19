@@ -71,6 +71,28 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
+  /api/auth/demo-session:
+    post:
+      tags: [Auth]
+      operationId: createPrivateDemoSession
+      description: Creates an isolated, prefilled, short-lived Golden Demo workspace and authentication session.
+      security: []
+      responses:
+        "201":
+          $ref: "#/components/responses/Success"
+        "429":
+          description: Per-IP demo creation rate limit reached.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+        "503":
+          description: Quick Demo is disabled or at global workspace capacity.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+
   /api/auth/refresh:
     post:
       tags: [Auth]

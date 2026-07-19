@@ -1,5 +1,6 @@
 import {
   AuditAction,
+  DemoWorkspaceStatus,
   InvitationStatus,
   MembershipRole,
   MembershipStatus,
@@ -12,6 +13,15 @@ import type { AuthContext, RequestMetadata } from "../../types/auth";
 import { ApiError } from "../../utils/api-error";
 import { AuthError } from "./auth-errors";
 import { hashPassword, verifyPassword } from "./auth-password";
+import {
+  assertTenantIsNotDemoWorkspace,
+  assertUserIsNotTemporaryDemoUser,
+  throwDemoAdministrationError,
+} from "../demo-workspace/demo-workspace.policy";
+import type {
+  DemoWorkspaceAuthMetadata,
+  GoldenDemoScenario,
+} from "../demo-workspace/demo-workspace.types";
 import {
   generateRefreshToken,
   getInvitationExpiryDate,
@@ -36,7 +46,7 @@ type ActiveMembership = {
   role: MembershipRole;
 };
 
-type AuthResult = {
+export type AuthResult = {
   accessToken: string;
   refreshToken: string;
   expiresInMinutes: number;
@@ -47,6 +57,7 @@ type AuthResult = {
   };
   currentTenant: ActiveMembership;
   availableTenants: ActiveMembership[];
+  demoWorkspace?: DemoWorkspaceAuthMetadata;
 };
 
 type MyInvitationItem = {
@@ -112,6 +123,7 @@ async function ensureUniqueTenantSlug(tx: Prisma.TransactionClient, base: string
 }
 
 async function listActiveMemberships(userId: string) {
+  const now = new Date();
   const memberships = await prisma.membership.findMany({
     where: {
       userId,
@@ -127,6 +139,12 @@ async function listActiveMemberships(userId: string) {
           id: true,
           name: true,
           slug: true,
+          demoWorkspace: {
+            select: {
+              status: true,
+              expiresAt: true,
+            },
+          },
         },
       },
     },
@@ -135,12 +153,44 @@ async function listActiveMemberships(userId: string) {
     },
   });
 
-  return memberships.map((membership) => ({
-    tenantId: membership.tenant.id,
-    tenantName: membership.tenant.name,
-    tenantSlug: membership.tenant.slug,
-    role: membership.role,
-  }));
+  return memberships
+    .filter(
+      (membership) =>
+        !membership.tenant.demoWorkspace ||
+        (membership.tenant.demoWorkspace.status === DemoWorkspaceStatus.ACTIVE &&
+          membership.tenant.demoWorkspace.expiresAt > now),
+    )
+    .map((membership) => ({
+      tenantId: membership.tenant.id,
+      tenantName: membership.tenant.name,
+      tenantSlug: membership.tenant.slug,
+      role: membership.role,
+    }));
+}
+
+function mapDemoWorkspaceMetadata(workspace: {
+  templateVersion: string;
+  expiresAt: Date;
+  scenario: Prisma.JsonValue;
+}): DemoWorkspaceAuthMetadata {
+  return {
+    templateVersion: workspace.templateVersion,
+    expiresAt: workspace.expiresAt,
+    scenario: workspace.scenario as GoldenDemoScenario,
+  };
+}
+
+async function getDemoWorkspaceMetadata(tenantId: string) {
+  const workspace = await prisma.demoWorkspace.findUnique({
+    where: { tenantId },
+    select: {
+      templateVersion: true,
+      expiresAt: true,
+      scenario: true,
+    },
+  });
+
+  return workspace ? mapDemoWorkspaceMetadata(workspace) : undefined;
 }
 
 function pickTenantMembership(
@@ -612,18 +662,23 @@ async function acceptInvitationTransaction(input: {
   });
 }
 
-async function createSessionAndTokens(
+export async function createSessionAndTokens(
   tx: Prisma.TransactionClient,
   input: {
     userId: string;
     tenantId: string;
     role: MembershipRole;
     metadata?: RequestMetadata;
+    sessionExpiresAt?: Date;
   },
 ) {
   const refreshToken = generateRefreshToken();
   const refreshTokenHash = hashRefreshToken(refreshToken);
-  const expiresAt = getRefreshTokenExpiryDate();
+  const defaultExpiresAt = getRefreshTokenExpiryDate();
+  const expiresAt =
+    input.sessionExpiresAt && input.sessionExpiresAt < defaultExpiresAt
+      ? input.sessionExpiresAt
+      : defaultExpiresAt;
 
   const session = await tx.authSession.create({
     data: {
@@ -779,6 +834,7 @@ export async function login(input: LoginInput, metadata?: RequestMetadata) {
       displayName: true,
       passwordHash: true,
       isActive: true,
+      demoWorkspaceId: true,
     },
   });
 
@@ -786,7 +842,12 @@ export async function login(input: LoginInput, metadata?: RequestMetadata) {
     ? await verifyPassword(input.password, user.passwordHash)
     : false;
 
-  if (!user || !validPassword || !user.isActive) {
+  if (
+    !user ||
+    !validPassword ||
+    !user.isActive ||
+    user.demoWorkspaceId
+  ) {
     await prisma.auditLog.create({
       data: {
         action: AuditAction.AUTH_LOGIN_FAILED,
@@ -860,6 +921,18 @@ export async function refreshSession(input: RefreshInput, metadata?: RequestMeta
       role: true,
       revokedAt: true,
       expiresAt: true,
+      tenant: {
+        select: {
+          demoWorkspace: {
+            select: {
+              status: true,
+              templateVersion: true,
+              expiresAt: true,
+              scenario: true,
+            },
+          },
+        },
+      },
     },
   });
 
@@ -871,7 +944,28 @@ export async function refreshSession(input: RefreshInput, metadata?: RequestMeta
     throw new AuthError("SESSION_REVOKED", "Refresh session has been revoked.", 401);
   }
 
-  if (session.expiresAt <= new Date()) {
+  const demoWorkspace = session.tenant.demoWorkspace;
+  const now = new Date();
+  if (
+    demoWorkspace &&
+    (demoWorkspace.status !== DemoWorkspaceStatus.ACTIVE ||
+      demoWorkspace.expiresAt <= now)
+  ) {
+    await prisma.authSession.updateMany({
+      where: {
+        tenantId: session.tenantId,
+        revokedAt: null,
+      },
+      data: { revokedAt: now },
+    });
+    throw new AuthError(
+      "SESSION_EXPIRED",
+      "Quick demo workspace has expired.",
+      401,
+    );
+  }
+
+  if (session.expiresAt <= now) {
     await prisma.authSession.update({
       where: { id: session.id },
       data: {
@@ -935,6 +1029,7 @@ export async function refreshSession(input: RefreshInput, metadata?: RequestMeta
       tenantId: session.tenantId,
       role: currentTenant.role,
       metadata,
+      sessionExpiresAt: demoWorkspace?.expiresAt,
     });
 
     await tx.authSession.update({
@@ -968,6 +1063,9 @@ export async function refreshSession(input: RefreshInput, metadata?: RequestMeta
     },
     currentTenant,
     availableTenants: memberships,
+    ...(demoWorkspace
+      ? { demoWorkspace: mapDemoWorkspaceMetadata(demoWorkspace) }
+      : {}),
   } satisfies AuthResult;
 }
 
@@ -1031,6 +1129,7 @@ export async function getAuthMe(auth: AuthContext) {
 
   const memberships = await listActiveMemberships(auth.userId);
   const currentTenant = pickTenantMembership(memberships, auth.tenantId);
+  const demoWorkspace = await getDemoWorkspaceMetadata(auth.tenantId);
 
   return {
     user: {
@@ -1040,6 +1139,7 @@ export async function getAuthMe(auth: AuthContext) {
     },
     currentTenant,
     availableTenants: memberships,
+    ...(demoWorkspace ? { demoWorkspace } : {}),
   };
 }
 
@@ -1048,6 +1148,7 @@ export async function switchTenant(
   input: SwitchTenantInput,
   metadata?: RequestMetadata,
 ) {
+  await assertUserIsNotTemporaryDemoUser(auth.userId);
   const memberships = await listActiveMemberships(auth.userId);
   const targetMembership = pickTenantMembership(memberships, input.tenantId);
 
@@ -1130,6 +1231,9 @@ export async function createTenantInvitation(
         select: {
           status: true,
           deletedAt: true,
+          demoWorkspace: {
+            select: { id: true },
+          },
         },
       }),
       tx.membership.findUnique({
@@ -1148,12 +1252,17 @@ export async function createTenantInvitation(
         where: { email },
         select: {
           id: true,
+          demoWorkspaceId: true,
         },
       }),
     ]);
 
     if (!tenant || tenant.status !== TenantStatus.ACTIVE || tenant.deletedAt) {
       throw new AuthError("TENANT_INACTIVE", "Tenant is inactive.", 403);
+    }
+
+    if (tenant.demoWorkspace || invitedUser?.demoWorkspaceId) {
+      throwDemoAdministrationError();
     }
 
     if (
@@ -1264,6 +1373,7 @@ export async function createTenantInvitation(
 }
 
 export async function listMyInvitations(auth: AuthContext) {
+  await assertUserIsNotTemporaryDemoUser(auth.userId);
   const user = await getActiveUserOrThrow(auth.userId);
   const normalizedEmail = normalizeEmail(user.email);
   const inviteVisibilityWhere: Prisma.TenantInvitationWhereInput = {
@@ -1317,6 +1427,8 @@ export async function listTenantInvitations(
     );
   }
 
+  await assertTenantIsNotDemoWorkspace(tenantId);
+
   await expirePendingInvitations({ tenantId });
 
   const invitations = await prisma.tenantInvitation.findMany({
@@ -1362,6 +1474,7 @@ export async function acceptTenantInvitationById(
   invitationId: string,
   metadata?: RequestMetadata,
 ) {
+  await assertUserIsNotTemporaryDemoUser(auth.userId);
   const user = await getActiveUserOrThrow(auth.userId);
 
   const invitation = await prisma.tenantInvitation.findUnique({
@@ -1411,6 +1524,8 @@ export async function resendTenantInvitation(
       403,
     );
   }
+
+  await assertTenantIsNotDemoWorkspace(tenantId);
 
   await expirePendingInvitations({ id: invitationId, tenantId });
 
@@ -1500,6 +1615,8 @@ export async function cancelTenantInvitation(
       403,
     );
   }
+
+  await assertTenantIsNotDemoWorkspace(tenantId);
 
   await expirePendingInvitations({ id: invitationId, tenantId });
 
@@ -1592,6 +1709,7 @@ export async function acceptTenantInvitation(
   input: AcceptInvitationInput,
   metadata?: RequestMetadata,
 ) {
+  await assertUserIsNotTemporaryDemoUser(auth.userId);
   const tokenHash = hashRefreshToken(input.token);
   const user = await getActiveUserOrThrow(auth.userId);
 

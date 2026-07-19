@@ -124,3 +124,18 @@ export function publishUnreadCount(
     }
   }
 }
+
+export function closeNotificationStreamsForTenant(tenantId: string) {
+  const prefix = `${tenantId}:`;
+
+  for (const [key, clients] of clientsByKey) {
+    if (!key.startsWith(prefix)) {
+      continue;
+    }
+
+    for (const client of [...clients]) {
+      removeClient(client);
+      client.res.end();
+    }
+  }
+}

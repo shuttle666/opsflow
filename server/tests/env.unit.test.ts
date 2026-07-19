@@ -13,6 +13,37 @@ describe("env parsing", () => {
     ).toThrow("JWT_ACCESS_SECRET must be explicitly configured in production.");
   });
 
+  it("requires production to explicitly enable private demo workspaces", () => {
+    expect(
+      parseEnv({
+        NODE_ENV: "production",
+        PORT: "4000",
+        CLIENT_URL: "https://app.example.com",
+        DATABASE_URL: "postgresql://opsflow:opsflow@localhost:5432/opsflow",
+        JWT_ACCESS_SECRET: "production-access-secret",
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        DEMO_WORKSPACE_ENABLED: false,
+      }),
+    );
+
+    expect(
+      parseEnv({
+        NODE_ENV: "production",
+        PORT: "4000",
+        CLIENT_URL: "https://app.example.com",
+        DATABASE_URL: "postgresql://opsflow:opsflow@localhost:5432/opsflow",
+        JWT_ACCESS_SECRET: "production-access-secret",
+        DEMO_WORKSPACE_ENABLED: "true",
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        DEMO_WORKSPACE_ENABLED: true,
+      }),
+    );
+  });
+
   it("allows the default JWT secret outside production", () => {
     expect(() =>
       parseEnv({
@@ -38,6 +69,42 @@ describe("env parsing", () => {
       expect.objectContaining({
         TRUST_PROXY_HOPS: 0,
         EVIDENCE_MAX_SIZE_BYTES: 10 * 1024 * 1024,
+        DEMO_WORKSPACE_ENABLED: true,
+        DEMO_WORKSPACE_TTL_MINUTES: 60,
+        DEMO_WORKSPACE_MAX_ACTIVE: 100,
+        DEMO_WORKSPACE_CREATE_LIMIT: 5,
+        DEMO_WORKSPACE_AI_REQUEST_LIMIT: 6,
+        DEMO_WORKSPACE_CLEANUP_INTERVAL_SECONDS: 5 * 60,
+        DEMO_WORKSPACE_CLEANUP_BATCH_SIZE: 20,
+      }),
+    );
+  });
+
+  it("parses bounded private demo workspace settings", () => {
+    expect(
+      parseEnv({
+        NODE_ENV: "development",
+        PORT: "4000",
+        CLIENT_URL: "http://localhost:3000",
+        DATABASE_URL: "postgresql://opsflow:opsflow@localhost:5432/opsflow",
+        JWT_ACCESS_SECRET: "dev-access-secret-change-me",
+        DEMO_WORKSPACE_ENABLED: "false",
+        DEMO_WORKSPACE_TTL_MINUTES: "90",
+        DEMO_WORKSPACE_MAX_ACTIVE: "25",
+        DEMO_WORKSPACE_CREATE_LIMIT: "3",
+        DEMO_WORKSPACE_AI_REQUEST_LIMIT: "4",
+        DEMO_WORKSPACE_CLEANUP_INTERVAL_SECONDS: "120",
+        DEMO_WORKSPACE_CLEANUP_BATCH_SIZE: "10",
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        DEMO_WORKSPACE_ENABLED: false,
+        DEMO_WORKSPACE_TTL_MINUTES: 90,
+        DEMO_WORKSPACE_MAX_ACTIVE: 25,
+        DEMO_WORKSPACE_CREATE_LIMIT: 3,
+        DEMO_WORKSPACE_AI_REQUEST_LIMIT: 4,
+        DEMO_WORKSPACE_CLEANUP_INTERVAL_SECONDS: 120,
+        DEMO_WORKSPACE_CLEANUP_BATCH_SIZE: 10,
       }),
     );
   });

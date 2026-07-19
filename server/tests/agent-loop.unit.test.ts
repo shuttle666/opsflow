@@ -6,6 +6,11 @@ const loopMocks = vi.hoisted(() => ({
   listTools: vi.fn(),
   executeTool: vi.fn(),
   streamFactory: vi.fn(),
+  revalidateAuth: vi.fn(async (auth) => auth),
+}));
+
+vi.mock("../src/modules/auth/auth-context", () => ({
+  revalidateTenantAuthContext: loopMocks.revalidateAuth,
 }));
 
 vi.mock("../src/modules/operations-tools", () => ({

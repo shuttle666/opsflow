@@ -66,6 +66,7 @@ enum AuditAction {
   AUTH_REFRESH
   AUTH_LOGOUT
   AUTH_SWITCH_TENANT
+  AUTH_DEMO_SESSION_CREATED
   TENANT_INVITATION_CREATED
   TENANT_INVITATION_ACCEPTED
   RBAC_FORBIDDEN
@@ -113,6 +114,11 @@ enum ToolInvocationStatus {
   FAILED
 }
 
+enum DemoWorkspaceStatus {
+  ACTIVE
+  CLEANING
+}
+
 model User {
   id                         String                @id @default(uuid()) @db.Uuid
   email                      String                @unique
@@ -121,6 +127,8 @@ model User {
   isActive                   Boolean               @default(true) @map("is_active")
   createdAt                  DateTime              @default(now()) @map("created_at")
   updatedAt                  DateTime              @updatedAt @map("updated_at")
+  demoWorkspaceId            String?               @map("demo_workspace_id") @db.Uuid
+  demoWorkspace              DemoWorkspace?        @relation(fields: [demoWorkspaceId], references: [id], onDelete: Restrict)
   memberships                Membership[]
   createdCustomers           Customer[]            @relation("CustomerCreatedBy")
   createdJobs                Job[]                 @relation("JobCreatedBy")
@@ -140,6 +148,7 @@ model User {
   confirmedAgentProposals    AgentProposal[]       @relation("AgentProposalConfirmedBy")
   toolInvocations            ToolInvocation[]
 
+  @@index([demoWorkspaceId])
   @@map("users")
 }
 
@@ -164,9 +173,29 @@ model Tenant {
   agentConversations   AgentConversation[]
   agentProposals       AgentProposal[]
   toolInvocations      ToolInvocation[]
+  demoWorkspace        DemoWorkspace?
 
   @@index([status])
   @@map("tenants")
+}
+
+model DemoWorkspace {
+  id               String              @id @default(uuid()) @db.Uuid
+  tenantId         String              @unique @map("tenant_id") @db.Uuid
+  templateVersion  String              @map("template_version")
+  scenario         Json
+  aiRequestsUsed   Int                 @default(0) @map("ai_requests_used")
+  status           DemoWorkspaceStatus @default(ACTIVE)
+  expiresAt        DateTime            @map("expires_at")
+  cleanupStartedAt DateTime?           @map("cleanup_started_at")
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+  tenant           Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  users            User[]
+
+  @@index([status, expiresAt])
+  @@index([status, cleanupStartedAt])
+  @@map("demo_workspaces")
 }
 
 model Membership {

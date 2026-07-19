@@ -30,17 +30,24 @@ import {
   switchTenant,
 } from "./auth.service";
 import { getRequestMetadata } from "./request-metadata";
+import { createPrivateDemoSession } from "../demo-workspace/demo-workspace.service";
 
 const refreshCookieName = "opsflow_refresh";
 const refreshCookiePath = "/api/auth";
 
-function refreshCookieOptions() {
+function refreshCookieOptions(expiresAt?: Date) {
+  const configuredMaxAge =
+    env.JWT_REFRESH_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000;
+  const workspaceMaxAge = expiresAt
+    ? Math.max(0, expiresAt.getTime() - Date.now())
+    : configuredMaxAge;
+
   return {
     httpOnly: true,
     secure: env.NODE_ENV === "production",
     sameSite: "lax" as const,
     path: refreshCookiePath,
-    maxAge: env.JWT_REFRESH_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000,
+    maxAge: Math.min(configuredMaxAge, workspaceMaxAge),
   };
 }
 
@@ -73,8 +80,12 @@ function getRefreshCookie(req: Parameters<RequestHandler>[0]) {
   return parseCookieHeader(req.headers.cookie).get(refreshCookieName);
 }
 
-function setRefreshCookie(res: Parameters<RequestHandler>[1], refreshToken: string) {
-  res.cookie(refreshCookieName, refreshToken, refreshCookieOptions());
+function setRefreshCookie(
+  res: Parameters<RequestHandler>[1],
+  refreshToken: string,
+  expiresAt?: Date,
+) {
+  res.cookie(refreshCookieName, refreshToken, refreshCookieOptions(expiresAt));
 }
 
 function clearRefreshCookie(res: Parameters<RequestHandler>[1]) {
@@ -114,6 +125,23 @@ export const loginHandler: RequestHandler = asyncHandler(async (req, res) => {
   });
 });
 
+export const privateDemoSessionHandler: RequestHandler = asyncHandler(
+  async (req, res) => {
+    const result = await createPrivateDemoSession(getRequestMetadata(req));
+    setRefreshCookie(
+      res,
+      result.refreshToken,
+      result.demoWorkspace.expiresAt,
+    );
+
+    sendSuccess(res, {
+      statusCode: 201,
+      message: "Quick demo workspace created.",
+      data: publicAuthResult(result),
+    });
+  },
+);
+
 export const refreshHandler: RequestHandler = asyncHandler(async (req, res) => {
   const input = refreshSchema.parse(req.body ?? {});
   const refreshToken = input.refreshToken ?? getRefreshCookie(req);
@@ -122,7 +150,11 @@ export const refreshHandler: RequestHandler = asyncHandler(async (req, res) => {
   }
 
   const result = await refreshSession({ refreshToken }, getRequestMetadata(req));
-  setRefreshCookie(res, result.refreshToken);
+  setRefreshCookie(
+    res,
+    result.refreshToken,
+    result.demoWorkspace?.expiresAt,
+  );
 
   sendSuccess(res, {
     message: "Token refresh successful.",

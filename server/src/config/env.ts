@@ -42,6 +42,38 @@ const envSchema = z.object({
   AUTH_SESSION_LIMIT: z.coerce.number().int().positive().default(5),
   BCRYPT_SALT_ROUNDS: z.coerce.number().int().min(8).max(14).default(10),
   INVITATION_EXPIRES_IN_DAYS: z.coerce.number().int().positive().default(7),
+  DEMO_WORKSPACE_ENABLED: booleanEnvSchema.optional(),
+  DEMO_WORKSPACE_TTL_MINUTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(24 * 60)
+    .default(60),
+  DEMO_WORKSPACE_MAX_ACTIVE: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(10_000)
+    .default(100),
+  DEMO_WORKSPACE_CREATE_LIMIT: z.coerce.number().int().positive().max(100).default(5),
+  DEMO_WORKSPACE_AI_REQUEST_LIMIT: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(100)
+    .default(6),
+  DEMO_WORKSPACE_CLEANUP_INTERVAL_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(24 * 60 * 60)
+    .default(5 * 60),
+  DEMO_WORKSPACE_CLEANUP_BATCH_SIZE: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(500)
+    .default(20),
   EVIDENCE_DIR: z.string().min(1).default("./uploads/evidence"),
   EVIDENCE_MAX_SIZE_BYTES: z.coerce.number().int().positive().default(10 * 1024 * 1024),
   ANTHROPIC_API_KEY: z.string().default(""),
@@ -98,7 +130,12 @@ export function parseEnv(source: NodeJS.ProcessEnv) {
     throw new Error("Invalid environment variables");
   }
 
-  const env = parsedEnv.data;
+  const env = {
+    ...parsedEnv.data,
+    DEMO_WORKSPACE_ENABLED:
+      parsedEnv.data.DEMO_WORKSPACE_ENABLED ??
+      parsedEnv.data.NODE_ENV !== "production",
+  };
 
   if (
     env.NODE_ENV === "production" &&

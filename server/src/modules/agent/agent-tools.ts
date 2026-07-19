@@ -2,6 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { MembershipRole } from "@prisma/client";
 import type { AuthContext } from "../../types/auth";
 import { safeExecuteWithSchema } from "../ai";
+import { revalidateTenantAuthContext } from "../auth/auth-context";
 import * as auditService from "../audit/audit.service";
 import * as customerService from "../customer/customer.service";
 import * as jobService from "../job/job.service";
@@ -729,7 +730,9 @@ export async function executeTool(
   input: Record<string, unknown>,
   context?: ToolContext,
 ): Promise<unknown> {
-  if (!canAccessTool(auth, toolName)) {
+  const currentAuth = await revalidateTenantAuthContext(auth);
+
+  if (!canAccessTool(currentAuth, toolName)) {
     return {
       error: true,
       message: "Permission denied: your role cannot use this tool.",
@@ -741,5 +744,5 @@ export async function executeTool(
     return { error: true, message: `Unknown tool: ${toolName}` };
   }
 
-  return tool.execute(auth, input, context);
+  return tool.execute(currentAuth, input, context);
 }

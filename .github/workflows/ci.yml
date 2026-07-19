@@ -97,6 +97,18 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Build production server image
+        run: docker build --tag opsflow-server-ci .
+
+      - name: Verify production demo seed dependencies
+        run: |
+          docker run --rm \
+            --env NODE_ENV=production \
+            --env JWT_ACCESS_SECRET=ci-production-image-secret \
+            --entrypoint ./node_modules/.bin/tsx \
+            opsflow-server-ci \
+            --eval 'require("./src/modules/evidence/evidence-storage")'
+
   nginx-ingress-smoke:
     name: nginx-ingress-smoke
     runs-on: ubuntu-latest

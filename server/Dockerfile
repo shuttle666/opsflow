@@ -48,6 +48,8 @@ COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/tsconfig.json /ap
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
+# Operational Prisma scripts run through tsx and import shared server modules.
+COPY --from=builder /app/src ./src
 
 RUN mkdir -p /app/uploads/evidence "$HOME/.cache/node/corepack" \
   && chown -R opsflow:nodejs /app "$HOME"

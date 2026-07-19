@@ -25,9 +25,9 @@ OpsFlow is a production-style, multi-tenant platform for service teams to manage
 
 Its differentiator is not another AI chat box. The in-app Web Agent and a local MCP server share the same tenant-aware Tool Registry. AI-initiated business changes stop at a structured pending proposal. The Web flow does not accept the original request as confirmation; the MCP contract requires the same later checkpoint and explicitly treats faithful confirmation handling as the external host's responsibility. An Owner or Manager must review and authorize the proposal before customer or job data is changed.
 
-**Demo Owner:** `owner@acme.example` / `owner-password-123`
+**Recommended:** choose **Start a quick demo** on the sign-in page. It creates a prefilled, isolated workspace for the current visitor without registration.
 
-> The public demo uses shared accounts. During the same reset window, another visitor using the same account may see data or Agent conversations you create, so use fictional sample data only. The daily reset removes operational records, Agent history, Tool Invocation audit rows, and tenant evidence files; it is still a demonstration environment, not a place for private or sensitive information.
+> A quick demo workspace expires after 60 minutes, has a six-request AI budget, and is removed in bounded background cleanup. Its tenant, users, jobs, Agent history, audit rows, and evidence are isolated from the shared demo account. The shared role accounts below remain available for the multi-role walkthrough; use fictional sample data in every demo environment.
 
 ## What this project demonstrates
 
@@ -39,8 +39,8 @@ Its differentiator is not another AI chat box. The in-app Web Agent and a local 
 
 ## 90-second walkthrough
 
-1. [Sign in as the Demo Owner](https://opsflow.aboutwenduo.wang/login) and scan today’s work on **Dashboard** and **Schedule**.
-2. Open **AI Planner** and ask it to prepare a customer, job, assignment, or scheduling change using the sample data.
+1. [Open the demo](https://opsflow.aboutwenduo.wang/login), choose **Start a quick demo**, and scan today’s work on **Dashboard** and **Schedule**.
+2. Open **AI Planner** and select the Golden Demo prompt for Aiden Murphy and Sofia Nguyen.
 3. Inspect the structured proposal. At this point, the requested customer or job change has not been applied.
 4. Review the resolved customer, job, assignee, schedule, blockers, and warnings, then select **Confirm plan**.
 5. Open the affected job to inspect its assignment, status, workflow history, and notifications.
@@ -201,7 +201,7 @@ OpsFlow is production-shaped rather than presented as production-complete.
 - MCP currently uses local stdio; remote transport, public client registration, and OAuth are deferred.
 - Evidence storage is local-disk behind an abstraction; an S3-compatible implementation is a planned upgrade.
 - Advanced route optimization, third-party integrations, payments, and a customer portal are outside the current case-study scope.
-- The public environment is a shared demonstration system, not a place for real customer or operational data.
+- Quick demo workspaces are short-lived and isolated, while the optional role accounts remain shared; neither is a place for real customer or operational data.
 
 ## Deeper documentation
 

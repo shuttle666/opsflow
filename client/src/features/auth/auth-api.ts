@@ -48,6 +48,14 @@ export async function registerRequest(input: RegisterInput) {
   return requireData(response, "Register response is missing payload.");
 }
 
+export async function startPrivateDemoRequest() {
+  const response = await apiClient.post<ApiSuccessResponse<AuthResult>>(
+    "/auth/demo-session",
+  );
+
+  return requireData(response, "Quick demo response is missing payload.");
+}
+
 export async function refreshRequest() {
   const response = await apiClient.post<ApiSuccessResponse<AuthResult>>(
     "/auth/refresh",

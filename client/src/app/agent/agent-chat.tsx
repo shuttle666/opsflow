@@ -119,13 +119,13 @@ function executionToolError(result: unknown): {
 }
 
 const PLANNER_SUGGESTIONS = [
-  "Assign Archie Wright's dishwasher leak job to Alex Nguyen tomorrow 9-11",
-  "Which unassigned jobs should be scheduled tomorrow?",
-  "Update Leo Martin's phone to 0412 999 888",
-  "Show Harper Lee's workload this week",
+  "Create an air conditioner service job for Aiden Murphy at 18 Collins Street, Melbourne VIC 3000 and assign it to Sofia Nguyen",
+  "Which unassigned jobs should be scheduled next?",
+  "Update Aiden Murphy's phone to 0412 999 888",
+  "Show Sofia Nguyen's workload this week",
 ];
 
-const PLANNER_TAGS = ["Schedule", "Assign", "Update", "Review"] as const;
+const PLANNER_TAGS = ["Create", "Schedule", "Update", "Review"] as const;
 const EMPTY_CONVERSATIONS: ConversationSummary[] = [];
 const EMPTY_MESSAGES: ChatMessage[] = [];
 
@@ -892,7 +892,13 @@ function ProposalCard({
   );
 }
 
-function EmptyState({ onSuggestion }: { onSuggestion?: (suggestion: string) => void }) {
+function EmptyState({
+  onSuggestion,
+  suggestions = PLANNER_SUGGESTIONS,
+}: {
+  onSuggestion?: (suggestion: string) => void;
+  suggestions?: readonly string[];
+}) {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col items-center text-center">
       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[image:var(--gradient-brand)] !text-white shadow-[0_18px_36px_-24px_var(--color-brand-glow)]">
@@ -919,7 +925,7 @@ function EmptyState({ onSuggestion }: { onSuggestion?: (suggestion: string) => v
 
       {onSuggestion ? (
         <div className="mt-7 grid w-full gap-2 sm:grid-cols-2">
-          {PLANNER_SUGGESTIONS.map((suggestion) => (
+          {suggestions.map((suggestion) => (
             <button
               key={suggestion}
               type="button"
@@ -940,7 +946,18 @@ export function AgentChat() {
   const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
   const userId = useAuthStore((state) => state.user?.id);
   const currentTenant = useAuthStore((state) => state.currentTenant);
+  const demoSuggestedPrompt = useAuthStore(
+    (state) => state.demoWorkspace?.scenario.suggestedPrompt,
+  );
   const canUse = canUsePlanner(currentTenant?.role);
+  const plannerSuggestions = useMemo(() => {
+    const suggestedPrompt = demoSuggestedPrompt?.trim();
+    if (!suggestedPrompt) {
+      return PLANNER_SUGGESTIONS;
+    }
+
+    return [suggestedPrompt, ...PLANNER_SUGGESTIONS.slice(1)];
+  }, [demoSuggestedPrompt]);
   const queryClient = useQueryClient();
   const queryScope = useAuthenticatedQueryScope();
   const activeConversationKey = useMemo(
@@ -1340,7 +1357,7 @@ export function AgentChat() {
           {isLoadingConversations ? (
             <LoadingPanel label="Loading planner conversation..." compact />
           ) : isEmptyConversation ? (
-            <EmptyState onSuggestion={setInput} />
+            <EmptyState onSuggestion={setInput} suggestions={plannerSuggestions} />
           ) : (
             <div className="flex w-full flex-col gap-4">
               {messages.map((message) => (

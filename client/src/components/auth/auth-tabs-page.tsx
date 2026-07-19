@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -10,9 +10,11 @@ import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
 import {
   ArrowRight,
   Building2,
+  ChevronDown,
   CircleUserRound,
   LockKeyhole,
   Mail,
+  Sparkles,
   type IconComponent,
 } from "@/components/ui/icons";
 import {
@@ -20,6 +22,7 @@ import {
 } from "@/components/ui/styles";
 import { loginSchema, type LoginFormValues } from "@/features/auth/login-schema";
 import { registerSchema, type RegisterFormValues } from "@/features/auth";
+import { writeGoldenDemoProgress } from "@/features/golden-demo";
 import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 
@@ -51,6 +54,9 @@ const authVideoUrl = "/opsflow-hero-bg.mp4";
 
 const authFieldClassName =
   "h-14 w-full rounded-[22px] border border-[var(--color-app-border)] bg-[color-mix(in_srgb,var(--color-app-panel)_84%,transparent)] py-0 pl-16 pr-4 text-sm text-[var(--color-text)] shadow-sm outline-none transition placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-brand)] focus:ring-[3px] focus:ring-[var(--color-brand-soft)]";
+
+const demoActionClassName =
+  "inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[16px] bg-[var(--color-brand)] px-4 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-[3px] focus:ring-[var(--color-brand-soft)] disabled:cursor-not-allowed disabled:opacity-60";
 
 function AuthField({
   icon: Icon,
@@ -86,20 +92,23 @@ function AuthTabsPageContent({ initialMode = "login" }: AuthTabsPageProps) {
   );
   const login = useAuthStore((state) => state.login);
   const registerUser = useAuthStore((state) => state.register);
+  const startPrivateDemo = useAuthStore((state) => state.startPrivateDemo);
   const status = useAuthStore((state) => state.status);
   const [mode, setMode] = useState<AuthMode>(() =>
     searchParams.get("mode") === "register" ? "register" : initialMode,
   );
   const [submitError, setSubmitError] = useState<ApiErrorView | null>(null);
+  const [isPrivateDemoStarting, setIsPrivateDemoStarting] = useState(false);
   const [selectedDemoEmail, setSelectedDemoEmail] = useState<string | null>(
     requestedDemoAccount?.email ?? null,
   );
+  const privateDemoRedirectPending = useRef(false);
 
   const rawNext = searchParams.get("next");
   const nextPath = rawNext && rawNext.startsWith("/") ? rawNext : "/dashboard";
 
   useEffect(() => {
-    if (status === "authenticated") {
+    if (status === "authenticated" && !privateDemoRedirectPending.current) {
       router.replace(nextPath);
     }
   }, [status, nextPath, router]);
@@ -155,6 +164,24 @@ function AuthTabsPageContent({ initialMode = "login" }: AuthTabsPageProps) {
       router.push(nextPath);
     } catch (error) {
       setSubmitError(getApiErrorView(error, "Registration failed. Please try again."));
+    }
+  };
+
+  const onPrivateDemoStart = async () => {
+    setSubmitError(null);
+    setIsPrivateDemoStarting(true);
+    privateDemoRedirectPending.current = true;
+
+    try {
+      await startPrivateDemo();
+      writeGoldenDemoProgress("started", 0);
+      router.push("/agent");
+    } catch (error) {
+      setSubmitError(
+        getApiErrorView(error, "Quick demo could not be created. Please try again."),
+      );
+      privateDemoRedirectPending.current = false;
+      setIsPrivateDemoStarting(false);
     }
   };
 
@@ -269,9 +296,44 @@ function AuthTabsPageContent({ initialMode = "login" }: AuthTabsPageProps) {
                 <InlineErrorBanner message={submitError} />
               ) : null}
 
-              <details className="rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-4 py-3 text-sm text-[var(--color-text-secondary)]">
-                <summary className="cursor-pointer list-none font-semibold text-[var(--color-text)]">
-                  Demo accounts
+              <section className="rounded-[20px] border border-[var(--color-brand)]/35 bg-[var(--color-brand-soft)] p-4">
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-app-panel)] text-[var(--color-brand)] shadow-sm">
+                    <Sparkles className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-bold text-[var(--color-text)]">
+                      Try a quick demo
+                    </h2>
+                    <p className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)]">
+                      Get an isolated workspace with fictional sample data. It expires
+                      automatically and never changes the shared demo account.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={isPrivateDemoStarting}
+                  onClick={onPrivateDemoStart}
+                  className={cn(demoActionClassName, "mt-4")}
+                >
+                  {isPrivateDemoStarting ? "Preparing your workspace..." : "Start a quick demo"}
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+                <p className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+                  No sign-up · Isolated data · Automatic cleanup
+                </p>
+              </section>
+
+              <details className="group rounded-[20px] border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] p-3 text-sm text-[var(--color-text-secondary)]">
+                <summary
+                  className={cn(
+                    demoActionClassName,
+                    "cursor-pointer list-none [&::-webkit-details-marker]:hidden",
+                  )}
+                >
+                  <span>Shared demo accounts</span>
+                  <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
                 </summary>
                 <div className="mt-3 grid gap-2">
                   {seededAccounts.map((account) => (

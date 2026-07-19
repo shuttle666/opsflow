@@ -33,9 +33,9 @@ describe("public home page", () => {
         name: "AI prepares the plan. People approve the change.",
       }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Explore Owner Demo" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Start a quick demo" })).toHaveAttribute(
       "href",
-      "/login?demo=owner",
+      "/login",
     );
     expect(screen.getAllByRole("link", { name: "Source" })[0]).toHaveAttribute(
       "href",

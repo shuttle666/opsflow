@@ -34,18 +34,37 @@ export type RegisterInput = {
   tenantName?: string;
 };
 
+export type DemoWorkspaceScenario = {
+  customerName: string;
+  staffName: string;
+  timezone: string;
+  localDate: string;
+  localStartTime: string;
+  localEndTime: string;
+  serviceAddress: string;
+  suggestedPrompt: string;
+};
+
+export type DemoWorkspaceContext = {
+  templateVersion: string;
+  expiresAt: string;
+  scenario: DemoWorkspaceScenario;
+};
+
 export type AuthResult = {
   accessToken: string;
   expiresInMinutes: number;
   user: AuthUser;
   currentTenant: TenantMembership;
   availableTenants: TenantMembership[];
+  demoWorkspace?: DemoWorkspaceContext;
 };
 
 export type MeResult = {
   user: AuthUser;
   currentTenant: TenantMembership;
   availableTenants: TenantMembership[];
+  demoWorkspace?: DemoWorkspaceContext;
 };
 
 export type InvitationAcceptedResult = {

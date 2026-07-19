@@ -10,9 +10,11 @@ import {
   listTenantInvitationsRequest,
   loginRequest,
   meRequest,
+  readStoredTokens,
   registerRequest,
   refreshRequest,
   resendInvitationRequest,
+  startPrivateDemoRequest,
 } from "@/features/auth";
 
 vi.mock("@/features/auth", () => ({
@@ -30,6 +32,7 @@ vi.mock("@/features/auth", () => ({
   refreshRequest: vi.fn(),
   registerRequest: vi.fn(),
   resendInvitationRequest: vi.fn(),
+  startPrivateDemoRequest: vi.fn(),
   switchTenantRequest: vi.fn(),
   writeStoredTokens: vi.fn(),
 }));
@@ -63,11 +66,13 @@ function buildAuthResult(): AuthResult {
 describe("auth store", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(readStoredTokens).mockReturnValue(null);
     useAuthStore.setState({
       status: "unauthenticated",
       user: null,
       currentTenant: null,
       availableTenants: [],
+      demoWorkspace: null,
       accessToken: null,
       refreshToken: null,
     });
@@ -90,6 +95,40 @@ describe("auth store", () => {
     expect(state.currentTenant?.tenantId).toBe(result.currentTenant.tenantId);
     expect(state.accessToken).toBe(result.accessToken);
     expect(state.refreshToken).toBeNull();
+  });
+
+  it("starts a private demo and sets its isolated authenticated session", async () => {
+    const result: AuthResult = {
+      ...buildAuthResult(),
+      demoWorkspace: {
+        templateVersion: "golden-demo.v1",
+        expiresAt: "2026-07-19T08:00:00.000Z",
+        scenario: {
+          customerName: "Aiden Murphy",
+          staffName: "Sofia Nguyen",
+          timezone: "Australia/Melbourne",
+          localDate: "2026-07-20",
+          localStartTime: "14:00",
+          localEndTime: "15:00",
+          serviceAddress: "18 Collins Street, Melbourne VIC 3000",
+          suggestedPrompt:
+            "Schedule Aiden Murphy with Sofia Nguyen on 2026-07-20 from 14:00 to 15:00",
+        },
+      },
+    };
+    vi.mocked(startPrivateDemoRequest).mockResolvedValue(result);
+
+    await useAuthStore.getState().startPrivateDemo();
+
+    const state = useAuthStore.getState();
+    expect(vi.mocked(startPrivateDemoRequest)).toHaveBeenCalledOnce();
+    expect(state.status).toBe("authenticated");
+    expect(state.user).toEqual(result.user);
+    expect(state.currentTenant).toEqual(result.currentTenant);
+    expect(state.availableTenants).toEqual(result.availableTenants);
+    expect(state.accessToken).toBe(result.accessToken);
+    expect(state.refreshToken).toBeNull();
+    expect(state.demoWorkspace).toEqual(result.demoWorkspace);
   });
 
   it("preserves API error metadata on login failure", async () => {
@@ -306,5 +345,36 @@ describe("auth store", () => {
       "invitation-7",
     );
     expect(vi.mocked(meRequest)).toHaveBeenCalled();
+  });
+
+  it("restores private demo context from the current-session response", async () => {
+    const authenticated = buildAuthResult();
+    const demoWorkspace = {
+      templateVersion: "golden-demo.v1",
+      expiresAt: "2026-07-19T08:00:00.000Z",
+      scenario: {
+        customerName: "Aiden Murphy",
+        staffName: "Sofia Nguyen",
+        timezone: "Australia/Melbourne",
+        localDate: "2026-07-20",
+        localStartTime: "14:00",
+        localEndTime: "15:00",
+        serviceAddress: "18 Collins Street, Melbourne VIC 3000",
+        suggestedPrompt:
+          "Schedule Aiden Murphy with Sofia Nguyen on 2026-07-20 from 14:00 to 15:00",
+      },
+    };
+    vi.mocked(readStoredTokens).mockReturnValue({ accessToken: "stored-token" });
+    vi.mocked(meRequest).mockResolvedValue({
+      user: authenticated.user,
+      currentTenant: authenticated.currentTenant,
+      availableTenants: authenticated.availableTenants,
+      demoWorkspace,
+    });
+
+    await useAuthStore.getState().bootstrapSession();
+
+    expect(vi.mocked(meRequest)).toHaveBeenCalledWith("stored-token");
+    expect(useAuthStore.getState().demoWorkspace).toEqual(demoWorkspace);
   });
 });

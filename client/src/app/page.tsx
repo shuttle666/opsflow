@@ -17,10 +17,10 @@ const architectureUrl = `${projectSourceUrl}/blob/main/docs/engineering/architec
 const caseStudyUrl = `${projectSourceUrl}/blob/main/docs/engineering/case-study.md`;
 
 const proposalFields = [
-  { label: "Customer", value: "Archie Wright" },
-  { label: "Job", value: "Dishwasher leak" },
-  { label: "Assignee", value: "Alex Morgan · Staff" },
-  { label: "Window", value: "Today · 10:30–12:00" },
+  { label: "Customer", value: "Aiden Murphy" },
+  { label: "Job", value: "Air conditioner service" },
+  { label: "Assignee", value: "Sofia Nguyen · Staff" },
+  { label: "Window", value: "Next business day · 14:00–15:00" },
 ] as const;
 
 const safeFlow = [
@@ -97,10 +97,10 @@ export default function HomePage() {
 
               <div className="mt-9 flex flex-wrap items-center gap-3">
                 <Link
-                  href="/login?demo=owner"
+                  href="/login"
                   className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[var(--color-text)] px-5 text-sm font-semibold !text-[var(--color-app-panel)] transition hover:opacity-85"
                 >
-                  Explore Owner Demo
+                  Start a quick demo
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
@@ -139,7 +139,7 @@ export default function HomePage() {
               </div>
 
               <p className="mt-7 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-text-muted)]">
-                Shared demo · Fictional data only
+                Isolated workspace · Fictional data · Automatic cleanup
               </p>
             </div>
 
@@ -154,7 +154,7 @@ export default function HomePage() {
                     <span className="h-2.5 w-2.5 rounded-full bg-[var(--color-warning)]" />
                     <div>
                       <p className="text-sm font-bold text-[var(--color-text)]">
-                        Schedule urgent repair
+                        Schedule service visit
                       </p>
                       <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
                         Proposal · Pending
@@ -168,8 +168,8 @@ export default function HomePage() {
 
                 <div className="p-5 sm:p-6">
                   <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
-                    Assign the urgent leak job and schedule the earliest
-                    conflict-free window.
+                    Create the air conditioner service job, assign Sofia, and
+                    schedule the verified demo window.
                   </p>
 
                   <dl className="mt-6 grid border-y border-[var(--color-app-border)] sm:grid-cols-2">

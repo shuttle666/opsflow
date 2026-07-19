@@ -14,6 +14,7 @@ import {
   registerRequest,
   refreshRequest,
   resendInvitationRequest,
+  startPrivateDemoRequest,
   switchTenantRequest,
   writeStoredTokens,
 } from "@/features/auth";
@@ -23,6 +24,7 @@ import type {
   AuthResult,
   AuthStatus,
   AuthUser,
+  DemoWorkspaceContext,
   InvitationCreateInput,
   InvitationCreatedResult,
   InvitationAcceptedResult,
@@ -39,11 +41,13 @@ type AuthStore = {
   user: AuthUser | null;
   currentTenant: TenantMembership | null;
   availableTenants: TenantMembership[];
+  demoWorkspace: DemoWorkspaceContext | null;
   accessToken: string | null;
   refreshToken: string | null;
   bootstrapSession: () => Promise<void>;
   register: (input: RegisterInput) => Promise<void>;
   login: (credentials: AuthCredentials) => Promise<void>;
+  startPrivateDemo: () => Promise<void>;
   logout: (allDevices?: boolean) => Promise<void>;
   switchTenant: (tenantId: string) => Promise<void>;
   createInvitation: (
@@ -76,6 +80,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   user: null,
   currentTenant: null,
   availableTenants: [],
+  demoWorkspace: null,
   accessToken: null,
   refreshToken: null,
   bootstrapSession: async () => {
@@ -90,6 +95,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
             user: null,
             currentTenant: null,
             availableTenants: [],
+            demoWorkspace: null,
           });
           return;
         }
@@ -108,6 +114,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
               user: me.user,
               currentTenant: me.currentTenant,
               availableTenants: me.availableTenants,
+              demoWorkspace: me.demoWorkspace ?? null,
             });
           };
 
@@ -147,6 +154,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         user: result.user,
         currentTenant: result.currentTenant,
         availableTenants: result.availableTenants,
+        demoWorkspace: result.demoWorkspace ?? null,
       });
     } catch (error) {
       get().clearSession();
@@ -173,6 +181,34 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         user: result.user,
         currentTenant: result.currentTenant,
         availableTenants: result.availableTenants,
+        demoWorkspace: result.demoWorkspace ?? null,
+      });
+    } catch (error) {
+      get().clearSession();
+      if (error instanceof Error) {
+        throw error;
+      }
+
+      throw new Error("Unexpected authentication error.");
+    }
+  },
+  startPrivateDemo: async () => {
+    set({ status: "loading" });
+
+    try {
+      const result = await startPrivateDemoRequest();
+      writeStoredTokens({
+        accessToken: result.accessToken,
+      });
+
+      set({
+        status: "authenticated",
+        accessToken: result.accessToken,
+        refreshToken: null,
+        user: result.user,
+        currentTenant: result.currentTenant,
+        availableTenants: result.availableTenants,
+        demoWorkspace: result.demoWorkspace ?? null,
       });
     } catch (error) {
       get().clearSession();
@@ -211,6 +247,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       user: result.user,
       currentTenant: result.currentTenant,
       availableTenants: result.availableTenants,
+      demoWorkspace: result.demoWorkspace ?? null,
     });
   },
   createInvitation: async (input) => {
@@ -241,6 +278,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       user: me.user,
       currentTenant: me.currentTenant,
       availableTenants: me.availableTenants,
+      demoWorkspace: me.demoWorkspace ?? null,
     });
 
     return accepted;
@@ -289,6 +327,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       user: me.user,
       currentTenant: me.currentTenant,
       availableTenants: me.availableTenants,
+      demoWorkspace: me.demoWorkspace ?? null,
     });
 
     return accepted;
@@ -302,6 +341,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       user: null,
       currentTenant: null,
       availableTenants: [],
+      demoWorkspace: null,
     });
   },
   refreshAccessToken: async () => {
@@ -319,6 +359,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
             user: result.user,
             currentTenant: result.currentTenant,
             availableTenants: result.availableTenants,
+            demoWorkspace: result.demoWorkspace ?? null,
           });
 
           return result;

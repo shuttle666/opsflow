@@ -135,6 +135,7 @@ describe("AgentChat", () => {
         role: "OWNER",
       },
       availableTenants: [],
+      demoWorkspace: null,
       accessToken: "expired-token",
       refreshToken: "refresh-token",
       withAccessTokenRetry: async <T,>(request: (accessToken: string) => Promise<T>) => {
@@ -148,6 +149,48 @@ describe("AgentChat", () => {
         }
       },
     });
+  });
+
+  it("prioritizes the server-provided Golden Demo prompt", async () => {
+    const suggestedPrompt =
+      "Schedule Aiden Murphy with Sofia Nguyen on 2026-07-20 from 14:00 to 15:00";
+    useAuthStore.setState({
+      demoWorkspace: {
+        templateVersion: "golden-demo.v1",
+        expiresAt: "2026-07-19T08:00:00.000Z",
+        scenario: {
+          customerName: "Aiden Murphy",
+          staffName: "Sofia Nguyen",
+          timezone: "Australia/Melbourne",
+          localDate: "2026-07-20",
+          localStartTime: "14:00",
+          localEndTime: "15:00",
+          serviceAddress: "18 Collins Street, Melbourne VIC 3000",
+          suggestedPrompt,
+        },
+      },
+    });
+
+    const user = userEvent.setup();
+    render(<AgentChat />);
+
+    const suggestion = await screen.findByRole("button", { name: suggestedPrompt });
+    expect(screen.getByText("Create", { selector: "span" })).toBeInTheDocument();
+    expect(screen.getByText("Schedule", { selector: "span" })).toBeInTheDocument();
+    expect(screen.getByText("Update", { selector: "span" })).toBeInTheDocument();
+    expect(screen.getByText("Review", { selector: "span" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: "Assign Archie Wright's dishwasher leak job to Alex Nguyen tomorrow 9-11",
+      }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Leo Martin|Harper Lee/u)).not.toBeInTheDocument();
+
+    await user.click(suggestion);
+
+    expect(screen.getByPlaceholderText("Ask the AI Planner...")).toHaveValue(
+      suggestedPrompt,
+    );
   });
 
   it("retries opening the message stream after a 401 and then consumes the stream", async () => {

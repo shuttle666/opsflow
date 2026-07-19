@@ -34,7 +34,11 @@ import {
   useUploadJobEvidenceMutation,
 } from "@/features/job/job-queries";
 import { useAuthenticatedQueryScope } from "@/hooks/use-authenticated-query";
-import { formatDateTime, formatScheduleRange } from "@/features/job";
+import {
+  formatDateTime,
+  formatScheduleRange,
+  getBrowserTimeZone,
+} from "@/features/job";
 import { getApiErrorView, type ApiErrorView } from "@/lib/api-client";
 import { queryKeys } from "@/lib/query-keys";
 import { useAuthStore } from "@/store/auth-store";
@@ -368,6 +372,7 @@ export default function JobDetailPage() {
   const jobId = typeof params.jobId === "string" ? params.jobId : "";
   const user = useAuthStore((state) => state.user);
   const currentTenant = useAuthStore((state) => state.currentTenant);
+  const displayTimeZone = getBrowserTimeZone();
   const withAccessTokenRetry = useAuthStore((state) => state.withAccessTokenRetry);
   const queryClient = useQueryClient();
   const queryScope = useAuthenticatedQueryScope();
@@ -629,8 +634,12 @@ export default function JobDetailPage() {
               />
               <OverviewMetric
                 label="Scheduled"
-                value={formatScheduleRange(job.scheduledStartAt, job.scheduledEndAt)}
-                meta="Visit time"
+                value={formatScheduleRange(
+                  job.scheduledStartAt,
+                  job.scheduledEndAt,
+                  displayTimeZone,
+                )}
+                meta={`Visit time · ${displayTimeZone}`}
               />
               <OverviewMetric
                 label="Assigned"
@@ -655,7 +664,11 @@ export default function JobDetailPage() {
                       </p>
                       <InfoRow
                         label="Visit time"
-                        value={formatScheduleRange(job.scheduledStartAt, job.scheduledEndAt)}
+                        value={formatScheduleRange(
+                          job.scheduledStartAt,
+                          job.scheduledEndAt,
+                          displayTimeZone,
+                        )}
                         mono
                       />
                       <InfoRow label="Service address" value={job.serviceAddress} />

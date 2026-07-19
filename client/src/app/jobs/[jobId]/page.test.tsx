@@ -15,6 +15,10 @@ import {
 import { useAuthStore } from "@/store/auth-store";
 import { render, screen, waitFor } from "@/test/render";
 import type { JobDetail, JobHistoryResult } from "@/types/job";
+import {
+  formatScheduleRange,
+  getBrowserTimeZone,
+} from "@/features/job";
 
 const baseJob: JobDetail = {
   id: "job-1",
@@ -213,6 +217,27 @@ describe("job detail page", () => {
     expect(screen.getByText("Scheduled")).toBeInTheDocument();
     expect(screen.queryByText("Completed")).not.toBeInTheDocument();
     expect(screen.queryByText("-")).not.toBeInTheDocument();
+  });
+
+  it("labels scheduled times with the browser timezone", async () => {
+    const scheduledStartAt = "2026-07-20T04:00:00.000Z";
+    const scheduledEndAt = "2026-07-20T05:00:00.000Z";
+    vi.mocked(getJobDetailRequest).mockResolvedValue({
+      ...baseJob,
+      status: "SCHEDULED",
+      scheduledStartAt,
+      scheduledEndAt,
+    });
+
+    render(<JobDetailPage />);
+
+    const displayTimeZone = getBrowserTimeZone();
+    expect(
+      (await screen.findAllByText(
+        formatScheduleRange(scheduledStartAt, scheduledEndAt, displayTimeZone),
+      )).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText(`Visit time · ${displayTimeZone}`)).toBeInTheDocument();
   });
 
   it("keeps workflow read-only for staff on jobs not assigned to them", async () => {

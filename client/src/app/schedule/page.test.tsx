@@ -191,6 +191,11 @@ describe("schedule page", () => {
     render(<SchedulePage />);
 
     expect(await screen.findByText("My Schedule")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(
+        `Times shown in ${Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"}`,
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText("Your assigned jobs across the selected period.")).toBeInTheDocument();
     expect(screen.getByText("Week view")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Previous week" })).toBeInTheDocument();

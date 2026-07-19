@@ -28,7 +28,7 @@ import {
   surfaceClassName,
   subtleButtonClassName,
 } from "@/components/ui/styles";
-import { formatTimeRange } from "@/features/job";
+import { formatTimeRange, getBrowserTimeZone } from "@/features/job";
 import { useScheduleRangeQuery } from "@/features/job/schedule-queries";
 import { getApiErrorView } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
@@ -1118,6 +1118,7 @@ function CalendarToolbar({
 
 export default function SchedulePage() {
   const currentTenant = useAuthStore((state) => state.currentTenant);
+  const displayTimeZone = getBrowserTimeZone();
   const datePickerRef = useRef<HTMLInputElement>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [anchorDate, setAnchorDate] = useState(todayLocalDate);
@@ -1211,6 +1212,14 @@ export default function SchedulePage() {
           />
         ) : (
           <div className="space-y-4">
+            <div className="flex justify-end">
+              <p
+                aria-label={`Times shown in ${displayTimeZone}`}
+                className="rounded-full border border-[var(--color-app-border)] bg-[var(--color-app-panel-muted)] px-3 py-1.5 text-xs text-[var(--color-text-secondary)]"
+              >
+                Times shown in <span className="font-mono font-semibold">{displayTimeZone}</span>
+              </p>
+            </div>
             <section className="grid gap-3 md:grid-cols-3">
               <StatCard
                 label="Scheduled jobs"

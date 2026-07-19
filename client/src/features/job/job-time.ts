@@ -26,6 +26,36 @@ export function formatDateTime(value: string | null) {
   return new Date(value).toLocaleString();
 }
 
+export function getBrowserTimeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
+export function formatTimeZoneName(value: string | Date, timeZone?: string) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return timeZone ?? getBrowserTimeZone();
+  }
+
+  const resolvedTimeZone = timeZone ?? getBrowserTimeZone();
+
+  try {
+    const timeZoneName = new Intl.DateTimeFormat(undefined, {
+      timeZone: resolvedTimeZone,
+      timeZoneName: "short",
+    })
+      .formatToParts(date)
+      .find((part) => part.type === "timeZoneName")?.value;
+
+    return timeZoneName ?? resolvedTimeZone;
+  } catch {
+    return resolvedTimeZone;
+  }
+}
+
 function sameLocalDate(left: Date, right: Date, timeZone?: string) {
   if (!timeZone) {
     return left.toDateString() === right.toDateString();
@@ -52,21 +82,31 @@ export function formatScheduleRange(
 
   const start = new Date(scheduledStartAt);
   const end = new Date(scheduledEndAt);
-  const sameDay = sameLocalDate(start, end, timeZone);
-  const dateOptions: Intl.DateTimeFormatOptions = timeZone
-    ? { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }
-    : {};
+  const resolvedTimeZone = timeZone ?? getBrowserTimeZone();
+  const sameDay = sameLocalDate(start, end, resolvedTimeZone);
+  const dateOptions: Intl.DateTimeFormatOptions = {
+    timeZone: resolvedTimeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  };
   const timeOptions: Intl.DateTimeFormatOptions = {
-    ...dateOptions,
+    timeZone: resolvedTimeZone,
     hour: "2-digit",
     minute: "2-digit",
   };
+  const startTimeZoneName = formatTimeZoneName(start, resolvedTimeZone);
+  const endTimeZoneName = formatTimeZoneName(end, resolvedTimeZone);
+  const timeZoneSuffix =
+    startTimeZoneName === endTimeZoneName
+      ? startTimeZoneName
+      : `${startTimeZoneName} → ${endTimeZoneName}`;
 
   if (sameDay) {
-    return `${start.toLocaleDateString([], dateOptions)} ${start.toLocaleTimeString([], timeOptions)} - ${end.toLocaleTimeString([], timeOptions)}`;
+    return `${start.toLocaleDateString([], dateOptions)} ${start.toLocaleTimeString([], timeOptions)} - ${end.toLocaleTimeString([], timeOptions)} ${timeZoneSuffix}`;
   }
 
-  return `${start.toLocaleDateString([], dateOptions)} ${start.toLocaleTimeString([], timeOptions)} - ${end.toLocaleDateString([], dateOptions)} ${end.toLocaleTimeString([], timeOptions)}`;
+  return `${start.toLocaleDateString([], dateOptions)} ${start.toLocaleTimeString([], timeOptions)} - ${end.toLocaleDateString([], dateOptions)} ${end.toLocaleTimeString([], timeOptions)} ${timeZoneSuffix}`;
 }
 
 export function formatTimeRange(

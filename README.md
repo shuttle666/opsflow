@@ -21,6 +21,10 @@
   </a>
 </p>
 
+<p align="center">
+  <sub><strong>360+</strong> automated tests across <strong>87</strong> files · <strong>18</strong> PostgreSQL-backed integration suites · <strong>5</strong> Playwright E2E workflows · CI exercises real PostgreSQL, Nginx, and Chromium</sub>
+</p>
+
 OpsFlow is a production-style, multi-tenant platform for field-service teams: customers, jobs, schedules, assignments, field evidence, and completion review in one operational workflow.
 
 Its differentiator: **AI prepares the plan; people approve the change.** The in-app Web Agent and a local MCP server share one tenant-aware Tool Registry, and every AI-initiated business change stops at a structured proposal until an Owner or Manager reviews and confirms it. [How the boundary works →](#the-differentiator-safe-ai-writes)

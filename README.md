@@ -227,4 +227,6 @@ OpsFlow is production-shaped rather than presented as production-complete.
 
 OpsFlow is an independently owned portfolio engineering case study by [Wenduo Wang](https://aboutwenduo.wang). I defined the product and architecture, implemented and reviewed the system, set its security boundaries, and own verification and final acceptance. AI tools assisted design exploration, implementation, and review; the [Engineering Case Study](docs/engineering/case-study.md) explains that workflow and the decisions that remained mine.
 
+Released under the [MIT License](LICENSE).
+
 [GitHub profile](https://github.com/shuttle666) · [Project source](https://github.com/shuttle666/opsflow) · [Portfolio](https://aboutwenduo.wang)

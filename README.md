@@ -21,13 +21,18 @@
   </a>
 </p>
 
-OpsFlow is a production-style, multi-tenant platform for service teams to manage customers, jobs, schedules, assignments, field evidence, and completion review in one operational workflow.
+OpsFlow is a production-style, multi-tenant platform for field-service teams: customers, jobs, schedules, assignments, field evidence, and completion review in one operational workflow.
 
-Its differentiator is not another AI chat box. The in-app Web Agent and a local MCP server share the same tenant-aware Tool Registry. AI-initiated business changes stop at a structured pending proposal. The Web flow does not accept the original request as confirmation; the MCP contract requires the same later checkpoint and explicitly treats faithful confirmation handling as the external host's responsibility. An Owner or Manager must review and authorize the proposal before customer or job data is changed.
+Its differentiator: **AI prepares the plan; people approve the change.** The in-app Web Agent and a local MCP server share one tenant-aware Tool Registry, and every AI-initiated business change stops at a structured proposal until an Owner or Manager reviews and confirms it. [How the boundary works →](#the-differentiator-safe-ai-writes)
+
+<p align="center">
+  <img src="docs/media/dashboard.png" alt="OpsFlow dashboard showing today's dispatch board, schedule summary cards, and crew status for the Acme Home Services workspace" width="920" />
+</p>
+<p align="center"><sub>The Owner dashboard: today's dispatch context, schedule movement, and the entry point into AI-assisted planning.</sub></p>
 
 **Recommended:** choose **Start a quick demo** on the sign-in page. It creates a prefilled, isolated workspace for the current visitor without registration.
 
-> A quick demo workspace expires after 60 minutes, has a six-request AI budget, and is removed in bounded background cleanup. Its tenant, users, jobs, Agent history, audit rows, and evidence are isolated from the shared demo account. The shared role accounts below remain available for the multi-role walkthrough; use fictional sample data in every demo environment.
+> Quick demo workspaces are isolated per visitor, expire after 60 minutes, carry a six-request AI budget, and are removed in background cleanup. The shared role accounts below remain available for the multi-role walkthrough; use fictional sample data in every demo environment.
 
 ## What this project demonstrates
 
@@ -57,11 +62,12 @@ For the full role-based loop, continue as Staff to progress an assigned job, upl
 
 OpsFlow treats model output as an untrusted plan, not as permission to operate the business.
 
-Read tools can inspect role-appropriate, tenant-scoped data. Write-oriented AI tools can persist a proposal, but they do not directly mutate customers or jobs. Execution is a separate authenticated step restricted to the Owner or Manager who owns that conversation and proposal.
+<p align="center">
+  <img src="docs/media/agent-proposal.png" alt="AI Planner proposal card: a Create Job approval for an air conditioner service, listing resolved target objects, a field-by-field diff of what will change, and a Confirm plan button — with no business data changed yet" width="920" />
+</p>
+<p align="center"><sub>The AI Planner stops at a structured proposal: resolved targets, a field-by-field diff, and candidate selection. Nothing changes until an Owner or Manager selects <strong>Confirm plan</strong>.</sub></p>
 
-The strongest path is the Web **Confirm plan** button because it does not depend on an LLM interpreting consent. A deliberately limited set of job proposals (`CREATE_JOB`, `ASSIGN_JOB`, and `SCHEDULE_JOB`) may also execute through `execute_proposal`, but only after the proposal has been shown and the user sends a later confirmation message. The server accepts only a small allowlist of short confirmation phrases and rejects questions, qualifications, revisions, and other free-form text. The Web Agent additionally verifies that the verbatim confirmation matches a persisted post-proposal user message and that the conversation has exactly one pending proposal; an external MCP host remains an explicit trust boundary responsible for presenting the proposal and proving that the supplied confirmation came from a later human response.
-
-At confirmation time, OpsFlow claims the pending proposal with a single-execution guard, reloads current tenant-scoped targets, checks key domain rules, and applies the approved changes inside a database transaction.
+AI read tools see only role-appropriate, tenant-scoped data, and AI write tools go no further than persisting a proposal. Executing one is a separate authenticated step: the strongest path is the Web **Confirm plan** button, which does not depend on an LLM interpreting consent, and a limited set of job proposals can also be confirmed conversationally against a strict server-side allowlist. At confirmation time, OpsFlow claims the proposal with a single-execution guard, reloads current tenant-scoped targets, re-checks domain rules, and applies the change inside a database transaction.
 
 ```mermaid
 flowchart LR
@@ -79,21 +85,21 @@ flowchart LR
   Recheck --> Mutation["Transactional business change"]
 ```
 
-The MCP surface is deliberately narrower than the Web Agent. It exposes selected reads, job proposal inspection, and conversational execution only for the eligible job operations above. Every proposal still returns an approval URL: it is the fallback for hosts without a suitable confirmation flow and the required path for Web-only proposal types such as customer changes, job detail/status changes, and cancellations.
+The MCP adapter shares the same registry but exposes a deliberately narrower surface, and an external MCP host remains an explicit, documented trust boundary. The full confirmation semantics — eligible proposal types, the confirmation-phrase allowlist, post-proposal message matching, and host responsibilities — are specified in [MCP design and security boundary](docs/engineering/mcp.md).
 
 ### Risk → Control → Evidence
 
 | Risk | Control | Repository evidence |
 | --- | --- | --- |
-| A model applies an unintended business change | AI write tools persist a pending proposal; the Web button is a separate non-LLM action, while conversational execution requires allowlisted text and the Web Agent also requires one unambiguous pending proposal plus a matching post-proposal user message | [Proposal tools](server/src/modules/operations-tools/definitions/proposal-tools.ts), [confirmation boundary](docs/engineering/mcp.md#confirmation-and-trust-boundary) |
+| A model applies an unintended business change | AI write tools persist a pending proposal; execution is a separate non-LLM Web action or an allowlisted, post-proposal conversational confirmation | [Proposal tools](server/src/modules/operations-tools/definitions/proposal-tools.ts), [confirmation boundary](docs/engineering/mcp.md#confirmation-and-trust-boundary) |
 | A caller invokes a hidden or role-restricted tool directly | Audience and role policies are checked during discovery and checked again during Registry execution; inputs and outputs are validated with Zod | [Tool Registry](server/src/modules/operations-tools/tool-registry.ts) |
 | A proposal points to stale or invalid operational data | Confirmation reloads key tenant-scoped targets and enforces active-staff, target-safety, and workflow rules before commit | [Proposal confirmation](server/src/modules/agent/agent.service.ts) |
 | Two requests try to confirm the same proposal | A conditional `PENDING → CONFIRMING` transition allows only one confirmation path to proceed | [Confirmation guard](server/src/modules/agent/agent.service.ts) |
-| An external host misrepresents user consent | The server rejects non-allowlisted confirmation text and the MCP contract marks execution destructive, but provenance and turn ordering remain documented host responsibilities; Web confirmation is the stronger fallback | [MCP trust boundary](docs/engineering/mcp.md#confirmation-and-trust-boundary) |
+| An external host misrepresents user consent | The server rejects non-allowlisted confirmation text; provenance stays a documented host responsibility, with Web confirmation as the stronger fallback | [MCP trust boundary](docs/engineering/mcp.md#confirmation-and-trust-boundary) |
 | Web and MCP behavior drift apart | Both adapters use the same canonical tool schemas, access policies, and execution handlers | [MCP architecture](docs/engineering/mcp.md#architecture) |
 | Invocation audit duplicates raw customer or job values | The dedicated `ToolInvocation` record stores source, status, duration, correlation IDs, and top-level field names rather than raw argument or result values | [Invocation audit](server/src/modules/operations-tools/tool-invocation-audit.ts) |
 
-The PII-minimized statement above applies specifically to `ToolInvocation` metadata. Agent conversations, proposals, and tool traces are persisted so the workflow can recover across restarts and remain reviewable.
+The PII-minimized statement applies to `ToolInvocation` metadata; conversations, proposals, and tool traces are persisted so the workflow stays recoverable and reviewable.
 
 ## One operational loop, three roles
 
@@ -105,6 +111,12 @@ Customer intake → Job creation → Assignment and scheduling
 - **Owners** manage the workspace, team access, and operational controls.
 - **Managers** coordinate customers, jobs, schedules, assignments, and completion review.
 - **Staff** see assigned work, progress jobs, upload evidence, and submit completion notes.
+
+<p align="center">
+  <img src="docs/media/jobs.png" alt="Jobs list with search, status and customer filters, pagination, and tenant-scoped job rows" width="66%" />
+  <img src="docs/media/mobile-dashboard.png" alt="The same dashboard rendered on a phone viewport" width="19%" />
+</p>
+<p align="center"><sub>The same tenant-scoped workflows on desktop and a phone viewport; mobile layouts are covered by an axe accessibility smoke test in CI.</sub></p>
 
 The product also includes tenant invitations, customer archiving, schedule conflict checks, authenticated notification streaming, activity history, and request IDs that connect frontend errors to structured backend logs.
 
@@ -188,11 +200,7 @@ pnpm --dir server build
 infra/nginx/smoke/run.sh
 ```
 
-Server database integration tests are intentionally separated from the default local test command and run in CI against a disposable PostgreSQL service. They include explicit cross-tenant attack probes, database constraint checks, MCP authorization revocation, Request ID correlation, and concurrency/idempotency coverage. See [the test notes](server/tests/README.md) for the local database-test flags.
-
-The Playwright suite runs the complete Owner → Staff → Manager operational loop, the guarded AI proposal flow, and a representative mobile accessibility smoke check in CI. It uses a deterministic, network-free Fake AI provider and dedicated application ports, so it never needs an Anthropic or OpenAI key. See [the testing strategy](docs/engineering/testing.md) and [E2E test notes](client/e2e/README.md) for coverage and safe local setup.
-
-The isolated Nginx smoke builds the production proxy and disposable upstream fixtures, then sends real requests through that boundary and validates the HTTPS template with a one-time certificate. It requires Docker and OpenSSL but no database, application secrets, or external service.
+Three heavier suites run in CI: database integration tests against a disposable PostgreSQL service (cross-tenant attack probes, constraint checks, MCP authorization revocation, and concurrency/idempotency coverage — see [the test notes](server/tests/README.md) for local flags), the Playwright suite covering the full Owner → Staff → Manager loop and the guarded AI proposal flow with a deterministic, network-free Fake AI provider (no Anthropic or OpenAI key needed — see [testing strategy](docs/engineering/testing.md) and [E2E notes](client/e2e/README.md)), and an isolated Nginx smoke that sends real requests through the production proxy template without any application secrets.
 
 ## Current scope
 

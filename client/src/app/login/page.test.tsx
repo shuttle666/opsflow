@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import LoginPage from "@/app/login/page";
@@ -101,6 +101,44 @@ describe("login page", () => {
     expect(window.localStorage.getItem(GOLDEN_DEMO_STORAGE_KEY)).not.toBeNull();
   });
 
+  it("shows immediate progress and prevents duplicate demo creation", async () => {
+    let resolvePrivateDemo: (() => void) | undefined;
+    const startPrivateDemo = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolvePrivateDemo = resolve;
+        }),
+    );
+    useAuthStore.setState({ startPrivateDemo });
+
+    const user = userEvent.setup();
+    render(<LoginPage />);
+
+    const startButton = screen.getByRole("button", { name: "Start a quick demo" });
+    await user.dblClick(startButton);
+
+    const pendingButton = screen.getByRole("button", {
+      name: "Preparing your workspace...",
+    });
+    expect(pendingButton).toBeDisabled();
+    expect(pendingButton).toHaveAttribute("aria-busy", "true");
+    expect(
+      pendingButton.querySelector('[data-slot="loading-pulse"]'),
+    ).toHaveClass("animate-pulse", "bg-white");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Creating an isolated workspace and sample data. This may take a few seconds.",
+    );
+    expect(startPrivateDemo).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      resolvePrivateDemo?.();
+    });
+
+    await waitFor(() => {
+      expect(pushMock).toHaveBeenCalledWith("/agent");
+    });
+  });
+
   it("does not let the authenticated redirect override a private demo destination", async () => {
     const startPrivateDemo = vi.fn().mockImplementation(async () => {
       useAuthStore.setState({ status: "authenticated" });
@@ -118,10 +156,11 @@ describe("login page", () => {
     expect(replaceMock).not.toHaveBeenCalledWith("/dashboard");
   });
 
-  it("keeps the visitor on the login page when private demo creation fails", async () => {
+  it("restores the quick demo action after a failure and allows retry", async () => {
     const startPrivateDemo = vi
       .fn()
-      .mockRejectedValue(new ApiClientError(429, "Too many demo workspaces."));
+      .mockRejectedValueOnce(new ApiClientError(429, "Too many demo workspaces."))
+      .mockResolvedValueOnce(undefined);
     useAuthStore.setState({ startPrivateDemo });
 
     const user = userEvent.setup();
@@ -132,6 +171,19 @@ describe("login page", () => {
     expect(await screen.findByText("Too many demo workspaces.")).toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();
     expect(readGoldenDemoProgress()).toBeNull();
+
+    const restoredButton = screen.getByRole("button", {
+      name: "Start a quick demo",
+    });
+    expect(restoredButton).toBeEnabled();
+    expect(restoredButton).toHaveAttribute("aria-busy", "false");
+
+    await user.click(restoredButton);
+
+    await waitFor(() => {
+      expect(startPrivateDemo).toHaveBeenCalledTimes(2);
+      expect(pushMock).toHaveBeenCalledWith("/agent");
+    });
   });
 
   it("switches to registration without leaving the auth page", async () => {

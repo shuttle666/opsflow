@@ -5,6 +5,28 @@ type LoadingPanelProps = {
   compact?: boolean;
 };
 
+type LoadingPulseProps = {
+  className?: string;
+  tone?: "brand" | "inverse";
+};
+
+export function LoadingPulse({
+  className,
+  tone = "brand",
+}: LoadingPulseProps) {
+  return (
+    <span
+      aria-hidden="true"
+      data-slot="loading-pulse"
+      className={cn(
+        "h-2.5 w-2.5 shrink-0 animate-pulse rounded-full motion-reduce:animate-none",
+        tone === "inverse" ? "bg-white" : "bg-[var(--color-brand)]",
+        className,
+      )}
+    />
+  );
+}
+
 export function LoadingPanel({ label, compact = false }: LoadingPanelProps) {
   return (
     <div
@@ -13,7 +35,7 @@ export function LoadingPanel({ label, compact = false }: LoadingPanelProps) {
         compact ? "px-5 py-5" : "px-6 py-8",
       )}
     >
-      <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-[var(--color-brand)]" />
+      <LoadingPulse />
       <span>{label}</span>
     </div>
   );

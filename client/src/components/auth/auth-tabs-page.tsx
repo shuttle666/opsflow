@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { BrandMark } from "@/components/ui/brand-mark";
 import { InlineErrorBanner } from "@/components/ui/inline-error-banner";
+import { LoadingPulse } from "@/components/ui/loading-panel";
 import {
   ArrowRight,
   Building2,
@@ -56,7 +57,7 @@ const authFieldClassName =
   "h-14 w-full rounded-[22px] border border-[var(--color-app-border)] bg-[color-mix(in_srgb,var(--color-app-panel)_84%,transparent)] py-0 pl-16 pr-4 text-sm text-[var(--color-text)] shadow-sm outline-none transition placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-brand)] focus:ring-[3px] focus:ring-[var(--color-brand-soft)]";
 
 const demoActionClassName =
-  "inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[16px] bg-[var(--color-brand)] px-4 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-[3px] focus:ring-[var(--color-brand-soft)] disabled:cursor-not-allowed disabled:opacity-60";
+  "inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[16px] bg-[var(--color-brand)] px-4 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-[3px] focus:ring-[var(--color-brand-soft)]";
 
 function AuthField({
   icon: Icon,
@@ -168,6 +169,10 @@ function AuthTabsPageContent({ initialMode = "login" }: AuthTabsPageProps) {
   };
 
   const onPrivateDemoStart = async () => {
+    if (privateDemoRedirectPending.current) {
+      return;
+    }
+
     setSubmitError(null);
     setIsPrivateDemoStarting(true);
     privateDemoRedirectPending.current = true;
@@ -313,15 +318,40 @@ function AuthTabsPageContent({ initialMode = "login" }: AuthTabsPageProps) {
                 </div>
                 <button
                   type="button"
+                  aria-busy={isPrivateDemoStarting}
                   disabled={isPrivateDemoStarting}
                   onClick={onPrivateDemoStart}
-                  className={cn(demoActionClassName, "mt-4")}
+                  className={cn(
+                    demoActionClassName,
+                    "mt-4 disabled:cursor-wait",
+                  )}
                 >
-                  {isPrivateDemoStarting ? "Preparing your workspace..." : "Start a quick demo"}
-                  <ArrowRight className="h-4 w-4" />
+                  {isPrivateDemoStarting ? (
+                    <>
+                      <LoadingPulse tone="inverse" />
+                      <span>Preparing your workspace...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Start a quick demo</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </>
+                  )}
                 </button>
-                <p className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
-                  No sign-up · Isolated data · Automatic cleanup
+                <p
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                  className={cn(
+                    "mt-2 text-center",
+                    isPrivateDemoStarting
+                      ? "text-xs leading-5 text-[var(--color-text-secondary)]"
+                      : "font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-text-muted)]",
+                  )}
+                >
+                  {isPrivateDemoStarting
+                    ? "Creating an isolated workspace and sample data. This may take a few seconds."
+                    : "No sign-up · Isolated data · Automatic cleanup"}
                 </p>
               </section>
 

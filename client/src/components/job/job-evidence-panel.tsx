@@ -7,6 +7,7 @@ import { LoadingPanel } from "@/components/ui/loading-panel";
 import { SummaryCard } from "@/components/ui/info-cards";
 import {
   cn,
+  dangerButtonClassName,
   inputClassName,
   secondaryButtonClassName,
   selectClassName,
@@ -283,7 +284,7 @@ export function JobEvidencePanel({
                     {canUpload ? (
                       <button
                         type="button"
-                        className={subtleButtonClassName}
+                        className={dangerButtonClassName}
                         disabled={activeDeleteId === item.id}
                         onClick={async () => {
                           const confirmed = window.confirm(

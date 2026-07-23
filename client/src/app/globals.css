@@ -41,7 +41,7 @@ input,
 textarea,
 select,
 button {
-  font: inherit;
+  font-family: inherit;
 }
 
 ::selection {

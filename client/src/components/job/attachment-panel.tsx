@@ -1,6 +1,7 @@
 import { EmptyStatePanel } from "@/components/ui/empty-state-panel";
 import { SummaryCard } from "@/components/ui/info-cards";
 import {
+  dangerButtonClassName,
   secondaryButtonClassName,
   subtleButtonClassName,
   surfaceClassName,
@@ -61,7 +62,7 @@ export function AttachmentPanel({ items }: AttachmentPanelProps) {
                     <button type="button" className={subtleButtonClassName}>
                       Download
                     </button>
-                    <button type="button" className={subtleButtonClassName}>
+                    <button type="button" className={dangerButtonClassName}>
                       Delete
                     </button>
                   </div>

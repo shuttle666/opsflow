@@ -10,6 +10,7 @@ import { LoadingPanel } from "@/components/ui/loading-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
   cn,
+  dangerButtonClassName,
   primaryButtonClassName,
   secondaryButtonClassName,
   surfaceClassName,
@@ -29,9 +30,6 @@ import type { JobStatus } from "@/types/job";
 function canManageCustomers(role: string | undefined) {
   return role === "OWNER" || role === "MANAGER";
 }
-
-const dangerButtonClassName =
-  "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-danger)] bg-transparent px-3.5 text-[13px] font-semibold text-[var(--color-danger)] shadow-sm transition hover:bg-[var(--color-danger-soft)] disabled:cursor-not-allowed disabled:opacity-60";
 
 function initialsFor(name: string | undefined | null) {
   if (!name) {

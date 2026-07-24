@@ -133,7 +133,9 @@
 
 /* Agent chat markdown */
 .agent-markdown {
+  min-width: 0;
   line-height: 1.65;
+  overflow-wrap: anywhere;
 }
 .agent-markdown > *:first-child { margin-top: 0; }
 .agent-markdown > *:last-child { margin-bottom: 0; }
@@ -196,4 +198,36 @@
   border: none;
   border-top: 1px solid var(--color-app-border);
   margin: 0.75em 0;
+}
+.agent-markdown-table-wrap {
+  max-width: 100%;
+  margin: 0.65em 0;
+  overflow-x: auto;
+  border: 1px solid var(--color-app-border);
+  border-radius: 8px;
+  background: var(--color-app-panel);
+}
+.agent-markdown table {
+  width: 100%;
+  min-width: 34rem;
+  border-collapse: collapse;
+  text-align: left;
+}
+.agent-markdown th,
+.agent-markdown td {
+  padding: 0.55em 0.7em;
+  border-bottom: 1px solid var(--color-app-border);
+  vertical-align: top;
+}
+.agent-markdown th + th,
+.agent-markdown td + td {
+  border-left: 1px solid var(--color-app-border);
+}
+.agent-markdown th {
+  background: var(--color-app-panel-muted);
+  color: var(--color-text);
+  font-weight: 600;
+}
+.agent-markdown tbody tr:last-child td {
+  border-bottom: 0;
 }

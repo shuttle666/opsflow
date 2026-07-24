@@ -3,7 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Markdown from "react-markdown";
+import { AgentMarkdown } from "@/components/agent/agent-markdown";
 import {
   ChevronDown,
   History,
@@ -247,10 +247,8 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   return (
     <div className="flex gap-2.5 pr-4 sm:pr-12">
       <AiAvatar />
-      <div className="max-w-[92%] rounded-[14px] rounded-bl bg-[var(--color-app-panel-muted)] px-4 py-3 text-[13px] leading-relaxed text-[var(--color-text)] sm:max-w-[84%] lg:max-w-[78%] xl:max-w-[74%]">
-        <div className="agent-markdown">
-          <Markdown>{message.content}</Markdown>
-        </div>
+      <div className="min-w-0 max-w-[92%] rounded-[14px] rounded-bl bg-[var(--color-app-panel-muted)] px-4 py-3 text-[13px] leading-relaxed text-[var(--color-text)] sm:max-w-[84%] lg:max-w-[78%] xl:max-w-[74%]">
+        <AgentMarkdown content={message.content} />
       </div>
     </div>
   );
@@ -1378,10 +1376,8 @@ export function AgentChat() {
               {streamingText ? (
                 <div className="flex gap-2.5 pr-4 sm:pr-12">
                   <AiAvatar />
-                  <div className="max-w-[92%] rounded-[14px] rounded-bl bg-[var(--color-app-panel-muted)] px-4 py-3 text-[13px] leading-relaxed text-[var(--color-text)] sm:max-w-[84%] lg:max-w-[78%] xl:max-w-[74%]">
-                    <div className="agent-markdown">
-                      <Markdown>{streamingText}</Markdown>
-                    </div>
+                  <div className="min-w-0 max-w-[92%] rounded-[14px] rounded-bl bg-[var(--color-app-panel-muted)] px-4 py-3 text-[13px] leading-relaxed text-[var(--color-text)] sm:max-w-[84%] lg:max-w-[78%] xl:max-w-[74%]">
+                    <AgentMarkdown content={streamingText} />
                   </div>
                 </div>
               ) : null}
